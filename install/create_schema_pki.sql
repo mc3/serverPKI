@@ -37,16 +37,25 @@ CREATE TABLE Services (         -- Service and port combination for TLSA-RR
   id                SERIAL          PRIMARY KEY,    -- 'PK of Services table'
   name              TEXT            NOT NULL ,      -- 'Name of service
   port              dd.port_number  NOT NULL ,      -- 'tcp / udp port number 
-  certificate       int4                            -- 'certificate'
-                        REFERENCES Certificates
-                        ON DELETE SET NULL
-                        ON UPDATE SET NULL,
   TLSAprefix        TEXT            NOT NULL,
   created           dd.created,                     -- 'time of record update'
   updated           dd.updated,                     -- 'time of record update'
   remarks           TEXT,                           -- 'Remarks'
 
     UNIQUE (name, port)
+)
+
+CREATE TABLE Certificates_Services (    -- Junction relation
+  certificate       int4                            -- 'certificate'
+                        REFERENCES Certificates
+                        ON DELETE CASCADE
+                        ON UPDATE CASCADE,
+  service           int4                            -- 'service'
+                        REFERENCES Services
+                        ON DELETE CASCADE
+                        ON UPDATE CASCADE,
+
+  PRIMARY KEY (certificate, service)
 )
 
 
@@ -164,7 +173,20 @@ CREATE TRIGGER Ensure_exactly_one_none_altname_subject_per_cert BEFORE INSERT OR
     EXECUTE PROCEDURE Ensure_exactly_one_none_altname_subject_per_cert();
 
 
+                        -- Views --------------------------------------------
 
+CREATE OR REPLACE VIEW cert AS
+    SELECT
+        s1.name AS CertName, s2.name AS AltNmae, d.fqdn AS DistHost, 
+            j.name AS Jail, p.name AS Place  
+        FROM
+            Subjects s1, Subjects S2, DistHosts d, Jails j, Places p,
+            Targets t, Certificates c
+        WHERE
+            s1.certificate = c.id AND s1.isAltname = FALSE AND
+            s2.certificate = c.id AND s2.isAltname = TRUE AND
+            t.certificate =  c.id AND t.disthost = d.id AND
+            t.jail = j.id AND t.place = p.id;
 
 GRANT USAGE ON SCHEMA pki TO pki_dev;
 
