@@ -11,6 +11,10 @@ CREATE SCHEMA pki               -- DB schema for project serverPKI'
 
 CREATE TABLE Certificates (     -- The certificate class
   id                SERIAL          PRIMARY KEY,    -- 'PK of Certificates table'
+  type              cert_type       NOT NULL,
+  disabled          BOOLEAN         NOT NULL
+                                    DEFAULT false,
+  updated           dd.updated,                     -- 'time of record update'
   created           dd.created,                     -- 'time of record update'
   remarks           TEXT                            -- 'Remarks'
 )
@@ -65,11 +69,11 @@ CREATE TABLE Places (         -- Places hold filesystem and exec data on target
   cert_file_type    dd.place_cert_file_type         -- 'which cert amd key files'
                                     DEFAULT 'separate'
                                     NOT NULL, 
-  cert_path         TEXT            NOT NULL,       -- 'path to cert dir' 
-  key_path          TEXT            NOT NULL,       -- 'path to key dir' 
+  cert_path         TEXT            NOT NULL,       -- 'path to cert/key dir' 
+  key_path          TEXT                    ,       -- 'path to key dir if different from cert' 
   uid               int2                    ,       -- 'uid for chown of key file'
   gid               int2                    ,       -- 'gid for chown of key file'
-  mode              int2                    ,       -- 'use this mode instead of 0400 for key file'
+  mode            int2                    ,       -- 'use this mode instead of 0400 for key file'
   chownBoth         BOOLEAN         NOT NULL        -- 'chown both cert and key file'
                                     DEFAULT FALSE,
   pgLink            BOOLEAN         NOT NULL        -- 'create link for pqlib'
@@ -106,15 +110,15 @@ CREATE TABLE Jails (              -- FreeBSD jail, to place cert at
 
 CREATE TABLE Targets (    -- Target describes where and how certs and keys are deployed
   id                SERIAL          PRIMARY KEY,    -- 'PK of DistHosts table'
-  distHost          int4            NOT NULL        -- 'host, hosting this jail/cert'
+  distHost          int4                            -- 'host, hosting this jail/cert'
                         REFERENCES DistHosts
                         ON DELETE CASCADE
                         ON UPDATE CASCADE,
-  jail              int4            NOT NULL        -- 'jail, hosting this cert'
+  jail              int4                            -- 'jail, hosting this cert'
                         REFERENCES Jails
                         ON DELETE CASCADE
                         ON UPDATE CASCADE,
-  place             int4            NOT NULL        -- 'cert placed here'
+  place             int4                            -- 'cert placed here'
                         REFERENCES Places
                         ON DELETE CASCADE
                         ON UPDATE CASCADE,
@@ -156,7 +160,7 @@ CREATE OR REPLACE FUNCTION Ensure_exactly_one_none_altname_subject_per_cert() RE
         IF NEW.isAltname THEN
             RETURN NEW;
         END IF;
-        IF (SELECT COUNT(*)
+        IF ( SELECT COUNT(*)
                 FROM Subjects S
                 WHERE S.certificate = NEW.certificate AND NOT S.isAltname ) > 0 THEN
             RAISE EXCEPTION '?Only one none-alternate-name-Subject per Certificate allowed';  
@@ -171,6 +175,75 @@ DROP TRIGGER IF EXISTS Ensure_exactly_one_none_altname_subject_per_cert ON Subje
 CREATE TRIGGER Ensure_exactly_one_none_altname_subject_per_cert BEFORE INSERT OR UPDATE
     ON Subjects FOR EACH ROW 
     EXECUTE PROCEDURE Ensure_exactly_one_none_altname_subject_per_cert();
+
+
+CREATE OR REPLACE FUNCTION Ensure_jail_on_disthost_with_jailroot() RETURNS TRIGGER AS $$
+    BEGIN
+        IF ( SELECT COUNT(*)
+                FROM DistHosts D
+                WHERE D.id = NEW.disthost AND D.jailroot IS NOT NULL ) = 0
+        THEN
+            RAISE EXCEPTION '?Disthost needs jailroot';  
+        ELSE
+            RETURN NEW;
+        END IF;
+    END;
+$$ LANGUAGE 'plpgsql';
+
+GRANT EXECUTE ON FUNCTION Ensure_jail_on_disthost_with_jailroot() TO pki_dev;
+DROP TRIGGER IF EXISTS Ensure_jail_on_disthost_with_jailroot ON Jails;
+CREATE TRIGGER Ensure_jail_on_disthost_with_jailroot BEFORE INSERT OR UPDATE
+    ON Jails FOR EACH ROW
+    EXECUTE PROCEDURE Ensure_jail_on_disthost_with_jailroot();
+
+
+CREATE OR REPLACE FUNCTION Ensure_jailroot_if_jails_exist() RETURNS TRIGGER AS $$
+    BEGIN
+        IF NEW.jailroot IS NOT NULL THEN
+            RETURN NEW;
+        END IF;
+        IF ( SELECT COUNT(*)
+                FROM Jails J
+                WHERE j.disthost = NEW.id ) > 0
+        THEN
+            RAISE EXCEPTION '?Disthost needs jailroot, because referenced by jail(s)';  
+        ELSE
+            RETURN NEW;
+        END IF;
+    END;
+$$ LANGUAGE 'plpgsql';
+
+GRANT EXECUTE ON FUNCTION Ensure_jailroot_if_jails_exist() TO pki_dev;
+DROP TRIGGER IF EXISTS Ensure_jailroot_if_jails_exist ON DistHosts;
+CREATE TRIGGER Ensure_jailroot_if_jails_exist BEFORE INSERT OR UPDATE
+    ON DistHosts FOR EACH ROW
+    EXECUTE PROCEDURE Ensure_jailroot_if_jails_exist();
+
+
+CREATE OR REPLACE FUNCTION Ensure_jail_sits_on_correct_disthost() RETURNS TRIGGER AS $$
+    BEGIN
+        IF NEW.jail IS NULL THEN
+            RETURN NEW;
+        END IF;
+        IF NEW.disthost IS NULL THEN
+            RAISE EXCEPTION '?Target: DistHost needed, if jail exists';  
+        END IF;
+        IF ( SELECT COUNT(*)
+                FROM Jails j
+                WHERE j.disthost = NEW.disthost ) = 0
+        THEN
+            RAISE EXCEPTION '?Target: Jail sits on wrong disthost';  
+        ELSE
+            RETURN NEW;
+        END IF;
+    END;
+$$ LANGUAGE 'plpgsql';
+
+GRANT EXECUTE ON FUNCTION Ensure_jail_sits_on_correct_disthost() TO pki_dev;
+DROP TRIGGER IF EXISTS Ensure_jail_sits_on_correct_disthost ON Targets;
+CREATE TRIGGER Ensure_jail_sits_on_correct_disthost BEFORE INSERT OR UPDATE
+    ON Targets FOR EACH ROW
+    EXECUTE PROCEDURE Ensure_jail_sits_on_correct_disthost();
 
 
                         -- Views --------------------------------------------

@@ -36,8 +36,13 @@ ALTER TYPE dd.subject_type OWNER TO pki_dev;
 
 ------------------------------ type of Place
 CREATE TYPE dd.place_cert_file_type AS ENUM (
-    'separate', 'combined cert key', 'combined cacert cert key');
+    'cert only', 'separate', 'combined', 'combined cacert');
 ALTER TYPE dd.subject_type OWNER TO pki_dev;
+
+------------------------------ type of Place
+CREATE TYPE dd.cert_type AS ENUM (
+    'LE', 'local');
+ALTER TYPE dd.cert_type OWNER TO pki_dev;
 
 
 
