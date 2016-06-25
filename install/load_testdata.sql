@@ -220,7 +220,7 @@ COPY Targets (id, disthost, jail, place, certificate) FROM stdin;
 14	11	\N	22	5
 15	3	7	17	6
 16	4	8	17	6
-17	7	\N	21	8
+17	9	\N	21	8
 18	8	\N	21	8
 19	6	\N	22	8
 20	7	\N	22	8
@@ -235,8 +235,8 @@ COPY Targets (id, disthost, jail, place, certificate) FROM stdin;
 29	3	16	13	15
 30	4	17	13	16
 31	11	\N	21	17
-32	11	\N	22	17
-33	11	\N	22	17
+32	6	\N	22	17
+33	7	\N	22	17
 34	4	21	13	18
 35	4	20	1	19
 36	4	20	2	19

@@ -11,7 +11,7 @@ CREATE SCHEMA pki               -- DB schema for project serverPKI'
 
 CREATE TABLE Certificates (     -- The certificate class
   id                SERIAL          PRIMARY KEY,    -- 'PK of Certificates table'
-  type              cert_type       NOT NULL,
+  type              dd.cert_type    NOT NULL,
   disabled          BOOLEAN         NOT NULL
                                     DEFAULT false,
   updated           dd.updated,                     -- 'time of record update'
@@ -24,7 +24,7 @@ CREATE TABLE Subjects (         -- A Subject or an alternate name of a certifica
   id                SERIAL          PRIMARY KEY,    -- 'PK of Subjects table'
   type              dd.subject_type NOT NULL        -- 'Type of subject'
                                         DEFAULT 'server', 
-  name              TEXT            NOT NULL UNIQUE,-- 'Either FQDN or user name'
+  name              CITEXT          NOT NULL UNIQUE,-- 'Either FQDN or user name'
   isAltname         BOOLEAN         NOT NULL
                                         DEFAULT TRUE, 
   certificate       INT4                            -- 'certifcate for this subject'
@@ -39,7 +39,7 @@ CREATE TABLE Subjects (         -- A Subject or an alternate name of a certifica
 
 CREATE TABLE Services (         -- Service and port combination for TLSA-RR
   id                SERIAL          PRIMARY KEY,    -- 'PK of Services table'
-  name              TEXT            NOT NULL ,      -- 'Name of service
+  name              CITEXT          NOT NULL ,      -- 'Name of service
   port              dd.port_number  NOT NULL ,      -- 'tcp / udp port number 
   TLSAprefix        TEXT            NOT NULL,
   created           dd.created,                     -- 'time of record update'
@@ -65,7 +65,7 @@ CREATE TABLE Certificates_Services (    -- Junction relation
 
 CREATE TABLE Places (         -- Places hold filesystem and exec data on target
   id                SERIAL          PRIMARY KEY,    -- 'PK of Places table'
-  name              TEXT            NOT NULL UNIQUE,-- 'Name of place
+  name              CITEXT          NOT NULL UNIQUE,-- 'Name of place
   cert_file_type    dd.place_cert_file_type         -- 'which cert amd key files'
                                     DEFAULT 'separate'
                                     NOT NULL, 
@@ -87,7 +87,7 @@ CREATE TABLE Places (         -- Places hold filesystem and exec data on target
 
 CREATE TABLE DistHosts (         -- Hosts where targets located (cert and key files)
   id                SERIAL          PRIMARY KEY,    -- 'PK of DistHosts table'
-  FQDN              TEXT            NOT NULL UNIQUE,-- 'FQDN of host'
+  FQDN              CITEXT          NOT NULL UNIQUE,-- 'FQDN of host'
   jailroot          TEXT      ,                     -- 'path to root of jails'
   updated           dd.updated,                     -- 'time of record update'
   created           dd.created,                     -- 'time of record creation'
@@ -97,7 +97,7 @@ CREATE TABLE DistHosts (         -- Hosts where targets located (cert and key fi
 
 CREATE TABLE Jails (              -- FreeBSD jail, to place cert at
   id                SERIAL          PRIMARY KEY,    -- 'PK of Jails table'
-  name              TEXT            NOT NULL UNIQUE,-- 'FQDN of host'
+  name              CITEXT          NOT NULL UNIQUE,-- 'FQDN of host'
   distHost          int4            NOT NULL        -- 'host, hosting this jail'
                         REFERENCES DistHosts
                         ON DELETE CASCADE
@@ -248,20 +248,169 @@ CREATE TRIGGER Ensure_jail_sits_on_correct_disthost BEFORE INSERT OR UPDATE
 
                         -- Views --------------------------------------------
 
-CREATE OR REPLACE VIEW cert AS
-    SELECT
-        s1.name AS CertName, s2.name AS AltNmae, d.fqdn AS DistHost, 
-            j.name AS Jail, p.name AS Place  
-        FROM
-            Subjects s1, Subjects S2, DistHosts d, Jails j, Places p,
-            Targets t, Certificates c
-        WHERE
-            s1.certificate = c.id AND s1.isAltname = FALSE AND
-            s2.certificate = c.id AND s2.isAltname = TRUE AND
-            t.certificate =  c.id AND t.disthost = d.id AND
-            t.jail = j.id AND t.place = p.id;
+CREATE OR REPLACE VIEW certs AS
+    SELECT s1.type AS "Subject", s1.name AS "Cert Name",
+                c.type AS "Type", s2.name AS "Alt Name", s.name AS "TLSA",
+                s.port AS "Port", d.fqdn AS "FQDN", j.name AS "Jail",
+                p.name AS "Place"
+    FROM Subjects s1
+        RIGHT JOIN Certificates c
+            ON s1.certificate = c.id AND s1.isAltname = FALSE
+        LEFT JOIN Subjects s2
+            ON s2.certificate = c.id AND s2.isAltname = TRUE
+        LEFT JOIN Certificates_Services cs
+            ON c.id = cs.certificate
+        LEFT JOIN Services s
+            ON cs.service = s.id
+        LEFT JOIN Targets t
+            ON c.id = t.certificate
+        LEFT JOIN Disthosts d
+            ON t.disthost = d.id
+        LEFT JOIN Jails j
+            ON t.jail = j.id
+        LEFT JOIN Places p
+            ON t.place = p.id
+    ORDER BY s1.name, s2.name, d.fqdn;
 
-GRANT USAGE ON SCHEMA pki TO pki_dev;
+CREATE OR REPLACE VIEW certs_ids AS
+    SELECT c.id AS c_id, s1.id AS s1_id, s1.type AS "Subject Type",
+                s1.name AS "Cert Name", c.type AS "Type", s2.id AS s2_id,
+                s2.name AS "Alt Name", s.id AS s_id, s.name AS "TLSA",
+                s.port AS "Port", t.id AS t_id, d.id AS d_id, d.fqdn AS "FQDN",
+                j.id AS j_id, j.name AS "Jail", p.id AS p_id, p.name AS "Place"
+    FROM Subjects s1
+        RIGHT JOIN Certificates c
+            ON s1.certificate = c.id AND s1.isAltname = FALSE
+        LEFT JOIN Subjects s2
+            ON s2.certificate = c.id AND s2.isAltname = TRUE
+        LEFT JOIN Certificates_Services cs
+            ON c.id = cs.certificate
+        LEFT JOIN Services s
+            ON cs.service = s.id
+        LEFT JOIN Targets t
+            ON c.id = t.certificate
+        LEFT JOIN Disthosts d
+            ON t.disthost = d.id
+        LEFT JOIN Jails j
+            ON t.jail = j.id
+        LEFT JOIN Places p
+            ON t.place = p.id
+    ORDER BY c.id, s1.id, s2.id;
+
+
+
+                        -- Functions -------------------------------------------
+                        
+
+CREATE OR REPLACE FUNCTION add_cert(
+        the_name CITEXT, the_subject_type dd.subject_type, the_cert_type dd.cert_type,
+        the_altname CITEXT, the_TLSA_name CITEXT, the_TLSA_port dd.port_number,
+        the_disthost_name CITEXT, the_jail CITEXT, the_place CITEXT
+        ) RETURNS TEXT
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+        the_isAltname       BOOLEAN;
+        cert_id             INT4;
+        view_row            certs%ROWTYPE;
+
+    BEGIN
+        if (the_name IS NULL OR the_name = '' OR the_subject_type IS NULL OR
+            the_cert_type IS NULL) THEN
+            RAISE EXCEPTION '?the_name, the_subject_type and the_cert_type must not be empty.';
+        END IF;
+        SELECT isAltname INTO the_isAltname
+            FROM Subjects
+            WHERE name = the_name;
+        IF FOUND THEN
+            IF the_isAltname THEN
+                RAISE EXCEPTION '?"%" is already in use as AltName', the_name;
+            ELSE
+                RAISE EXCEPTION '?"%" is already in use.', the_name;
+            END IF;
+        END IF;
+        IF the_altname IS NOT NULL THEN
+            SELECT isAltname INTO the_isAltname
+                FROM Subjects
+                WHERE name = the_altname;
+            IF FOUND THEN
+                IF the_isAltname THEN
+                    RAISE EXCEPTION '?"%" is already in use as AltName', the_altname;
+                ELSE
+                    RAISE EXCEPTION '?"%" is already in use as Subject name.', the_altname;
+                END IF;
+            END IF;
+        END IF;
+        
+        INSERT INTO Certificates(type)
+            VALUES (the_cert_type)
+            RETURNING id INTO cert_id;
+        INSERT INTO Subjects(type, name, isAltName, certificate)
+            VALUES (the_subject_type, the_name, FALSE, cert_id);
+        IF the_altname IS NOT NULL THEN
+            INSERT INTO Subjects(type, name, isAltName, certificate)
+                VALUES (the_subject_type, the_altname, TRUE, cert_id);
+        END IF;
+        
+        IF (the_TLSA_name IS NULL AND the_TLSA_port IS NOT NULL) OR
+            (the_TLSA_name IS NOT NULL AND the_TLSA_port IS NULL) THEN
+                RAISE EXCEPTION '?the_TLSA_name and the_TLSA_port must both be provided or omitted.';
+        END IF;
+        IF the_TLSA_name IS NOT NULL THEN
+            DECLARE service_id INT4;
+            BEGIN
+                SELECT id INTO service_id
+                    FROM Services
+                    WHERE name = the_TLSA_name AND port = the_TLSA_port;
+                IF NOT FOUND THEN
+                    RAISE EXCEPTION '?No such service "%" with port "%".', the_TLSA_name, the_TLSA_port;
+                END IF;
+                INSERT INTO Certificates_Services(certificate, service)
+                    VALUES (cert_id, service_id);
+            END;
+        END IF;
+        
+        IF (the_disthost_name IS NULL AND the_jail IS NULL AND
+            the_place IS NULL) THEN
+            SELECT * INTO view_row
+                FROM certs
+                WHERE "Cert Name" = the_name;
+            --RAISE NOTICE '[Inserted %]', view_row;
+            RETURN view_row;
+        ELSE
+            DECLARE
+                the_dishost_id  INT4 := NULL;
+                the_jail_id     INT4 := NULL;
+                the_place_id    INT4 := NULL;
+            BEGIN
+                IF the_disthost_name IS NOT NULL THEN
+                    SELECT id INTO the_dishost_id
+                        FROM DistHosts
+                        WHERE FQDN = the_disthost_name;
+                END IF;
+                IF the_jail IS NOT NULL THEN
+                    SELECT id INTO the_jail_id
+                        FROM Jails
+                        WHERE name = the_jail;
+                END IF;
+                IF the_place IS NOT NULL THEN
+                    SELECT id INTO the_place_id
+                        FROM Places
+                        WHERE name = the_place;
+                END IF;
+                INSERT INTO Targets(disthost, jail, place, certificate)
+                    VALUES(the_dishost_id, the_jail_id, the_place_id, cert_id);
+            END;
+        END IF;
+    END
+$$;
+
+GRANT EXECUTE ON FUNCTION add_cert(
+        the_name CITEXT, the_subject_type dd.subject_type, the_cert_type dd.cert_type,
+        the_altname CITEXT, the_TLSA_name CITEXT, the_TLSA_port dd.port_number,
+        the_disthost_name CITEXT, the_jail CITEXT, the_place CITEXT
+        ) TO pki_dev;
+
 
 COMMIT;                 -- CREATE SCHEMA pki
 
