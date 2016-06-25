@@ -375,7 +375,6 @@ CREATE OR REPLACE FUNCTION add_cert(
             SELECT * INTO view_row
                 FROM certs
                 WHERE "Cert Name" = the_name;
-            --RAISE NOTICE '[Inserted %]', view_row;
             RETURN view_row;
         ELSE
             DECLARE
@@ -402,6 +401,10 @@ CREATE OR REPLACE FUNCTION add_cert(
                     VALUES(the_dishost_id, the_jail_id, the_place_id, cert_id);
             END;
         END IF;
+        SELECT * INTO view_row
+            FROM certs
+            WHERE "Cert Name" = the_name;
+        RETURN view_row;
     END
 $$;
 
