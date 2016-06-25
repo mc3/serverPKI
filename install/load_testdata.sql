@@ -43,7 +43,7 @@ COPY Certificates (id, type, disabled) FROM stdin;
 39	local	false
 40	local	false
 \.
-
+SELECT setval('Certificates_id_seq', max(id)) FROM Certificates;
 
 COPY Subjects (id, type, name, isAltname, certificate) FROM stdin;
 1	server	build3.lrau.net	false	1
@@ -97,6 +97,7 @@ COPY Subjects (id, type, name, isAltname, certificate) FROM stdin;
 49	client	syslog	false	39
 50	client	bacula_dir	false	40
 \.
+SELECT setval('Subjects_id_seq', max(id)) FROM Subjects;
 
 
 COPY Services (id, name, port, TLSAprefix) FROM stdin;
@@ -106,6 +107,7 @@ COPY Services (id, name, port, TLSAprefix) FROM stdin;
 4	imap	587	_587._tcp.{}. 3600 IN TLSA 3 0 1
 5	smtp	25	_25._tcp.{}. 3600 IN TLSA 3 0 1
 \.
+SELECT setval('Services_id_seq', max(id)) FROM Services;
 
 
 COPY Certificates_Services (certificate, service) FROM stdin;
@@ -155,6 +157,7 @@ COPY Places (id, name, cert_file_type, cert_path, key_path, uid, gid, mode, chow
 19	root	separate	root/.postgresql	\N	\N	\N	\N	false	true	\N
 20	zeus	separate	/etc/certificates	\N	\N	29	288	false	false	\N
 \.
+SELECT setval('Places_id_seq', max(id)) FROM Places;
 
 
 COPY DistHosts (id, FQDN, jailroot) FROM stdin;
@@ -174,6 +177,7 @@ COPY DistHosts (id, FQDN, jailroot) FROM stdin;
 13	wilhelms-imac.in.chaos1.de	\N
 14	zeus.in.chaos1.de	\N
 \.
+SELECT setval('DistHosts_id_seq', max(id)) FROM DistHosts;
 
 
 COPY Jails (id, name, disthost) FROM stdin;
@@ -201,6 +205,7 @@ COPY Jails (id, name, disthost) FROM stdin;
 22	www3	3
 23	www4	4
 \.
+SELECT setval('Jails_id_seq', max(id)) FROM Jails;
 
 
 COPY Targets (id, disthost, jail, place, certificate) FROM stdin;
@@ -270,6 +275,7 @@ COPY Targets (id, disthost, jail, place, certificate) FROM stdin;
 64	\N	\N	\N	39
 65	15	\N	3	40
 \.
+SELECT setval('Targets_id_seq', max(id)) FROM Targets;
 
 
 COMMIT;                 -- CREATE SCHEMA pki

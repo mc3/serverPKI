@@ -1,4 +1,4 @@
------------------------------ serverPKI definition schema
+    ----------------------------- serverPKI definition schema
 SET search_path = pki, dd, public, pg_catalog;
 SET log_min_messages='error';
 
@@ -29,8 +29,8 @@ CREATE TABLE Subjects (         -- A Subject or an alternate name of a certifica
                                         DEFAULT TRUE, 
   certificate       INT4                            -- 'certifcate for this subject'
                         REFERENCES Certificates
-                        ON DELETE SET NULL
-                        ON UPDATE SET NULL,
+                        ON DELETE CASCADE
+                        ON UPDATE CASCADE,
   updated           dd.updated,                     -- 'time of record update'
   created           dd.created,                     -- 'time of record creation'
   remarks           TEXT                            -- 'Remarks'
@@ -155,7 +155,26 @@ CREATE TABLE CertInstance (        -- certificate instances being issued
                         -- TRIGGERS --------------------------------------------
 
 
-CREATE OR REPLACE FUNCTION Ensure_exactly_one_none_altname_subject_per_cert() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION Forbit_deleting_none_altname_subject() RETURNS TRIGGER AS $$
+    BEGIN
+        IF NOT OLD.isAltname THEN
+            -- never allow subject to be deleted which is none altname
+            -- (delete certificate instead)
+            RETURN NULL;
+        ELSE
+            RETURN OLD;
+        END IF;
+    END;
+$$ LANGUAGE 'plpgsql';
+
+GRANT EXECUTE ON FUNCTION Forbit_deleting_none_altname_subject() TO pki_dev;
+DROP TRIGGER IF EXISTS Forbit_deleting_none_altname_subject ON Subjects;
+CREATE TRIGGER Forbit_deleting_none_altname_subject BEFORE DELETE
+    ON Subjects FOR EACH ROW 
+    EXECUTE PROCEDURE Forbit_deleting_none_altname_subject();
+    
+
+CREATE OR REPLACE FUNCTION Allow_one_none_altname_subject_per_cert() RETURNS TRIGGER AS $$
     BEGIN
         IF NEW.isAltname THEN
             RETURN NEW;
@@ -163,7 +182,26 @@ CREATE OR REPLACE FUNCTION Ensure_exactly_one_none_altname_subject_per_cert() RE
         IF ( SELECT COUNT(*)
                 FROM Subjects S
                 WHERE S.certificate = NEW.certificate AND NOT S.isAltname ) > 0 THEN
-            RAISE EXCEPTION '?Only one none-alternate-name-Subject per Certificate allowed';  
+            RAISE EXCEPTION '?Only one none-alternate-name-Subject per Certifiate allowed:';  
+        ELSE
+            RETURN NEW;
+        END IF;
+    END;
+$$ LANGUAGE 'plpgsql';
+
+GRANT EXECUTE ON FUNCTION Allow_one_none_altname_subject_per_cert() TO pki_dev;
+DROP TRIGGER IF EXISTS Allow_one_none_altname_subject_per_cert ON Subjects;
+CREATE TRIGGER Allow_one_none_altname_subject_per_cert BEFORE INSERT
+    ON Subjects FOR EACH ROW 
+    EXECUTE PROCEDURE Allow_one_none_altname_subject_per_cert();
+    
+
+CREATE OR REPLACE FUNCTION Ensure_exactly_one_none_altname_subject_per_cert() RETURNS TRIGGER AS $$
+    BEGIN
+        -- update case. Do not allow changing certificate or isAltname
+        IF ( NEW.certificate != OLD.certificate OR
+                 NEW.isAltname != OLD.isAltname ) THEN
+            RAISE EXCEPTION '?Cant change relationship to certificate or alname attribute of subject';  
         ELSE
             RETURN NEW;
         END IF;
@@ -172,7 +210,7 @@ $$ LANGUAGE 'plpgsql';
 
 GRANT EXECUTE ON FUNCTION Ensure_exactly_one_none_altname_subject_per_cert() TO pki_dev;
 DROP TRIGGER IF EXISTS Ensure_exactly_one_none_altname_subject_per_cert ON Subjects;
-CREATE TRIGGER Ensure_exactly_one_none_altname_subject_per_cert BEFORE INSERT OR UPDATE
+CREATE TRIGGER Ensure_exactly_one_none_altname_subject_per_cert AFTER UPDATE
     ON Subjects FOR EACH ROW 
     EXECUTE PROCEDURE Ensure_exactly_one_none_altname_subject_per_cert();
 
@@ -251,7 +289,7 @@ CREATE TRIGGER Ensure_jail_sits_on_correct_disthost BEFORE INSERT OR UPDATE
 CREATE OR REPLACE VIEW certs AS
     SELECT s1.type AS "Subject", s1.name AS "Cert Name",
                 c.type AS "Type", s2.name AS "Alt Name", s.name AS "TLSA",
-                s.port AS "Port", d.fqdn AS "FQDN", j.name AS "Jail",
+                s.port AS "Port", d.fqdn AS "Dist Host", j.name AS "Jail",
                 p.name AS "Place"
     FROM Subjects s1
         RIGHT JOIN Certificates c
@@ -301,7 +339,7 @@ CREATE OR REPLACE VIEW certs_ids AS
 
                         -- Functions -------------------------------------------
                         
-
+-- SELECT * FROM add_cert('myserver.at.do.main', 'server','LE', NULL, NULL, NULL, NULL, NULL, NULL);
 CREATE OR REPLACE FUNCTION add_cert(
         the_name CITEXT, the_subject_type dd.subject_type, the_cert_type dd.cert_type,
         the_altname CITEXT, the_TLSA_name CITEXT, the_TLSA_port dd.port_number,
@@ -414,6 +452,40 @@ GRANT EXECUTE ON FUNCTION add_cert(
         the_disthost_name CITEXT, the_jail CITEXT, the_place CITEXT
         ) TO pki_dev;
 
+
+
+CREATE OR REPLACE FUNCTION add_altname(
+        the_cert_name CITEXT, the_altname CITEXT
+        ) RETURNS VOID
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+        cert_id             INT4;
+        the_subject_type    dd.subject_type;
+        view_row            certs%ROWTYPE;
+
+    BEGIN
+        if (the_cert_name IS NULL OR the_cert_name = '' OR the_altname IS NULL OR
+            the_altname = '') THEN
+            RAISE EXCEPTION '?the_cert_name and the_altname must not be empty.';
+        END IF;
+        PERFORM id
+            FROM Subjects
+            WHERE name = the_altname;
+        IF FOUND THEN
+            RAISE EXCEPTION '?"%" is already in use.', the_altname;
+        END IF;
+        SELECT certificate, type INTO cert_id, the_subject_type
+            FROM Subjects
+            WHERE name = the_cert_name;
+        IF FOUND THEN
+            INSERT INTO Subjects(type, name, isAltname, certificate)
+                VALUES(the_subject_type, the_altname, TRUE, cert_id);
+        ELSE
+           RAISE EXCEPTION '?No such Subject as "%"', the_cert_name;
+        END IF;
+    END
+$$;
 
 COMMIT;                 -- CREATE SCHEMA pki
 
