@@ -128,7 +128,9 @@ CREATE TABLE Targets (    -- Target describes where and how certs and keys are d
                         ON UPDATE CASCADE,
   updated           dd.updated,                     -- 'time of record update'
   created           dd.created,                     -- 'time of record creation'
-  remarks           TEXT                            -- 'Remarks'
+  remarks           TEXT,                           -- 'Remarks'
+
+  UNIQUE(distHost, jail, place, certificate)
 )
 
 
@@ -453,6 +455,37 @@ GRANT EXECUTE ON FUNCTION add_cert(
         ) TO pki_dev;
 
 
+CREATE OR REPLACE FUNCTION remove_cert(
+        the_cert_name CITEXT
+        ) RETURNS VOID
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+        cert_id             INT4;
+
+    BEGIN
+        if (the_cert_name IS NULL OR the_cert_name = '') THEN
+            RAISE EXCEPTION '?the_cert_name must not be empty.';
+        END IF;
+        SELECT c.id INTO cert_id
+            FROM Subjects s, Certificates c
+            WHERE s.name = the_cert_name AND s.certificate = c.id;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION '?No such certificate as "%".', the_altname;
+        END IF;
+        -- All related Subjects, Targets and Certificates_Services
+        -- deleted by CASCADEd DELETE:
+        DELETE FROM Certificates
+            WHERE id = cert_id;
+    END
+$$;
+
+GRANT EXECUTE ON FUNCTION remove_cert(
+        the_cert_name CITEXT
+        ) TO pki_dev;
+
+
+
 
 CREATE OR REPLACE FUNCTION add_altname(
         the_cert_name CITEXT, the_altname CITEXT
@@ -486,6 +519,344 @@ CREATE OR REPLACE FUNCTION add_altname(
         END IF;
     END
 $$;
+
+GRANT EXECUTE ON FUNCTION add_altname(
+        the_cert_name CITEXT, the_altname CITEXT
+        ) TO pki_dev;
+
+
+CREATE OR REPLACE FUNCTION remove_altname(
+        the_altname CITEXT
+        ) RETURNS VOID
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+        DELETE FROM Subjects
+            WHERE name = the_altname AND isAltname = TRUE;
+    END
+$$;
+
+GRANT EXECUTE ON FUNCTION remove_altname(
+        the_altname CITEXT
+        ) TO pki_dev;
+
+
+CREATE OR REPLACE FUNCTION add_Service(
+        the_cert_name CITEXT, the_service_name CITEXT, the_port dd.port_number
+        ) RETURNS VOID
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+        cert_id             INT4;
+        service_id          INT4;
+
+    BEGIN
+        if (the_cert_name IS NULL OR the_cert_name = '' OR the_service_name IS NULL OR
+            the_service_name = '' OR the_port IS NULL) THEN
+            RAISE EXCEPTION '?cert name, service name and the port must not be empty.';
+        END IF;
+        SELECT id INTO service_id
+            FROM Services
+            WHERE name = the_service_name AND port = the_port;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION '?No such service "%" "%".', the_service_name, the_port;
+        END IF;
+        SELECT certificate INTO cert_id
+            FROM Subjects
+            WHERE name = the_cert_name;
+        IF FOUND THEN
+            INSERT INTO Certificates_Services(certificate, service)
+                VALUES(cert_id, service_id);
+        ELSE
+           RAISE EXCEPTION '?No such Subject as "%"', the_cert_name;
+        END IF;
+    END
+$$;
+
+GRANT EXECUTE ON FUNCTION add_Service(
+        the_cert_name CITEXT, the_service_name CITEXT, the_port dd.port_number
+        ) TO pki_dev;
+
+
+CREATE OR REPLACE FUNCTION remove_Service(
+        the_cert_name CITEXT, the_service_name CITEXT, the_port dd.port_number
+        ) RETURNS VOID
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+        cert_id             INT4;
+        service_id          INT4;
+
+    BEGIN
+        if (the_cert_name IS NULL OR the_cert_name = '' OR the_service_name IS NULL OR
+            the_service_name = '' OR the_port IS NULL) THEN
+            RAISE EXCEPTION '?cert name, service name and the port must not be empty.';
+        END IF;
+        SELECT id INTO service_id
+            FROM Services
+            WHERE name = the_service_name AND port = the_port;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION '?No such service "%" "%".', the_service_name, the_port;
+        END IF;
+        SELECT certificate INTO cert_id
+            FROM Subjects
+            WHERE name = the_cert_name;
+        IF FOUND THEN
+            DELETE FROM Certificates_Services
+                WHERE certificate = cert_id AND service = service_id;
+        ELSE
+           RAISE EXCEPTION '?No such Subject as "%"', the_cert_name;
+        END IF;
+    END
+$$;
+
+GRANT EXECUTE ON FUNCTION remove_Service(
+        the_cert_name CITEXT, the_service_name CITEXT, the_port dd.port_number
+        ) TO pki_dev;
+
+
+CREATE OR REPLACE FUNCTION add_Disthost(
+        the_cert_name CITEXT, the_disthost_name CITEXT
+        ) RETURNS VOID
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+        cert_id             INT4;
+        disthost_id          INT4;
+
+    BEGIN
+        if (the_cert_name IS NULL OR the_cert_name = '' OR the_disthost_name IS NULL OR
+            the_disthost_name = '') THEN
+            RAISE EXCEPTION '?cert name and disthost name must not be empty.';
+        END IF;
+        SELECT id INTO disthost_id
+            FROM DistHosts
+            WHERE FQDN = the_disthost_name;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION '?No such Disthost "%".', the_disthost_name;
+        END IF;
+        SELECT certificate INTO cert_id
+            FROM Subjects
+            WHERE name = the_cert_name;
+        IF FOUND THEN
+            INSERT INTO Targets(certificate, disthost)
+                VALUES(cert_id, disthost_id);
+        ELSE
+           RAISE EXCEPTION '?No such Subject as "%"', the_cert_name;
+        END IF;
+    END
+$$;
+
+GRANT EXECUTE ON FUNCTION add_Disthost(
+        the_cert_name CITEXT, the_disthost_name CITEXT
+        ) TO pki_dev;
+
+
+CREATE OR REPLACE FUNCTION remove_Disthost(
+        the_cert_name CITEXT, the_disthost_name CITEXT
+        ) RETURNS VOID
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+        cert_id             INT4;
+        disthost_id          INT4;
+
+    BEGIN
+        if (the_cert_name IS NULL OR the_cert_name = '' OR the_disthost_name IS NULL OR
+            the_disthost_name = '') THEN
+            RAISE EXCEPTION '?cert name and disthost name must not be empty.';
+        END IF;
+        SELECT id INTO disthost_id
+            FROM DistHosts
+            WHERE FQDN = the_disthost_name;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION '?No such Disthost "%".', the_disthost_name;
+        END IF;
+        SELECT certificate INTO cert_id
+            FROM Subjects
+            WHERE name = the_cert_name;
+        IF FOUND THEN
+            DELETE FROM Targets
+                WHERE
+                    certificate = cert_id AND disthost = disthost_id AND
+                    jail IS NULL AND place IS NULL;
+            IF NOT FOUND THEN
+                UPDATE Targets
+                    SET disthost = NULL
+                    WHERE certificate = cert_id AND disthost = disthost_id;
+            END IF;
+        ELSE
+           RAISE EXCEPTION '?No such Subject as "%"', the_cert_name;
+        END IF;
+    END
+$$;
+
+GRANT EXECUTE ON FUNCTION remove_Disthost(
+        the_cert_name CITEXT, the_disthost_name CITEXT
+        ) TO pki_dev;
+
+
+CREATE OR REPLACE FUNCTION add_Jail(
+        the_cert_name CITEXT, the_jail_name CITEXT
+        ) RETURNS VOID
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+        cert_id          INT4;
+        jail_id          INT4;
+
+    BEGIN
+        if (the_cert_name IS NULL OR the_cert_name = '' OR the_jail_name IS NULL OR
+            the_jail_name = '') THEN
+            RAISE EXCEPTION '?cert name and jail name must not be empty.';
+        END IF;
+        SELECT id INTO jail_id
+            FROM Jails
+            WHERE name = the_jail_name;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION '?No such Jail "%".', the_disthost_name;
+        END IF;
+        SELECT certificate INTO cert_id
+            FROM Subjects
+            WHERE name = the_cert_name;
+        IF FOUND THEN
+            INSERT INTO Targets(certificate, jail)
+                VALUES(cert_id, jail_id);
+        ELSE
+           RAISE EXCEPTION '?No such Subject as "%"', the_cert_name;
+        END IF;
+    END
+$$;
+
+GRANT EXECUTE ON FUNCTION add_Jail(
+        the_cert_name CITEXT, the_jail_name CITEXT
+        ) TO pki_dev;
+
+
+CREATE OR REPLACE FUNCTION remove_Jail(
+        the_cert_name CITEXT, the_jail_name CITEXT
+        ) RETURNS VOID
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+        cert_id          INT4;
+        jail_id          INT4;
+
+    BEGIN
+        if (the_cert_name IS NULL OR the_cert_name = '' OR the_jail_name IS NULL OR
+            the_jail_name = '') THEN
+            RAISE EXCEPTION '?cert name and jail name must not be empty.';
+        END IF;
+        SELECT id INTO jail_id
+            FROM Jails
+            WHERE name = the_jail_name;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION '?No such Jail "%".', the_disthost_name;
+        END IF;
+        SELECT certificate INTO cert_id
+            FROM Subjects
+            WHERE name = the_cert_name;
+        IF FOUND THEN
+            DELETE FROM TARGETS
+                WHERE certificate = cert_id AND jail = jail_id AND
+                    disthost IS NULL AND place IS NULL;
+            IF NOT FOUND THEN
+                UPDATE Targets
+                    SET jail = NULL
+                    WHERE certificate = cert_id AND jail = jail_id;
+            END IF;
+        ELSE
+           RAISE EXCEPTION '?No such Subject as "%"', the_cert_name;
+        END IF;
+    END
+$$;
+
+GRANT EXECUTE ON FUNCTION remove_Jail(
+        the_cert_name CITEXT, the_jail_name CITEXT
+        ) TO pki_dev;
+
+
+CREATE OR REPLACE FUNCTION add_Place(
+        the_cert_name CITEXT, the_place_name CITEXT
+        ) RETURNS VOID
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+        cert_id          INT4;
+        place_id          INT4;
+
+    BEGIN
+        if (the_cert_name IS NULL OR the_cert_name = '' OR the_place_name IS NULL OR
+            the_place_name = '') THEN
+            RAISE EXCEPTION '?cert name and place name must not be empty.';
+        END IF;
+        SELECT id INTO place_id
+            FROM Places
+            WHERE name = the_place_name;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION '?No such Place "%".', the_disthost_name;
+        END IF;
+        SELECT certificate INTO cert_id
+            FROM Subjects
+            WHERE name = the_cert_name;
+        IF FOUND THEN
+            INSERT INTO Targets(certificate, place)
+                VALUES(cert_id, place_id);
+        ELSE
+           RAISE EXCEPTION '?No such Subject as "%"', the_cert_name;
+        END IF;
+    END
+$$;
+
+GRANT EXECUTE ON FUNCTION add_Place(
+        the_cert_name CITEXT, the_place_name CITEXT
+        ) TO pki_dev;
+
+
+CREATE OR REPLACE FUNCTION remove_Place(
+        the_cert_name CITEXT, the_place_name CITEXT
+        ) RETURNS VOID
+    LANGUAGE plpgsql
+    AS $$
+    DECLARE
+        cert_id         INT4;
+        place_id        INT4;
+
+    BEGIN
+        if (the_cert_name IS NULL OR the_cert_name = '' OR the_place_name IS NULL OR
+            the_place_name = '') THEN
+            RAISE EXCEPTION '?cert name and place name must not be empty.';
+        END IF;
+        SELECT id INTO place_id
+            FROM Places
+            WHERE name = the_place_name;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION '?No such Place "%".', the_disthost_name;
+        END IF;
+        SELECT certificate INTO cert_id
+            FROM Subjects
+            WHERE name = the_cert_name;
+        IF FOUND THEN
+            DELETE FROM TARGETS
+                WHERE certificate = cert_id AND place = place_id AND
+                    disthost IS NULL AND jail IS NULL;
+            IF NOT FOUND THEN
+                UPDATE Targets
+                    SET place = NULL
+                    WHERE certificate = cert_id AND place = place_id;
+            END IF;
+        ELSE
+           RAISE EXCEPTION '?No such Subject as "%"', the_cert_name;
+        END IF;
+    END
+$$;
+
+GRANT EXECUTE ON FUNCTION remove_Place(
+        the_cert_name CITEXT, the_place_name CITEXT
+        ) TO pki_dev;
+
+
+
 
 COMMIT;                 -- CREATE SCHEMA pki
 
