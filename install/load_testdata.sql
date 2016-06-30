@@ -261,18 +261,13 @@ COPY Targets (id, disthost, jail, place, certificate) FROM stdin;
 50	2	\N	16	30
 51	4	21	19	31
 52	4	17	12	32
-53	\N	\N	\N	33
 54	5	\N	11	34
 55	3	14	14	34
 56	3	16	14	34
 57	4	15	14	34
 58	4	17	14	34
 59	4	17	11	34
-60	\N	\N	\N	35
-61	\N	\N	\N	36
-62	\N	\N	\N	37
 63	4	21	19	38
-64	\N	\N	\N	39
 65	15	\N	3	40
 \.
 SELECT setval('Targets_id_seq', max(id)) FROM Targets;

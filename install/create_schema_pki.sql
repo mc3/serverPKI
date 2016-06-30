@@ -110,18 +110,18 @@ CREATE TABLE Jails (              -- FreeBSD jail, to place cert at
 
 CREATE TABLE Targets (    -- Target describes where and how certs and keys are deployed
   id                SERIAL          PRIMARY KEY,    -- 'PK of DistHosts table'
-  distHost          int4                            -- 'host, hosting this jail/cert'
+  distHost          int4            NOT NULL        -- 'host, hosting this jail/cert'
                         REFERENCES DistHosts
                         ON DELETE CASCADE
                         ON UPDATE CASCADE,
   jail              int4                            -- 'jail, hosting this cert'
                         REFERENCES Jails
-                        ON DELETE CASCADE
-                        ON UPDATE CASCADE,
+                        ON DELETE SET NULL
+                        ON UPDATE SET NULL,
   place             int4                            -- 'cert placed here'
                         REFERENCES Places
-                        ON DELETE CASCADE
-                        ON UPDATE CASCADE,
+                        ON DELETE SET NULL
+                        ON UPDATE SET NULL,
   certificate       int4            NOT NULL        -- 'subject of target'
                         REFERENCES Certificates
                         ON DELETE CASCADE
@@ -426,16 +426,29 @@ CREATE OR REPLACE FUNCTION add_cert(
                     SELECT id INTO the_dishost_id
                         FROM DistHosts
                         WHERE FQDN = the_disthost_name;
+                    IF NOT FOUND THEN
+                        RAISE EXCEPTION '?No such disthost "%"', the_disthost_name;
+                    END IF;
+                ELSE    -- we have no disthost
+                    IF (the_jail IS NOT NULL OR the_place IS NOT NULL) THEN
+                        RAISE EXCEPTION '?Needing disthost if jail or place supplied';
+                    END IF;
                 END IF;
                 IF the_jail IS NOT NULL THEN
                     SELECT id INTO the_jail_id
                         FROM Jails
                         WHERE name = the_jail;
+                    IF NOT FOUND THEN
+                        RAISE EXCEPTION '?No such jail "%"', the_jail;
+                    END IF;
                 END IF;
                 IF the_place IS NOT NULL THEN
                     SELECT id INTO the_place_id
                         FROM Places
                         WHERE name = the_place;
+                    IF NOT FOUND THEN
+                        RAISE EXCEPTION '?No such place "%"', the_place;
+                    END IF;
                 END IF;
                 INSERT INTO Targets(disthost, jail, place, certificate)
                     VALUES(the_dishost_id, the_jail_id, the_place_id, cert_id);
@@ -697,31 +710,39 @@ GRANT EXECUTE ON FUNCTION remove_Disthost(
 
 
 CREATE OR REPLACE FUNCTION add_Jail(
-        the_cert_name CITEXT, the_jail_name CITEXT
+        the_cert_name CITEXT, the_disthost_name CITEXT, the_jail_name CITEXT
         ) RETURNS VOID
     LANGUAGE plpgsql
     AS $$
     DECLARE
+        the_dishost_id   INT4;
         cert_id          INT4;
         jail_id          INT4;
 
     BEGIN
-        if (the_cert_name IS NULL OR the_cert_name = '' OR the_jail_name IS NULL OR
-            the_jail_name = '') THEN
-            RAISE EXCEPTION '?cert name and jail name must not be empty.';
+        if (the_cert_name IS NULL OR the_cert_name = '' OR
+            the_disthost_name IS NULL OR the_disthost_name = '' OR
+            the_jail_name IS NULL OR the_jail_name = '') THEN
+            RAISE EXCEPTION '?cert name disthost and jail name must not be empty.';
+        END IF;
+        SELECT id INTO the_dishost_id
+            FROM DistHosts
+            WHERE FQDN = the_disthost_name;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION '?No such disthost "%"', the_disthost_name;
         END IF;
         SELECT id INTO jail_id
             FROM Jails
             WHERE name = the_jail_name;
         IF NOT FOUND THEN
-            RAISE EXCEPTION '?No such Jail "%".', the_disthost_name;
+            RAISE EXCEPTION '?No such Jail "%".', the_jail_name;
         END IF;
         SELECT certificate INTO cert_id
             FROM Subjects
             WHERE name = the_cert_name;
         IF FOUND THEN
-            INSERT INTO Targets(certificate, jail)
-                VALUES(cert_id, jail_id);
+            INSERT INTO Targets(certificate, disthost, jail)
+                VALUES(cert_id, the_dishost_id, jail_id);
         ELSE
            RAISE EXCEPTION '?No such Subject as "%"', the_cert_name;
         END IF;
@@ -729,7 +750,7 @@ CREATE OR REPLACE FUNCTION add_Jail(
 $$;
 
 GRANT EXECUTE ON FUNCTION add_Jail(
-        the_cert_name CITEXT, the_jail_name CITEXT
+        the_cert_name CITEXT, the_disthost_name CITEXT, the_jail_name CITEXT
         ) TO pki_dev;
 
 
@@ -777,31 +798,39 @@ GRANT EXECUTE ON FUNCTION remove_Jail(
 
 
 CREATE OR REPLACE FUNCTION add_Place(
-        the_cert_name CITEXT, the_place_name CITEXT
+        the_cert_name CITEXT, the_disthost_name CITEXT, the_place_name CITEXT
         ) RETURNS VOID
     LANGUAGE plpgsql
     AS $$
     DECLARE
+        the_dishost_id   INT4;
         cert_id          INT4;
-        place_id          INT4;
+        place_id         INT4;
 
     BEGIN
-        if (the_cert_name IS NULL OR the_cert_name = '' OR the_place_name IS NULL OR
-            the_place_name = '') THEN
-            RAISE EXCEPTION '?cert name and place name must not be empty.';
+        if (the_cert_name IS NULL OR the_cert_name = '' OR
+            the_disthost_name IS NULL OR the_disthost_name = '' OR
+            the_place_name IS NULL OR the_place_name = '') THEN
+            RAISE EXCEPTION '?cert name disthost and place name must not be empty.';
+        END IF;
+        SELECT id INTO the_dishost_id
+            FROM DistHosts
+            WHERE FQDN = the_disthost_name;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION '?No such disthost "%"', the_disthost_name;
         END IF;
         SELECT id INTO place_id
             FROM Places
             WHERE name = the_place_name;
         IF NOT FOUND THEN
-            RAISE EXCEPTION '?No such Place "%".', the_disthost_name;
+            RAISE EXCEPTION '?No such place "%".', the_place_name;
         END IF;
         SELECT certificate INTO cert_id
             FROM Subjects
             WHERE name = the_cert_name;
         IF FOUND THEN
-            INSERT INTO Targets(certificate, place)
-                VALUES(cert_id, place_id);
+            INSERT INTO Targets(certificate, disthost, place)
+                VALUES(cert_id, the_dishost_id, place_id);
         ELSE
            RAISE EXCEPTION '?No such Subject as "%"', the_cert_name;
         END IF;
@@ -809,7 +838,7 @@ CREATE OR REPLACE FUNCTION add_Place(
 $$;
 
 GRANT EXECUTE ON FUNCTION add_Place(
-        the_cert_name CITEXT, the_place_name CITEXT
+        the_cert_name CITEXT, the_disthost_name CITEXT, the_place_name CITEXT
         ) TO pki_dev;
 
 
