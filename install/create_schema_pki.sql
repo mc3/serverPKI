@@ -49,6 +49,7 @@ CREATE TABLE Services (         -- Service and port combination for TLSA-RR
     UNIQUE (name, port)
 )
 
+
 CREATE TABLE Certificates_Services (    -- Junction relation
   certificate       int4                            -- 'certificate'
                         REFERENCES Certificates
@@ -134,6 +135,7 @@ CREATE TABLE Targets (    -- Target describes where and how certs and keys are d
 )
 
 
+
 CREATE TABLE CertInstance (        -- certificate instances being issued
   id                SERIAL          PRIMARY KEY,    -- 'PK of CertInstance table'
   certificate       int4            NOT NULL        -- 'Certificate Class'
@@ -151,8 +153,18 @@ CREATE TABLE CertInstance (        -- certificate instances being issued
   updated           dd.updated,                     -- 'time of record update'
   remarks           TEXT                            -- 'Remarks'
 )
+
 ;                       -- CREATE SCHEMA pki -----------------------------------
 
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Certificates TO pki_dev;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Subjects TO pki_dev;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Services TO pki_dev;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Certificates_Services TO pki_dev;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Places TO pki_dev;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE DistHosts TO pki_dev;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Jails TO pki_dev;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Targets TO pki_dev;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE CertInstance TO pki_dev;
 
                         -- TRIGGERS --------------------------------------------
 
@@ -886,6 +898,7 @@ GRANT EXECUTE ON FUNCTION remove_Place(
 
 
 
+GRANT USAGE ON SCHEMA pki TO pki_dev;
 
 COMMIT;                 -- CREATE SCHEMA pki
 
