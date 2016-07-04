@@ -81,6 +81,8 @@ ps_tlsaprefixes = None
 ps_disthosts = None
 
         
+#--------------- class Certificate --------------
+
 class Certificate(object):
     'Certificate'
     
@@ -93,7 +95,6 @@ class Certificate(object):
         self.altnames = []
         self.tlsaprefixes = []
         self.disthosts = {}
-        
         
         if not ps_certificate:
             db.execute("PREPARE q_certificate(text) AS " + q_certificate)
@@ -108,21 +109,20 @@ class Certificate(object):
             ps_altnames = db.statement_from_id('q_altnames')
         for (name,) in ps_altnames(self.cert_id):
             self.altnames.append(name)
-        if options.debug: print('Altnames: ', self.altnames)
+        if options.debug: print('Altnames: '.format(self.altnames))
         
         if not ps_tlsaprefixes:
             db.execute("PREPARE q_tlsaprefixes(integer) AS " + q_tlsaprefixes)
             ps_tlsaprefixes = db.statement_from_id('q_tlsaprefixes')
         for (name,) in ps_tlsaprefixes(self.cert_id):
             self.tlsaprefixes.append(name)
-        if options.debug: print('TLSA prefixes: ', self.tlsaprefixes)
+        if options.debug: print('TLSA prefixes: '.format(self.tlsaprefixes))
         
         if not ps_disthosts:
             db.execute("PREPARE q_disthosts(integer) AS " + q_disthosts)
             ps_disthosts = db.statement_from_id('q_disthosts')
-        if options.debug: print('Disthosts:')
         for row in ps_disthosts(self.cert_id):
-            if options.debug: print('Disthost row: {}',row)
+            ##if options.debug: print('Disthost row: {}'.format(row))
             if row['fqdn']:    
                 if row['fqdn'] not in self.disthosts:
                     self.disthosts[row['fqdn']] = {    'jails': {}, 'places': {} }
@@ -138,7 +138,7 @@ class Certificate(object):
                             p = Place(db,row['place_name'])
                             places[row['place_name']] = p
                         dh['places'][row['place_name']] = places[row['place_name']]
-        if options.debug: print('{}', self.disthosts)
+        if options.debug: print('Disthosts: {}'.format(self.disthosts))
 
 
 
@@ -154,6 +154,8 @@ q_Place = """
 ps_place = None
 
         
+#--------------- class Place --------------
+
 class Place(object):
     'Place'
     

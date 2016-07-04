@@ -18,9 +18,12 @@ from pki.cert import Certificate
             
 #--------------- main --------------
 
-util.log_to_file('sftp.log')
-
+all_cert_names = []
 our_cert_names = []
+our_certs = {}
+
+
+util.log_to_file('sftp.log')
 
 pe = dbc('pki_dev')
 db = pe.open()
@@ -31,15 +34,12 @@ row_list = db.query("""
         WHERE isAltName = FALSE
         ORDER BY name""",)
 
-all_certs = []
-all_cert_names = []
 
 for (name,) in row_list:
     all_cert_names.append(name)
-    c = Certificate(db, name)
-    all_certs.append(c)
 
-"""
+if opts.verbose: print('[{} certificates in configuration]'.format(len(all_cert_names)))
+
 if opts.all:
     our_cert_names = all_cert_names
 
@@ -50,7 +50,7 @@ error = False
 if opts.only_cert:
     error = False
     for i in opts.only_cert:
-        if i not in all_certs:
+        if i not in all_cert_names:
             print("? {} not in configuration. Can't be specified with --only".format(i))
             error = True
     if not error:
@@ -60,7 +60,7 @@ else:
     if opts.cert_to_be_included:
         error = False
         for i in opts.cert_to_be_included:
-            if i not in all_certs:
+            if i not in all_cert_names:
                 print("? {} not in configuration. Can't be included".format(i))
                 error = True
         if not error:
@@ -69,7 +69,7 @@ else:
     if opts.cert_to_be_excluded:
         error = False
         for i in opts.cert_to_be_excluded:
-            if i not in all_certs:
+            if i not in all_cert_names:
                 print("? {} not in configuration. Can't be excluded".format(i))
                 error = True
         if not error:
@@ -81,13 +81,17 @@ if error:
 
 our_cert_names = sorted(list(cert_name_set))
 
+for name in our_cert_names:
+    c = Certificate(db, name)
+    our_certs[name] = c
+
 if opts.check_only:
-    if traverseConfigTree('check', sorted(all_certs)):
-        print('[No syntax errors found in configuration.]')
+    print('[No syntax errors found in configuration.]')
     sys.exit(0)
 
 if opts.debug: print('[Selected certificates:]\n\r{}'.format(our_cert_names))
 
+"""
 if opts.create:
     if create_certs(our_cert_names):
         if opts.distribute:
