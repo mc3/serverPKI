@@ -123,19 +123,18 @@ def store_TLSAs(subject, tlsa_hash, theCertificate):
         if opts.debug: print('[Writing \n\r{}into {}]'.format(rr, str(subdir / filename)))
         filename.open(mode = 'w').write(rr)
 
-def TLSA_pathes(subject):
+def TLSA_pathes(theCertificate):
     """
     Retrieve pathes of TLSA RRs.
     
-    @param subject:     subject of cerificate
-    @type subject:      string
-    @rtype:             List of file pathes (may be empty)
+    @param theCertificate:     cerificate
+    @type theCertificate:      Certificate
+    @rtype:                    List of file pathes (may be empty)
     @exceptions:
     """
     retval = []
-    my_subject = Subjects.certs[subject]
     
-    for fqdn in fqdnsFromTLSA(subject):
+    for fqdn in theCertificate.tlsaprefixes:
         filename = Path(fqdn + '.tlsa')
         fqdn_tags = subject.split(sep='.')
         dirname = '.'.join(fqdn_tags[-2::])

@@ -8,7 +8,7 @@ import sys
 from paramiko import util
 
 ##from pki.config import Subjects
-##from pki.certdist import traverseConfigTree
+from pki.certdist import deployCerts
 ##from pki.certrunner import create_certs
 from pki.utils import options as opts
 
@@ -90,6 +90,16 @@ if opts.check_only:
     sys.exit(0)
 
 if opts.debug: print('[Selected certificates:]\n\r{}'.format(our_cert_names))
+
+if opts.create:
+    for c in our_certs.values():
+        if c.create_instance():
+            continue
+        sle('Stopped due to error-')
+        print('?Stopped due to error.')
+        sys.exit(1)
+if opts.distribute:
+    deployCerts(our_certs)
 
 """
 if opts.create:

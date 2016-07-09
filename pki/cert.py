@@ -34,8 +34,16 @@
 # requires python 3.4.
 
 #--------------- imported modules --------------
+import sys
+from pathlib import Path
+from OpenSSL import crypto,rand,crypto
 
 #--------------- local imports --------------
+from pki.config import Pathes, X509atts
+from pki.certgen import *
+##from pki.certdist import deployCerts
+from pki.certstore import store
+
 from pki.utils import sli, sln, sle, options
 
 #--------------- Places --------------
@@ -86,12 +94,19 @@ ps_disthosts = None
 class Certificate(object):
     'Certificate'
     
+    cakey = None
+    cacert = None
+    cacert_text = ''
+    
     
     def __init__(self, db, name):
         
         global ps_certificate, ps_altnames, ps_tlsaprefixes, ps_disthosts
         global places
         
+        self.db = db
+        self.name = name
+
         self.altnames = []
         self.tlsaprefixes = []
         self.disthosts = {}
@@ -101,7 +116,6 @@ class Certificate(object):
             ps_certificate = db.statement_from_id('q_certificate')
         self.cert_id, self.cert_type, self.disabled, self.subject_type = \
             ps_certificate.first(name)
-        self.name = name
         if options.debug: print('------ cert {} {}'.format(self.name, 
                     self.cert_type + ' DISABLED' if self.disabled else ''))
         if not ps_altnames:
@@ -139,8 +153,109 @@ class Certificate(object):
                             places[row['place_name']] = p
                         dh['places'][row['place_name']] = places[row['place_name']]
         if options.debug: print('Disthosts: {}'.format(self.disthosts))
+    
+    def create_instance(self):
+        if self.cert_type == 'LE': return self.create_LE_instance()
+        elif self.cert_type == 'local': return self.create_local_instance()
+        else: raise AssertionError
+        
+    def create_LE_instance(self):
+        sle('LE type certificates not yet implemented: {}'.format(self.name))
+        print('?LE type certificates not yet implemented: {}'.format(self.name))
+        sys.exit(1)
+        
+    def create_local_instance(self):
+        if not self.get_cacert(): return False
+        
+        if options.verbose:
+            print('[Creating key (%d bits) and cert for %s %s and loading %d bytes of random data...]' %
+                (int(X509atts.bits), self.subject_type, self.name, int(X509atts.bits)))
+        rand.load_file(b'/dev/urandom', X509atts.bits)
+        if not rand.status:
+            print('? Random device failed to produce enough entropy')
+            return False
+        pkey = createKeyPair(TYPE_RSA, X509atts.bits)
+        name_dict = X509atts.names
+        name_dict['CN'] = self.name
+        req = createCertRequest(pkey, 'SHA256', name_dict)
+        
+        serial = Serial()
+        my_serial = serial.next()
+        alt_names = [self.name, ]
+        if len(self.altnames) > 0:
+            alt_names.extend(self.altnames)
+        cert = createCertificate(req, self.subject_type, self.cacert, self.cakey, my_serial,
+                                    0, X509atts.lifetime, alt_names, digest='SHA256')
+        
+        hostname = self.name[2:] if self.name.startswith('*.') else self.name
+        store(hostname, self.subject_type, self.cacert_text, cert, pkey, self)
+        
+        print('[Cert for %s, serial %d/%x created]' % (hostname, my_serial, my_serial))
+        return True
+        
+    def get_cacert(self):
+        if not Pathes.ca_cert.exists() or not Pathes.ca_key.exists:
 
+            print('%No CA cert found. Creating one (just for testing - NOT FOR PRODUCTION). . .')
+            if not Pathes.ca_serial.exists():
+                try:
+                    fd = Path.open(Pathes.ca_serial, "w")
+                    fd.write(str(0)+'\n')
+                except IOError:
+                    print('?Could not create serial in db: ' + str(Pathes.ca_serial))
+                    sys.exit(1)
+                    
+            rand.load_file('/dev/urandom', 4096)
+            if not rand.status:
+                print('? Random device failed to produce enough entropy')
+                return False
 
+            self.cakey = createKeyPair(TYPE_RSA, 4096)
+            try:
+                self.cakey.check()
+            except MyException("Couln't create key"):
+                sys.exit(1)
+                
+            self.cacert = crypto.X509()
+            self.cacert.set_version(2)         # X509.v3
+            
+            serial = Serial()
+            my_serial = serial.next()
+            self.cacert.set_serial_number(my_serial)
+
+            self.cacert.get_subject().commonName = "Authority Certificate for Testing serverPKI"
+            self.cacert.set_issuer(self.cacert.get_subject())
+            self.cacert.set_pubkey(self.cakey)
+            
+            self.cacert.gmtime_adj_notBefore(0)
+            self.cacert.gmtime_adj_notAfter(60*60*24*365*10) # 10 years
+
+            caext = crypto.X509Extension((b'basicConstraints'), False, (b'CA:true'))
+            self.cacert.add_extensions([caext])
+            self.cacert.sign(self.cakey, "SHA256")
+            
+            p = Path(Pathes.ca_key)
+            with p.open('wb') as f:
+                f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, self.cakey))
+            p.chmod(0o600)
+            
+            p = Path(Pathes.ca_cert)
+            with p.open('wb') as f:
+                f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, self.cacert))
+            
+            print('[CA cert created for testing.]')
+            sln('CA cert created for testing.')
+            
+        try:
+            if options.verbose: print('[Using CA key at {}]'.format(Pathes.ca_key))
+            self.cakey = crypto.load_privatekey(crypto.FILETYPE_PEM, Path.open(Pathes.ca_key, 'r').read())
+        except Exception:
+            print('?Wrong pass phrase')
+            return False 
+        
+        self.cacert = crypto.load_certificate(crypto.FILETYPE_PEM, Path.open(Pathes.ca_cert, 'r').read())
+        self.cacert_text = Path.open(Pathes.ca_cert, 'rb').read()
+        return True
 
 #---------------  prepared SQL queries for class Place  --------------
 
