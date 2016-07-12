@@ -18,7 +18,7 @@ from time import sleep
 from paramiko import SSHClient, HostKeys, AutoAddPolicy
 
 from pki.certstore import cert_and_key_pathes, TLSA_pathes
-from pki.config import Pathes
+from pki.config import Pathes, SSH_CLIENT_USER_NAME
 from pki.utils import options as opts
 
 TLSA_zone_cache = {}
@@ -95,7 +95,8 @@ def ssh_connection(dest_host):
     client.load_host_keys(expanduser('~/.ssh/known_hosts'))
     if opts.debug: print('[Connecting to {}]'.format(dest_host))
     try:
-        client.connect(dest_host, key_filename=expanduser('~/.ssh/id_rsa'))
+        client.connect(dest_host, username=SSH_CLIENT_USER_NAME,
+                            key_filename=expanduser('~/.ssh/id_rsa'))
     except Exception:
         print('?Failed to connect to host {}, because: \n   {}'.
             format(dest_host, sys.exc_info()[0].__name__))
