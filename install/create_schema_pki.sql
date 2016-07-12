@@ -436,12 +436,12 @@ CREATE OR REPLACE FUNCTION add_cert(
             RETURN view_row;
         ELSE
             DECLARE
-                the_dishost_id  INT4 := NULL;
+                the_disthost_id INT4 := NULL;
                 the_jail_id     INT4 := NULL;
                 the_place_id    INT4 := NULL;
             BEGIN
                 IF the_disthost_name IS NOT NULL THEN
-                    SELECT id INTO the_dishost_id
+                    SELECT id INTO the_disthost_id
                         FROM DistHosts
                         WHERE FQDN = the_disthost_name;
                     IF NOT FOUND THEN
@@ -469,7 +469,7 @@ CREATE OR REPLACE FUNCTION add_cert(
                     END IF;
                 END IF;
                 INSERT INTO Targets(disthost, jail, place, certificate)
-                    VALUES(the_dishost_id, the_jail_id, the_place_id, cert_id);
+                    VALUES(the_disthost_id, the_jail_id, the_place_id, cert_id);
             END;
         END IF;
         SELECT * INTO view_row
@@ -670,11 +670,11 @@ CREATE OR REPLACE FUNCTION add_target(
 
         BEGIN
             DECLARE
-                the_dishost_id  INT4 := NULL;
+                the_disthost_id INT4 := NULL;
                 the_jail_id     INT4 := NULL;
                 the_place_id    INT4 := NULL;
             BEGIN
-                SELECT id INTO the_dishost_id
+                SELECT id INTO the_disthost_id
                     FROM DistHosts
                     WHERE FQDN = the_disthost_name;
                 IF NOT FOUND THEN
@@ -697,7 +697,7 @@ CREATE OR REPLACE FUNCTION add_target(
                     END IF;
                 END IF;
                 INSERT INTO Targets(disthost, jail, place, certificate)
-                    VALUES(the_dishost_id, the_jail_id, the_place_id, cert_id);
+                    VALUES(the_disthost_id, the_jail_id, the_place_id, cert_id);
             END;
         END;
         SELECT * INTO view_row
@@ -723,7 +723,7 @@ CREATE OR REPLACE FUNCTION remove_target(
     AS $$
     DECLARE
         cert_id             INT4;
-        the_dishost_id  INT4 := NULL;
+        the_disthost_id  INT4 := NULL;
         the_jail_id     INT4 := NULL;
         the_place_id    INT4 := NULL;
 
@@ -738,7 +738,7 @@ CREATE OR REPLACE FUNCTION remove_target(
         IF NOT FOUND THEN
             RAISE EXCEPTION '?No such certificate as "%".', the_altname;
         END IF;
-        SELECT d.id INTO the_dishost_id
+        SELECT d.id INTO the_disthost_id
             FROM Disthosts d
             WHERE d.fqdn = the_disthost_name;
         IF NOT FOUND THEN
@@ -754,7 +754,7 @@ CREATE OR REPLACE FUNCTION remove_target(
 
         DELETE FROM Targets
             WHERE
-                certificate = cert_id AND disthost = the_dishost_id AND
+                certificate = cert_id AND disthost = the_disthost_id AND
                 jail = the_jail_id AND place = the_place_id;
         IF NOT FOUND THEN
             RAISE EXCEPTION '?No target exists with that combination.';
