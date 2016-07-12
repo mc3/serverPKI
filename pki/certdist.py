@@ -142,7 +142,7 @@ def distribute_cert(subject, subject_type, dest_host, dest_path, place, jail, wh
                         sftp.symlink(path, 'postgresql.key')
                         if opts.debug: print('[{} => postgresql.key]'.format(path))
                      
-                if 'key' in path or place.chown_both:
+                if 'key' in path or place.chownBoth:
                     uid = gid = 0
                     if place.uid: uid = place.uid
                     if place.gid: gid = place.gid
@@ -161,6 +161,8 @@ def distribute_cert(subject, subject_type, dest_host, dest_path, place, jail, wh
             cmd = str((place.reload_command).format(jail))
             print('[Executing "{}" on host {}]'.format(cmd, dest_host))
             with client.get_transport().open_session() as chan:
+                ##stdin, stdout, stderr = chan.exec_command(cmd, timeout=10)
+                ##print('stdout="{}", stderr="{}"'.format(stdout, stderr))
                 chan.exec_command(cmd)
                 while not chan.exit_status_ready():
                     sleep(1)

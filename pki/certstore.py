@@ -195,11 +195,11 @@ def cert_and_key_pathes(subject, subject_type, place, what):
     subdir = Pathes.work / subject
     if not (subdir.exists() and subdir.is_dir()):
         raise MyException('?Missing certificate or key for {}. Create it first.'.format(subject))
-    if 'combined_cert_key' in place and place['combined_cert_key']:
+    if place.cert_file_type == 'combined':
         retval.append(key_cert_name(subject, subject_type))
     else:
         if 'k' in what: retval.append(key_name(subject, subject_type))
-        if 'combined_cert_cacert' in place and place['combined_cert_cacert']:
+        if place.cert_file_type == 'combined cacert':
             retval.append(cert_cacert_name(subject, subject_type))
         else:
             if 'c' in what: retval.append(cert_name(subject, subject_type))

@@ -288,5 +288,3 @@ class Place(object):
         self.cert_file_type, self.cert_path, self.key_path, self.uid, self.gid,\
             self.mode, self.chownBoth, self.pgLink, self.reload_command = \
             ps_place.first(name)
-        if not self.cert_file_type:
-            MyException('Place {} does not exist'.format(name))
