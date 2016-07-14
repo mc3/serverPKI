@@ -136,7 +136,7 @@ def TLSA_pathes(theCertificate):
     
     for fqdn in theCertificate.tlsaprefixes:
         filename = Path(fqdn + '.tlsa')
-        fqdn_tags = subject.split(sep='.')
+        fqdn_tags = theCertificate.name.split(sep='.')
         dirname = '.'.join(fqdn_tags[-2::])
         subdir = Pathes.work_tlsa / dirname
         if not (subdir.exists() and subdir.is_dir()):

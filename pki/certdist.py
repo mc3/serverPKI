@@ -7,6 +7,7 @@ Certificate distribution module.
 
 import sys
 from datetime import datetime
+from io import StringIO
 from pathlib import PurePath, Path
 from os.path import expanduser
 from os import chdir
@@ -71,13 +72,23 @@ def deployCerts(certs):
                         
                     for place in dh['places'].values():
                     
-                        dp = PurePath(dest_path, place.cert_path)
-                        if opts.debug: print('[{}: {}: {}]'.format(cert.name, fqdn, dp))
-                        distribute_cert(cert.name, cert.subject_type, fqdn, dp, place, jail, 'c')
-                    
-                        dp = PurePath(dest_path, place.key_path)
-                        if opts.debug: print('[{}: {}: {}]'.format(cert.name, fqdn, dp))
-                        distribute_cert(cert.name, cert.subject_type, fqdn, dp, place, jail, 'k')
+                        if place.cert_path:
+                            dp = PurePath(dest_path, place.cert_path)
+                            if opts.debug: print('[{}: {}: {}]'.format(
+                                                        cert.name, fqdn, dp))
+                            distribute_cert(cert.name, cert.subject_type, fqdn,
+                                                    dp, place, jail, 'c')
+                        else:
+                            print('?Missing cert path in place "()" for cert'
+                                ' "{}"'.format(place.name, cert.name))
+                        if place.key_path:
+                            dp = PurePath(dest_path, place.key_path)
+                        elif (place.cert_file_type != 'combined' and 
+                            place.cert_file_type != 'combined cacert'):
+                            if opts.debug: print('[{}: {}: {}]'.format(
+                                                        cert.name, fqdn, dp))
+                            distribute_cert(cert.name, cert.subject_type, fqdn,
+                                                    dp, place, jail, 'k')
                 
         print()
         if not opts.no_TLSA:
@@ -161,18 +172,25 @@ def distribute_cert(subject, subject_type, dest_host, dest_path, place, jail, wh
             cmd = str((place.reload_command).format(jail))
             print('[Executing "{}" on host {}]'.format(cmd, dest_host))
             with client.get_transport().open_session() as chan:
-                ##stdin, stdout, stderr = chan.exec_command(cmd, timeout=10)
-                ##print('stdout="{}", stderr="{}"'.format(stdout, stderr))
+                chan.settimeout(10.0)
+                chan.set_combine_stderr(True)
                 chan.exec_command(cmd)
+                #stdin = chan.makefile('wb', -1)
+                #stdout = chan.makefile('rb', -1)
+                ##print('stdout="{}", stderr="{}"'.format(stdout, stderr))
+                ##chan.exec_command(cmd)
+                
                 while not chan.exit_status_ready():
-                    sleep(1)
+                    
+                    if chan.recv_ready():
+                        data = chan.recv(1024)
+                        while data:
+                            print(data.decode('ascii'),end='')
+                            data = chan.recv(1024)
                 es = int(chan.recv_exit_status())
                 if es != 0:
-                    while not chan.recv_stderr_ready():
-                        sleep(1)
-                    print('?Remote execution failure of "{}" on host {}\n\r\texit={};'
-                            ' error: {}'.format(cmd, dest_host, es, 
-                                        chan.recv_stderr(4096).decode('ascii')))
+                    print('?Remote execution failure of "{}" on host {}\texit={}'
+                            .format(cmd, dest_host, es))
 
 
 # **TODO** Implement TLSA rollover. Keep old TLSA in *.old:tlsa
