@@ -9,7 +9,7 @@ from OpenSSL import crypto
 from pki.config import Pathes
 from pathlib import Path
 
-from pki.utils import sli, sln, sle, options
+from pki.utils import sld, sli, sln, sle, options
 
 
 TYPE_RSA = crypto.TYPE_RSA
@@ -30,17 +30,17 @@ class Serial(object):
                 fd = Path.open(Pathes.ca_serial, "r")
                 self.__value = int(fd.read())
             except:
-                print('%Serial number not found in db or not readable: ' + str(Pathes.ca_serial))
+                sln('Serial number not found in db or not readable: ' + str(Pathes.ca_serial))
             fd.close()
         self.__value += 1
         try:
             fd = Path.open(Pathes.ca_serial, "w")
             fd.write(str(self.__value)+'\n')
         except IOError:
-            print('?Could not update serial in db: ' + str(Pathes.ca_serial))
+            sle('Could not update serial in db: ' + str(Pathes.ca_serial))
             sys.exit(1)
         fd.close()
-        if options.debug: print('[New serial is {}]'.format(self.__value))
+        sld('New serial is {}'.format(self.__value))
         return self.__value
 
 def createKeyPair(type, bits):
@@ -103,7 +103,7 @@ def createCertificate(req, host_type, issuerCert, issuerKey, serial, notBefore, 
     try:
     	assert cert.get_serial_number()==serial		# something is wrong here
     except AssertionError:
-    	print('?Internal inconsitency: serial is %d/%x but should be %d/%x', (
+    	sle('Internal inconsitency: serial is %d/%x but should be %d/%x', (
     		cert.get_serial_number(), cert.get_serial_number(), serial, serial))
     cert.gmtime_adj_notBefore(notBefore)
     cert.gmtime_adj_notAfter(notAfter)
@@ -128,7 +128,7 @@ def createCertificate(req, host_type, issuerCert, issuerKey, serial, notBefore, 
     try:
         cert.sign(issuerKey, digest)
     except Exception:
-        print('?Wrong pass phrase')
+        sle('Wrong pass phrase')
         sys.exit(1) 
     return cert
 

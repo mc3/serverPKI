@@ -11,9 +11,10 @@ from paramiko import util
 from pki.certdist import deployCerts
 ##from pki.certrunner import create_certs
 from pki.utils import options as opts
+from pki.utils import options_set
 
 from pki.db import DbConnection as dbc
-from pki.utils import sli, sln, sle
+from pki.utils import sld, sli, sln, sle
 from pki.cert import Certificate
             
 #--------------- main --------------
@@ -25,6 +26,9 @@ our_certs = {}
 
 util.log_to_file('sftp.log')
 
+
+sli('operateCA started with options {}'.format(options_set()))
+ 
 pe = dbc('pki_dev')
 db = pe.open()
 
@@ -38,7 +42,7 @@ row_list = db.query("""
 for (name,) in row_list:
     all_cert_names.append(name)
 
-if opts.verbose: print('[{} certificates in configuration]'.format(len(all_cert_names)))
+sli('{} certificates in configuration'.format(len(all_cert_names)))
 
 if opts.all:
     our_cert_names = all_cert_names
@@ -51,7 +55,7 @@ if opts.only_cert:
     error = False
     for i in opts.only_cert:
         if i not in all_cert_names:
-            print("? {} not in configuration. Can't be specified with --only".format(i))
+            sle("{} not in configuration. Can't be specified with --only".format(i))
             error = True
     if not error:
         cert_name_set = set(opts.only_cert)
@@ -61,7 +65,7 @@ else:
         error = False
         for i in opts.cert_to_be_included:
             if i not in all_cert_names:
-                print("? {} not in configuration. Can't be included".format(i))
+                sle("{} not in configuration. Can't be included".format(i))
                 error = True
         if not error:
             cert_name_set = set(opts.cert_to_be_included)
@@ -70,13 +74,13 @@ else:
         error = False
         for i in opts.cert_to_be_excluded:
             if i not in all_cert_names:
-                print("? {} not in configuration. Can't be excluded".format(i))
+                sle("{} not in configuration. Can't be excluded".format(i))
                 error = True
         if not error:
             cert_name_set -= set(cert_to_be_excluded)
 
 if error:
-    print('?Stopped due to command line errors')
+    sle('Stopped due to command line errors')
     sys.exit(1)
 
 our_cert_names = sorted(list(cert_name_set))
@@ -86,19 +90,20 @@ for name in our_cert_names:
     our_certs[name] = c
 
 if opts.check_only:
-    print('[No syntax errors found in configuration.]')
+    sli('No syntax errors found in configuration.')
     sys.exit(0)
 
-if opts.debug: print('[Selected certificates:]\n\r{}'.format(our_cert_names))
+sld('Selected certificates:\n\r{}'.format(our_cert_names))
 
 if opts.create:
+    sli('Creating certificates.')
     for c in our_certs.values():
         if c.create_instance():
             continue
-        sle('Stopped due to error-')
-        print('?Stopped due to error.')
+        sle('Stopped due to error')
         sys.exit(1)
 if opts.distribute:
+    sli('Distributing certificates.')
     deployCerts(our_certs)
 
 """

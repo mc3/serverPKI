@@ -21,6 +21,7 @@ from paramiko import SSHClient, HostKeys, AutoAddPolicy
 from pki.certstore import cert_and_key_pathes, TLSA_pathes
 from pki.config import Pathes, SSH_CLIENT_USER_NAME
 from pki.utils import options as opts
+from pki.utils import sld, sli, sln, sle
 
 TLSA_zone_cache = {}
 
@@ -39,7 +40,7 @@ def deployCerts(certs):
     skip_host = []
     if opts.skip_host: skip_host = opts.skip_host
     
-    if opts.debug: print('[limit_hosts={}, only_host={}, skip_host={}]'.format(
+    sld('limit_hosts={}, only_host={}, skip_host={}'.format(
                                             limit_hosts, only_host, skip_host))
     
     chdir(str(Pathes.work))
@@ -55,18 +56,17 @@ def deployCerts(certs):
         
             dest_path = PurePath('/')
             
-            if opts.debug: print('[{}: {}]'.format(cert.name, fqdn))
+            sld('{}: {}'.format(cert.name, fqdn))
             
             if dh['jails']:
                 for jail in ( dh['jails'].keys() or '' ):
             
                     jailroot = dh['jailroot'] if dh['jailroot'] else ''
                     dest_path = PurePath('/', jailroot, jail)
-                    if opts.debug:
-                        print('[{}: {}: {}]'.format(cert.name, fqdn, dest_path))                
+                    sld('[{}: {}: {}]'.format(cert.name, fqdn, dest_path))                
     
                     if not dh['places']:
-                        print('?{} subject has no place attribute.'.format(cert.name))
+                        sle('{} subject has no place attribute.'.format(cert.name))
                         error_found = True
                         return False
                         
@@ -74,25 +74,25 @@ def deployCerts(certs):
                     
                         if place.cert_path:
                             dp = PurePath(dest_path, place.cert_path)
-                            if opts.debug: print('[{}: {}: {}]'.format(
+                            sld('{}: {}: {}'.format(
                                                         cert.name, fqdn, dp))
                             distribute_cert(cert.name, cert.subject_type, fqdn,
                                                     dp, place, jail, 'c')
                         else:
-                            print('?Missing cert path in place "()" for cert'
+                            sle('Missing cert path in place "()" for cert'
                                 ' "{}"'.format(place.name, cert.name))
                         if place.key_path:
                             dp = PurePath(dest_path, place.key_path)
                         elif (place.cert_file_type != 'combined' and 
                             place.cert_file_type != 'combined cacert'):
-                            if opts.debug: print('[{}: {}: {}]'.format(
+                            sld('{}: {}: {}'.format(
                                                         cert.name, fqdn, dp))
                             distribute_cert(cert.name, cert.subject_type, fqdn,
                                                     dp, place, jail, 'k')
                 
-        print()
+        sli('')
         if not opts.no_TLSA:
-            print()
+            sli('')
             distribute_tlsa_rrs(cert)
         
     updateSOAofUpdatedZones()
@@ -104,16 +104,16 @@ def ssh_connection(dest_host):
 
     client = SSHClient()
     client.load_host_keys(expanduser('~/.ssh/known_hosts'))
-    if opts.debug: print('[Connecting to {}]'.format(dest_host))
+    sld('Connecting to {}'.format(dest_host))
     try:
         client.connect(dest_host, username=SSH_CLIENT_USER_NAME,
                             key_filename=expanduser('~/.ssh/id_rsa'))
     except Exception:
-        print('?Failed to connect to host {}, because: \n   {}'.
+        sle('Failed to connect to host {}, because: \n   {}'.
             format(dest_host, sys.exc_info()[0].__name__))
         raise
     else:
-        if opts.debug: print('[Connected to host {}]'.format(dest_host))
+        sld('Connected to host {}'.format(dest_host))
         return client
 
 def distribute_cert(subject, subject_type, dest_host, dest_path, place, jail, what):
@@ -123,24 +123,24 @@ def distribute_cert(subject, subject_type, dest_host, dest_path, place, jail, wh
             try:
                 sftp.chdir(str(dest_path))
             except IOError:
-                print('%{}:{} does not exist - creating\n\t{}'.format(
+                sln('{}:{} does not exist - creating\n\t{}'.format(
                             dest_host, dest_path, sys.exc_info()[0].__name__))
                 try:
                     sftp.mkdir(str(dest_path))   
                 except IOError:
-                    print('?Cant create {}:{}: Missing parent?\n\t{}'.format(
+                    sle('Cant create {}:{}: Missing parent?\n\t{}'.format(
                             dest_host, dest_path, sys.exc_info()[0].__name__))
                     raise
                 sftp.chdir(str(dest_path))
             pl = cert_and_key_pathes(subject, subject_type, place, what)            
             for ppath in pl:
                 path = str(ppath)
-                print('[{}/{} => {}:{}]'.format(subject, path, dest_host, dest_path))
+                sli('{}/{} => {}:{}'.format(subject, path, dest_host, dest_path))
                 fat = sftp.put(subject + '/' + path, path, confirm=True)
-                if opts.debug: print('[size={}, uid={}, gid={}, mtime={}]'.format(
+                sld('size={}, uid={}, gid={}, mtime={}'.format(
                             fat.st_size, fat.st_uid, fat.st_gid, fat.st_mtime))
                 if 'key' in path:
-                    if opts.debug: print('[Setting mode to 0o400 of {}:{}/{}]'.format(
+                    sld('Setting mode to 0o400 of {}:{}/{}'.format(
                                                                     dest_host, dest_path, path))
                     mode = 0o400
                     if place.mode: mode = int(place.mode,8)
@@ -151,14 +151,14 @@ def distribute_cert(subject, subject_type, dest_host, dest_path, place, jail, wh
                         except IOError:
                             pass            # none exists: ignore
                         sftp.symlink(path, 'postgresql.key')
-                        if opts.debug: print('[{} => postgresql.key]'.format(path))
+                        sld('{} => postgresql.key'.format(path))
                      
                 if 'key' in path or place.chownBoth:
                     uid = gid = 0
                     if place.uid: uid = place.uid
                     if place.gid: gid = place.gid
                     if uid != 0 or gid != 0:
-                        if opts.debug: print('[Setting uid/gid to {}:{} of {}:{}/{}'.format(
+                        sld('Setting uid/gid to {}:{} of {}:{}/{}'.format(
                                                             uid, gid, dest_host, dest_path, path))
                         sftp.chown(path, uid, gid)
                 elif place.pgLink:
@@ -167,31 +167,29 @@ def distribute_cert(subject, subject_type, dest_host, dest_path, place, jail, wh
                     except IOError:
                         pass            # none exists: ignore
                     sftp.symlink(path, 'postgresql.crt')
-                    if opts.debug: print('[{} => postgresql.crt]'.format(path))
+                    sld('{} => postgresql.crt'.format(path))
         if place.reload_command:
             cmd = str((place.reload_command).format(jail))
-            print('[Executing "{}" on host {}]'.format(cmd, dest_host))
+            sli('Executing "{}" on host {}'.format(cmd, dest_host))
+
             with client.get_transport().open_session() as chan:
                 chan.settimeout(10.0)
                 chan.set_combine_stderr(True)
                 chan.exec_command(cmd)
-                #stdin = chan.makefile('wb', -1)
-                #stdout = chan.makefile('rb', -1)
-                ##print('stdout="{}", stderr="{}"'.format(stdout, stderr))
-                ##chan.exec_command(cmd)
                 
+                remote_result_msg = ''
                 while not chan.exit_status_ready():
-                    
-                    if chan.recv_ready():
+                     if chan.recv_ready():
                         data = chan.recv(1024)
                         while data:
-                            print(data.decode('ascii'),end='')
+                            remote_result_msg += (data.decode('ascii'))
                             data = chan.recv(1024)
                 es = int(chan.recv_exit_status())
                 if es != 0:
-                    print('?Remote execution failure of "{}" on host {}\texit={}'
-                            .format(cmd, dest_host, es))
-
+                    sle('Remote execution failure of "{}" on host {}\texit={}, because:\n\r{}'
+                            .format(cmd, dest_host, es, remote_result_msg))
+                else:
+                    sli(remote_result_msg)
 
 # **TODO** Implement TLSA rollover. Keep old TLSA in *.old:tlsa
 def distribute_tlsa_rrs(cert):
@@ -199,7 +197,7 @@ def distribute_tlsa_rrs(cert):
     if Pathes.tlsa_dns_master == '':       # DNS master on local host
         for tlsa_path in TLSA_pathes(cert): 
             dest = str((Pathes.tlsa_repository_root / tlsa_path.relative_to(Pathes.work_tlsa)).parent)
-            print('[{} => {}]'.format(str(tlsa_path), dest))
+            sli('{} => {}'.format(str(tlsa_path), dest))
             copy2(str(tlsa_path), dest)
             TLSA_zone_cache[dest] = 1
     else:                           # remote DNS master ( **UNTESTED**)
@@ -211,10 +209,10 @@ def distribute_tlsa_rrs(cert):
                 
                 for child_dir in p.iterdir():
                     for child in child_dir.iterdir():
-                        print('[{} => {}:{}]'.format(
+                        sli('{} => {}:{}'.format(
                                 child, Pathes.tlsa_dns_master, child))
                         fat = sftp.put(str(child), str(child), confirm=True)
-                        if opts.debug: print('[size={}, uid={}, gid={}, mtime={}]'.format(
+                        sld('size={}, uid={}, gid={}, mtime={}'.format(
                                         fat.st_size, fat.st_uid, fat.st_gid, fat.st_mtime))
 
 def updateSOAofUpdatedZones():
@@ -231,8 +229,8 @@ def updateSOAofUpdatedZones():
             try:
                 zf = fd.read()
             except:                 # file not found or not readable
-                raise MyException("?Can't read zone file " + filename)
-        if opts.debug: print('[Updating SOA: zone file before update:{}]'.format(zf))
+                raise MyException("Can't read zone file " + filename)
+        sld('Updating SOA: zone file before update:{}'.format(zf))
         sea = re.search('(\d{8})(\d{2})(\s*;\s*)(Serial number)', zf)
         old_date = sea.group(1)
         daily_change = sea.group(2)
@@ -241,7 +239,7 @@ def updateSOAofUpdatedZones():
         else:
             daily_change = '01'
         zf = re.sub('\d{10}', current_date + daily_change, zf, count=1)
-        if opts.debug: print('[Updating SOA: zone file after update:{}]'.format(zf))
+        sld('Updating SOA: zone file after update:{}'.format(zf))
         with open(filename, 'w', encoding="ASCII") as fd:
             try:
                 fd.write(zf)
@@ -251,9 +249,9 @@ def updateSOAofUpdatedZones():
 def reloadNameServer():
         if len(TLSA_zone_cache) > 0:
             try:
-                 if opts.debug: print('[Reloading nameserver]')
+                 sld('Reloading nameserver')
                  subprocess.call(['rndc', 'reload'])
             except subprocess.SubprocessError as e:
-                 print('?Error while reloading nameserver: \n{}: {}'.format(e.cmd, e.output))
+                 sle('Error while reloading nameserver: \n{}: {}'.format(e.cmd, e.output))
 
  

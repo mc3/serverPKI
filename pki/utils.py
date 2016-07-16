@@ -46,6 +46,9 @@ parser.add_option('--check-configuration-only', '-n', dest='check_only', action=
 parser.add_option('--debug', '-d', action='store_true',
                    default=False,
                    help='Turn on debugging.'),
+parser.add_option('--quiet', '-q', action='store_true',
+                   default=False,
+                   help='Be quiet on command line. Do only logging. (for cron jobs).'),
 parser.add_option('--verbose', '-v', dest='verbose', action='store_true',
                    default=False,
                    help='Be more verbose.')
@@ -63,27 +66,67 @@ import syslog
 
 syslog_initialized = False
 
-SLI = syslog.LOG_INFO | syslog.LOG_MAIL
-SLN = syslog.LOG_NOTICE | syslog.LOG_MAIL
-SLE = syslog.LOG_ERR | syslog.LOG_MAIL
+LOG_SECURITY = 13 << 3      # FreeBSD  - does not work with python
+
+SLD = syslog.LOG_DEBUG | syslog.LOG_LPR
+SLI = syslog.LOG_INFO | syslog.LOG_LPR
+SLN = syslog.LOG_NOTICE | syslog.LOG_LPR
+SLE = syslog.LOG_ERR | syslog.LOG_LPR
+
+def sld(msg):
+    if not syslog_initialized:
+        init_syslog()
+    m = '['+msg+']'
+    syslog.syslog(SLD, m)
+    if not options.quiet and (options.debug or options.verbose): print(m)
 
 def sli(msg):
     if not syslog_initialized:
         init_syslog()
-    syslog.syslog(SLI, '['+msg+']')
-
-def sle(msg):
-    if not syslog_initialized:
-        init_syslog()
-    syslog.syslog(SLE, '?'+msg)
+    m = '['+msg+']'
+    syslog.syslog(SLI, m)
+    if not options.quiet and options.verbose: print(m)
 
 def sln(msg):
     if not syslog_initialized:
         init_syslog()
-    syslog.syslog(SLN, '%'+msg)
+    m = '%'+msg
+    syslog.syslog(SLN, m)
+    if not options.quiet: print(m)
+
+def sle(msg):
+    if not syslog_initialized:
+        init_syslog()
+    m = '?'+msg
+    syslog.syslog(SLE, m)
+    print(m)
 
 def init_syslog():
     global syslog_initialized
     
-    syslog.openlog(ident = 'pki', facility = syslog.LOG_LOCAL6)
+    syslog.openlog(ident = 'pki', facility = syslog.LOG_LPR)
     syslog_initialized = True
+
+
+# --------------- utility functions -------------
+
+def options_set():
+    """ options_set - return string of options set on command line
+    """
+    opts_set = ''
+    for opt, value in options.__dict__.items():
+        if value:
+            opts_set += opt
+            args = ''
+            if isinstance(value,str):
+                args += (' ' + value)
+            elif isinstance(value,list):
+                sep = ''
+                for item in value:
+                    args += (sep + item)
+                    sep = ','
+            if len(args) > 1:
+                opts_set += ('(' + args + ')')
+            
+            opts_set += ' '
+    return opts_set

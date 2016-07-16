@@ -11,6 +11,7 @@ from os import chdir,chmod
 
 from pki.config import Pathes
 from pki.utils import options as opts
+from pki.utils import sld, sli, sln, sle
 
 def key_name(subject, subject_type):
     return Path(str('%s_%s_key.pem' % (subject, subject_type)))
@@ -93,7 +94,7 @@ def fqdnsFromTLSA(theCertificate):
         
     if len(theCertificate.tlsaprefixes) > 0:
         fqdns = [theCertificate.name] + theCertificate.altnames
-    if opts.debug: print('[fqdnsFromTLSA: fqdns: {}]'.format(fqdns))
+    sld('fqdnsFromTLSA: fqdns: {}'.format(fqdns))
     return fqdns
 
 def store_TLSAs(subject, tlsa_hash, theCertificate):
@@ -120,7 +121,7 @@ def store_TLSAs(subject, tlsa_hash, theCertificate):
         if not subdir.exists() or not subdir.is_dir():
             clean_cert_dir(subdir)
         chdir(str(subdir))
-        if opts.debug: print('[Writing \n\r{}into {}]'.format(rr, str(subdir / filename)))
+        sld('Writing \n\r{}into {}'.format(rr, str(subdir / filename)))
         filename.open(mode = 'w').write(rr)
 
 def TLSA_pathes(theCertificate):
@@ -140,7 +141,7 @@ def TLSA_pathes(theCertificate):
         dirname = '.'.join(fqdn_tags[-2::])
         subdir = Pathes.work_tlsa / dirname
         if not (subdir.exists() and subdir.is_dir()):
-            raise MyException('?Missing TLSA RR for {}. Create it first.'.format(subject))
+            raise MyException('Missing TLSA RR for {}. Create it first.'.format(subject))
         retval.append(subdir / filename)
     return retval
     
@@ -156,7 +157,7 @@ def make_cert_dir(subject):
     subdir = Pathes.work / subject
     if subdir.exists() and subdir.is_dir():
         return
-    if opts.verbose: print('[Creating directory {}]'.format(subdir))
+    sli('Creating directory {}'.format(subdir))
     subdir.mkdir(mode = 0o700)
 
 def clean_cert_dir(dir):
@@ -170,13 +171,13 @@ def clean_cert_dir(dir):
     """
     if dir.exists():
         if dir.is_dir():
-            print('[Removing directory {}]'.format(dir))
+            sli('Removing directory {}'.format(dir))
             for x in dir.iterdir():
                 x.unlink()
             dir.rmdir()
         else:
             dir.unlink()
-    if opts.verbose: print('[Creating directory {}]'.format(dir))
+    sli('Creating directory {}'.format(dir))
     dir.mkdir(mode = 0o700, parents=True)
 
 
@@ -194,7 +195,7 @@ def cert_and_key_pathes(subject, subject_type, place, what):
     retval = []
     subdir = Pathes.work / subject
     if not (subdir.exists() and subdir.is_dir()):
-        raise MyException('?Missing certificate or key for {}. Create it first.'.format(subject))
+        raise MyException('Missing certificate or key for {}. Create it first.'.format(subject))
     if place.cert_file_type == 'combined':
         retval.append(key_cert_name(subject, subject_type))
     else:

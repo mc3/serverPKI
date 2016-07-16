@@ -44,7 +44,7 @@ from pki.certgen import *
 ##from pki.certdist import deployCerts
 from pki.certstore import store
 
-from pki.utils import sli, sln, sle, options
+from pki.utils import sld, sli, sln, sle, options
 
 #--------------- Places --------------
 places = {}
@@ -116,27 +116,27 @@ class Certificate(object):
             ps_certificate = db.statement_from_id('q_certificate')
         self.cert_id, self.cert_type, self.disabled, self.subject_type = \
             ps_certificate.first(name)
-        if options.debug: print('------ cert {} {}'.format(self.name, 
+        sld('------ cert {} {}'.format(self.name, 
                     self.cert_type + ' DISABLED' if self.disabled else ''))
         if not ps_altnames:
             db.execute("PREPARE q_altnames(integer) AS " + q_altnames)
             ps_altnames = db.statement_from_id('q_altnames')
         for (name,) in ps_altnames(self.cert_id):
             self.altnames.append(name)
-        if options.debug: print('Altnames: '.format(self.altnames))
+        sld('Altnames: '.format(self.altnames))
         
         if not ps_tlsaprefixes:
             db.execute("PREPARE q_tlsaprefixes(integer) AS " + q_tlsaprefixes)
             ps_tlsaprefixes = db.statement_from_id('q_tlsaprefixes')
         for (name,) in ps_tlsaprefixes(self.cert_id):
             self.tlsaprefixes.append(name)
-        if options.debug: print('TLSA prefixes: '.format(self.tlsaprefixes))
+        sld('TLSA prefixes: '.format(self.tlsaprefixes))
         
         if not ps_disthosts:
             db.execute("PREPARE q_disthosts(integer) AS " + q_disthosts)
             ps_disthosts = db.statement_from_id('q_disthosts')
         for row in ps_disthosts(self.cert_id):
-            ##if options.debug: print('Disthost row: {}'.format(row))
+            ##sld('Disthost row: {}'.format(row))
             if row['fqdn']:    
                 if row['fqdn'] not in self.disthosts:
                     self.disthosts[row['fqdn']] = {    'jails': {}, 'places': {} }
@@ -152,7 +152,7 @@ class Certificate(object):
                             p = Place(db,row['place_name'])
                             places[row['place_name']] = p
                         dh['places'][row['place_name']] = places[row['place_name']]
-        if options.debug: print('Disthosts: {}'.format(self.disthosts))
+        sld('Disthosts: {}'.format(self.disthosts))
     
     def create_instance(self):
         if self.cert_type == 'LE': return self.create_LE_instance()
@@ -161,18 +161,16 @@ class Certificate(object):
         
     def create_LE_instance(self):
         sle('LE type certificates not yet implemented: {}'.format(self.name))
-        print('?LE type certificates not yet implemented: {}'.format(self.name))
         sys.exit(1)
         
     def create_local_instance(self):
         if not self.get_cacert(): return False
         
-        if options.verbose:
-            print('[Creating key (%d bits) and cert for %s %s and loading %d bytes of random data...]' %
+        sli('Creating key (%d bits) and cert for %s %s and loading %d bytes of random data...' %
                 (int(X509atts.bits), self.subject_type, self.name, int(X509atts.bits)))
         rand.load_file(b'/dev/urandom', X509atts.bits)
         if not rand.status:
-            print('? Random device failed to produce enough entropy')
+            sle('Random device failed to produce enough entropy')
             return False
         pkey = createKeyPair(TYPE_RSA, X509atts.bits)
         name_dict = X509atts.names
@@ -190,24 +188,24 @@ class Certificate(object):
         hostname = self.name[2:] if self.name.startswith('*.') else self.name
         store(hostname, self.subject_type, self.cacert_text, cert, pkey, self)
         
-        print('[Cert for %s, serial %d/%x created]' % (hostname, my_serial, my_serial))
+        sli('Cert for %s, serial %d/%x created' % (hostname, my_serial, my_serial))
         return True
         
     def get_cacert(self):
         if not Pathes.ca_cert.exists() or not Pathes.ca_key.exists:
 
-            print('%No CA cert found. Creating one (just for testing - NOT FOR PRODUCTION). . .')
+            sln('No CA cert found. Creating one (just for testing - NOT FOR PRODUCTION). . .')
             if not Pathes.ca_serial.exists():
                 try:
                     fd = Path.open(Pathes.ca_serial, "w")
                     fd.write(str(0)+'\n')
                 except IOError:
-                    print('?Could not create serial in db: ' + str(Pathes.ca_serial))
+                    sle('Could not create serial in db: ' + str(Pathes.ca_serial))
                     sys.exit(1)
                     
             rand.load_file('/dev/urandom', 4096)
             if not rand.status:
-                print('? Random device failed to produce enough entropy')
+                sle('Random device failed to produce enough entropy')
                 return False
 
             self.cakey = createKeyPair(TYPE_RSA, 4096)
@@ -243,14 +241,13 @@ class Certificate(object):
             with p.open('wb') as f:
                 f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, self.cacert))
             
-            print('[CA cert created for testing.]')
             sln('CA cert created for testing.')
             
         try:
-            if options.verbose: print('[Using CA key at {}]'.format(Pathes.ca_key))
+            sli('Using CA key at {}'.format(Pathes.ca_key))
             self.cakey = crypto.load_privatekey(crypto.FILETYPE_PEM, Path.open(Pathes.ca_key, 'r').read())
         except Exception:
-            print('?Wrong pass phrase')
+            sle('Wrong pass phrase')
             return False 
         
         self.cacert = crypto.load_certificate(crypto.FILETYPE_PEM, Path.open(Pathes.ca_cert, 'r').read())
