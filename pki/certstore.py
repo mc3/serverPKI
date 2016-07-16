@@ -130,19 +130,22 @@ def TLSA_pathes(theCertificate):
     
     @param theCertificate:     cerificate
     @type theCertificate:      Certificate
-    @rtype:                    List of file pathes (may be empty)
+    @rtype:                    List of tuples (may be empty)
+    @rtype                     Each tuple contains: source path, destination dir
     @exceptions:
     """
     retval = []
+    subject_fqdn_tags = theCertificate.name.split(sep='.')
+    src_zone = '.'.join(subject_fqdn_tags[-2::])
     
-    for fqdn in theCertificate.tlsaprefixes:
+    for fqdn in theCertificate.altnames + [theCertificate.name]:
         filename = Path(fqdn + '.tlsa')
-        fqdn_tags = theCertificate.name.split(sep='.')
-        dirname = '.'.join(fqdn_tags[-2::])
-        subdir = Pathes.work_tlsa / dirname
+        subdir = Pathes.work_tlsa / src_zone
         if not (subdir.exists() and subdir.is_dir()):
             raise MyException('Missing TLSA RR for {}. Create it first.'.format(subject))
-        retval.append(subdir / filename)
+        fqdn_tags = fqdn.split(sep='.')
+        dest_zone = '.'.join(fqdn_tags[-2::])
+        retval.append(((subdir / filename), dest_zone,))
     return retval
     
 def make_cert_dir(subject):

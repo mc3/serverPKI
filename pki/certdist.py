@@ -194,12 +194,14 @@ def distribute_cert(subject, subject_type, dest_host, dest_path, place, jail, wh
 # **TODO** Implement TLSA rollover. Keep old TLSA in *.old:tlsa
 def distribute_tlsa_rrs(cert):
     
+    sli('Distributing TLSA RRs for DANE.')
     if Pathes.tlsa_dns_master == '':       # DNS master on local host
-        for tlsa_path in TLSA_pathes(cert): 
-            dest = str((Pathes.tlsa_repository_root / tlsa_path.relative_to(Pathes.work_tlsa)).parent)
-            sli('{} => {}'.format(str(tlsa_path), dest))
-            copy2(str(tlsa_path), dest)
-            TLSA_zone_cache[dest] = 1
+        for tlsa_source_path, zone in TLSA_pathes(cert): 
+            dest = str(Pathes.tlsa_repository_root / zone)
+            sli('{} => {}'.format(str(tlsa_source_path), dest))
+            copy2(str(tlsa_source_path), dest)
+            TLSA_zone_cache[zone] = 1
+
     else:                           # remote DNS master ( **UNTESTED**)
         with ssh_connection(Pathes.tlsa_dns_master) as client:
             with client.open_sftp() as sftp:
@@ -220,17 +222,16 @@ def updateSOAofUpdatedZones():
     timestamp = datetime.now()
     current_date = timestamp.strftime('%Y%m%d')
 
-    for k in TLSA_zone_cache:
+    for zone in TLSA_zone_cache:
 
-        chdir(k)
-        filename = str(Path(k).name) + '.zone'  # **HACK: supports only 2nd level domains**
-        zf = ''
-        with open(filename, 'r', encoding="ASCII") as fd:
+        filename = Pathes.tlsa_repository_root / zone / str(zone + '.zone')
+        with filename.open('r', encoding="ASCII") as fd:
             try:
                 zf = fd.read()
             except:                 # file not found or not readable
                 raise MyException("Can't read zone file " + filename)
-        sld('Updating SOA: zone file before update:{}'.format(zf))
+        old_serial = [line for line in zf.splitlines() if 'Serial number' in line][0]
+        sld('Updating SOA: zone file {}'.format(filename))
         sea = re.search('(\d{8})(\d{2})(\s*;\s*)(Serial number)', zf)
         old_date = sea.group(1)
         daily_change = sea.group(2)
@@ -239,8 +240,9 @@ def updateSOAofUpdatedZones():
         else:
             daily_change = '01'
         zf = re.sub('\d{10}', current_date + daily_change, zf, count=1)
-        sld('Updating SOA: zone file after update:{}'.format(zf))
-        with open(filename, 'w', encoding="ASCII") as fd:
+        new_serial = [line for line in zf.splitlines() if 'Serial number' in line][0]
+        sld('Updating SOA: SOA before nd after update:\n{}\n{}'.format(old_serial,new_serial))
+        with filename.open('w', encoding="ASCII") as fd:
             try:
                 fd.write(zf)
             except:                 # file not found or not readable

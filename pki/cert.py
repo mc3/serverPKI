@@ -82,6 +82,24 @@ q_disthosts = """
             LEFT JOIN Jails j ON t.jail = j.id
             LEFT JOIN Places p ON t.place = p.id
 """
+q_insert_instance = """
+    INSERT INTO CertInstance (certificate, state, cert, key, cert_key, CAcert_cert_key, TLSA)
+        VALUES $1, 'reserved', '', '', '', '', '')
+        RETURNING id::int
+"""
+"""
+q_update_instance = """
+    UPDATE CertInstance 
+        SET state = 'issued',
+            cert = $2,
+            key = $3, 
+            cert_key = $3,
+            CAcert_cert_key $4,
+            TLSA = $5
+            issued = NOW(),
+            expired = $6)
+        WHERE id = $1
+"""
 
 ps_certificate = None
 ps_altnames = None
