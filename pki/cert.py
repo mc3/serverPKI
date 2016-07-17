@@ -34,8 +34,11 @@
 # requires python 3.4.
 
 #--------------- imported modules --------------
-import sys
+import datetime
+from hashlib import sha256
 from pathlib import Path
+import sys
+
 from OpenSSL import crypto,rand,crypto
 
 #--------------- local imports --------------
@@ -83,21 +86,20 @@ q_disthosts = """
             LEFT JOIN Places p ON t.place = p.id
 """
 q_insert_instance = """
-    INSERT INTO CertInstance (certificate, state, cert, key, cert_key, CAcert_cert_key, TLSA)
-        VALUES $1, 'reserved', '', '', '', '', '')
+    INSERT INTO CertInstances (certificate, state, cert, key, cert_key, CAcert_cert_key, TLSA)
+        VALUES ($1::INTEGER, 'reserved', '', '', '', '', '')
         RETURNING id::int
 """
-"""
 q_update_instance = """
-    UPDATE CertInstance 
+    UPDATE CertInstances 
         SET state = 'issued',
             cert = $2,
             key = $3, 
-            cert_key = $3,
-            CAcert_cert_key $4,
-            TLSA = $5
-            issued = NOW(),
-            expired = $6)
+            cert_key = $4,
+            CAcert_cert_key = $5,
+            TLSA = $6,
+            issued = CURRENT_DATE::DATE,
+            expires = $7::DATE
         WHERE id = $1
 """
 
@@ -105,6 +107,8 @@ ps_certificate = None
 ps_altnames = None
 ps_tlsaprefixes = None
 ps_disthosts = None
+ps_insert_instance = None
+ps_update_instance = None
 
         
 #--------------- class Certificate --------------
@@ -129,59 +133,64 @@ class Certificate(object):
         self.tlsaprefixes = []
         self.disthosts = {}
         
-        if not ps_certificate:
-            db.execute("PREPARE q_certificate(text) AS " + q_certificate)
-            ps_certificate = db.statement_from_id('q_certificate')
-        self.cert_id, self.cert_type, self.disabled, self.subject_type = \
-            ps_certificate.first(name)
-        sld('------ cert {} {}'.format(self.name, 
-                    self.cert_type + ' DISABLED' if self.disabled else ''))
-        if not ps_altnames:
-            db.execute("PREPARE q_altnames(integer) AS " + q_altnames)
-            ps_altnames = db.statement_from_id('q_altnames')
-        for (name,) in ps_altnames(self.cert_id):
-            self.altnames.append(name)
-        sld('Altnames: '.format(self.altnames))
-        
-        if not ps_tlsaprefixes:
-            db.execute("PREPARE q_tlsaprefixes(integer) AS " + q_tlsaprefixes)
-            ps_tlsaprefixes = db.statement_from_id('q_tlsaprefixes')
-        for (name,) in ps_tlsaprefixes(self.cert_id):
-            self.tlsaprefixes.append(name)
-        sld('TLSA prefixes: '.format(self.tlsaprefixes))
-        
-        if not ps_disthosts:
-            db.execute("PREPARE q_disthosts(integer) AS " + q_disthosts)
-            ps_disthosts = db.statement_from_id('q_disthosts')
-        for row in ps_disthosts(self.cert_id):
-            ##sld('Disthost row: {}'.format(row))
-            if row['fqdn']:    
-                if row['fqdn'] not in self.disthosts:
-                    self.disthosts[row['fqdn']] = {    'jails': {}, 'places': {} }
-                    if row['jailroot']:
-                        self.disthosts[row['fqdn']]['jailroot'] = row['jailroot']
-                dh = self.disthosts[row['fqdn']]
-                if row['jail_name']:
-                    if row['jail_name'] not in dh['jails']:
-                        dh['jails'][row['jail_name']] = 0
-                if row['place_name']:
-                    if row['place_name'] not in dh['places']:
-                        if row['place_name'] not in places:
-                            p = Place(db,row['place_name'])
-                            places[row['place_name']] = p
-                        dh['places'][row['place_name']] = places[row['place_name']]
-        sld('Disthosts: {}'.format(self.disthosts))
+        with self.db.xact(isolation='SERIALIZABLE', mode='READ ONLY'):
+            if not ps_certificate:
+                db.execute("PREPARE q_certificate(text) AS " + q_certificate)
+                ps_certificate = db.statement_from_id('q_certificate')
+            self.cert_id, self.cert_type, self.disabled, self.subject_type = \
+                ps_certificate.first(name)
+            sld('------ cert {} {}'.format(self.name, 
+                        self.cert_type + ' DISABLED' if self.disabled else ''))
+            if not ps_altnames:
+                db.execute("PREPARE q_altnames(integer) AS " + q_altnames)
+                ps_altnames = db.statement_from_id('q_altnames')
+            for (name,) in ps_altnames(self.cert_id):
+                self.altnames.append(name)
+            sld('Altnames: '.format(self.altnames))
+            
+            if not ps_tlsaprefixes:
+                db.execute("PREPARE q_tlsaprefixes(integer) AS " + q_tlsaprefixes)
+                ps_tlsaprefixes = db.statement_from_id('q_tlsaprefixes')
+            for (name,) in ps_tlsaprefixes(self.cert_id):
+                self.tlsaprefixes.append(name)
+            sld('TLSA prefixes: '.format(self.tlsaprefixes))
+            
+            if not ps_disthosts:
+                db.execute("PREPARE q_disthosts(integer) AS " + q_disthosts)
+                ps_disthosts = db.statement_from_id('q_disthosts')
+            for row in ps_disthosts(self.cert_id):
+                ##sld('Disthost row: {}'.format(row))
+                if row['fqdn']:    
+                    if row['fqdn'] not in self.disthosts:
+                        self.disthosts[row['fqdn']] = {    'jails': {}, 'places': {} }
+                        if row['jailroot']:
+                            self.disthosts[row['fqdn']]['jailroot'] = row['jailroot']
+                    dh = self.disthosts[row['fqdn']]
+                    if row['jail_name']:
+                        if row['jail_name'] not in dh['jails']:
+                            dh['jails'][row['jail_name']] = 0
+                    if row['place_name']:
+                        if row['place_name'] not in dh['places']:
+                            if row['place_name'] not in places:
+                                p = Place(db,row['place_name'])
+                                places[row['place_name']] = p
+                            dh['places'][row['place_name']] = places[row['place_name']]
+            sld('Disthosts: {}'.format(self.disthosts))
     
     def create_instance(self):
-        if self.cert_type == 'LE': return self.create_LE_instance()
-        elif self.cert_type == 'local': return self.create_local_instance()
-        else: raise AssertionError
+        with self.db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
+            if self.cert_type == 'LE': return self.create_LE_instance()
+            elif self.cert_type == 'local': return self.create_local_instance()
+            else: raise AssertionError
         
     def create_LE_instance(self):
         sle('LE type certificates not yet implemented: {}'.format(self.name))
         sys.exit(1)
         
     def create_local_instance(self):
+    
+        global ps_insert_instance, ps_update_instance
+        
         if not self.get_cacert(): return False
         
         sli('Creating key (%d bits) and cert for %s %s and loading %d bytes of random data...' %
@@ -195,18 +204,46 @@ class Certificate(object):
         name_dict['CN'] = self.name
         req = createCertRequest(pkey, 'SHA256', name_dict)
         
-        serial = Serial()
-        my_serial = serial.next()
+        if not ps_insert_instance:
+            self.db.execute("PREPARE q_insert_instance(integer) AS " + q_insert_instance)
+            ps_insert_instance = self.db.statement_from_id('q_insert_instance')
+        (instance_serial) = ps_insert_instance.first(self.cert_id)
+        if not instance_serial:
+            raise MyException('?Failed to store new Cerificate in the DB' )
+        else:
+            sld('Serial of new certificate is {}'.format(instance_serial))    
         alt_names = [self.name, ]
         if len(self.altnames) > 0:
             alt_names.extend(self.altnames)
-        cert = createCertificate(req, self.subject_type, self.cacert, self.cakey, my_serial,
+        cert = createCertificate(req, self.subject_type, self.cacert, self.cakey, instance_serial,
                                     0, X509atts.lifetime, alt_names, digest='SHA256')
         
-        hostname = self.name[2:] if self.name.startswith('*.') else self.name
-        store(hostname, self.subject_type, self.cacert_text, cert, pkey, self)
+        #?# hostname = self.name[2:] if self.name.startswith('*.') else self.name
+        #'store(hostname, self.subject_type, self.cacert_text, cert, pkey, self)
         
-        sli('Cert for %s, serial %d/%x created' % (hostname, my_serial, my_serial))
+        key_text = crypto.dump_privatekey(crypto.FILETYPE_PEM, pkey)
+        cert_text = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
+    
+        tlsa_hash = sha256(crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)).hexdigest()
+    
+        cert_plus_cacert_text = cert_text + self.cacert_text
+        key_plus_cert_text = key_text + cert_text
+
+        if not ps_update_instance:
+            ps_update_instance = self.db.prepare(q_update_instance)
+            
+        lifetime_days = X509atts.lifetime/(60*60*24)
+        expire_date = datetime.date.today()+datetime.timedelta(days=lifetime_days)
+        sld('Certificate expires after {} days, which will be at {}'.format(
+                                                    lifetime_days, expire_date))
+        (updates) = ps_update_instance.first(
+                    instance_serial, cert_text.decode('ascii'),
+                    key_text.decode('ascii'), key_plus_cert_text.decode('ascii'),
+                    cert_plus_cacert_text.decode('ascii'), tlsa_hash,
+                    expire_date)
+        if updates != 1:
+            raise MyException('?Failed to store certificate in DB')
+        sli('Cert for %s, serial %d/%x created' % (self.name, instance_serial, instance_serial))
         return True
         
     def get_cacert(self):

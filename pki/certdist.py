@@ -241,7 +241,7 @@ def updateSOAofUpdatedZones():
             daily_change = '01'
         zf = re.sub('\d{10}', current_date + daily_change, zf, count=1)
         new_serial = [line for line in zf.splitlines() if 'Serial number' in line][0]
-        sld('Updating SOA: SOA before nd after update:\n{}\n{}'.format(old_serial,new_serial))
+        sld('Updating SOA: SOA before and after update:\n{}\n{}'.format(old_serial,new_serial))
         with filename.open('w', encoding="ASCII") as fd:
             try:
                 fd.write(zf)
