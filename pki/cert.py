@@ -41,10 +41,11 @@ import sys
 
 from OpenSSL import crypto,rand,crypto
 
+TYPE_RSA = crypto.TYPE_RSA
+TYPE_DSA = crypto.TYPE_DSA
+
 #--------------- local imports --------------
 from pki.config import Pathes, X509atts
-from pki.certgen import *
-##from pki.certdist import deployCerts
 from pki.certstore import store
 
 from pki.utils import sld, sli, sln, sle, options
@@ -114,7 +115,10 @@ ps_update_instance = None
 #--------------- class Certificate --------------
 
 class Certificate(object):
-    'Certificate'
+    """
+    Certificate meta data class.
+    In memory representation of DB backed meta information.
+    """
     
     cakey = None
     cacert = None
@@ -199,10 +203,10 @@ class Certificate(object):
         if not rand.status:
             sle('Random device failed to produce enough entropy')
             return False
-        pkey = createKeyPair(TYPE_RSA, X509atts.bits)
+        pkey = self.createKeyPair(TYPE_RSA, X509atts.bits)
         name_dict = X509atts.names
         name_dict['CN'] = self.name
-        req = createCertRequest(pkey, 'SHA256', name_dict)
+        req = self.createCertRequest(pkey, 'SHA256', name_dict)
         
         if not ps_insert_instance:
             self.db.execute("PREPARE q_insert_instance(integer) AS " + q_insert_instance)
@@ -215,8 +219,8 @@ class Certificate(object):
         alt_names = [self.name, ]
         if len(self.altnames) > 0:
             alt_names.extend(self.altnames)
-        cert = createCertificate(req, self.subject_type, self.cacert, self.cakey, instance_serial,
-                                    0, X509atts.lifetime, alt_names, digest='SHA256')
+        cert = self.createLocalCertificate(req, instance_serial, 0,
+                                X509atts.lifetime, alt_names, digest='SHA256')
         
         #?# hostname = self.name[2:] if self.name.startswith('*.') else self.name
         #'store(hostname, self.subject_type, self.cacert_text, cert, pkey, self)
@@ -246,6 +250,93 @@ class Certificate(object):
         sli('Cert for %s, serial %d/%x created' % (self.name, instance_serial, instance_serial))
         return True
         
+    def createLocalCertificate(self, req, serial, notBefore, notAfter, alt_names, digest="sha1"):
+        """
+        Generate a certificate given a certificate request.
+    
+        Arguments: req        - Certificate request to use
+                   serial     - Serial number for the certificate
+                   notBefore  - Timestamp (relative to now) when the certificate
+                                starts being valid
+                   notAfter   - Timestamp (relative to now) when the certificate
+                                stops being valid
+                   digest     - Digest method to use for signing
+        Returns:   The signed certificate in an X509 object
+        """
+        cert = crypto.X509()
+        cert.set_version(2)         # X509.v3
+        cert.set_serial_number(serial)
+        try:
+        	assert cert.get_serial_number()==serial		# something is wrong here
+        except AssertionError:
+        	sle('Internal inconsitency: serial is %d/%x but should be %d/%x', (
+        		cert.get_serial_number(), cert.get_serial_number(), serial, serial))
+        cert.gmtime_adj_notBefore(notBefore)
+        cert.gmtime_adj_notAfter(notAfter)
+        cert.set_issuer(self.cacert.get_subject())
+        cert.set_subject(req.get_subject())
+        cert.set_pubkey(req.get_pubkey())
+        
+        subj_altnames = ''
+        delim = ''
+        for alt_name in alt_names:
+            subj_altnames += delim + 'DNS:' + alt_name
+            delim = ','
+        cert.add_extensions((
+            # If critical=True then gives error: error 26 at 0 depth lookup:unsupported certificate purpose
+            crypto.X509Extension(b'subjectKeyIdentifier', False, b'hash', subject=self.cacert),
+            crypto.X509Extension(b'basicConstraints', True, b'CA:false', subject=self.cacert),
+            crypto.X509Extension(b'keyUsage', True, b'digitalSignature,keyEncipherment' 
+                                        if self.subject_type == 'server' else b'digitalSignature'),
+            crypto.X509Extension(b'extendedKeyUsage', True, b'serverAuth'
+                                        if self.subject_type  == 'server' else b'clientAuth'),
+            crypto.X509Extension(b'subjectAltName', True, bytes(subj_altnames, 'ascii'))))
+        try:
+            cert.sign(self.cakey, digest)
+        except Exception:
+            sle('Wrong pass phrase')
+            sys.exit(1) 
+        return cert
+
+    def createKeyPair(self, type, bits):
+        """
+        Create a public/private key pair.
+    
+        Arguments: type - Key type, must be one of TYPE_RSA and TYPE_DSA
+                   bits - Number of bits to use in the key
+        Returns:   The public/private key pair in a PKey object
+        """
+        pkey = crypto.PKey()
+        pkey.generate_key(type, bits)
+        return pkey
+    
+    def createCertRequest(self, pkey, digest, name_dict):
+        """
+        Create a certificate request.
+    
+        Arguments: pkey   - The key to associate with the request
+                   digest - Digestion method to use for signing, default is md5
+                   **name - The name of the subject of the request, possible
+                            arguments are:
+                              C     - Country name
+                              ST    - State or province name
+                              L     - Locality name
+                              O     - Organization name
+                              OU    - Organizational unit name
+                              CN    - Common name
+                              emailAddress - E-mail address
+        Returns:   The certificate request in an X509Req object
+        """
+        req = crypto.X509Req()
+        subj = req.get_subject()
+    
+        for (key,value) in name_dict.items():
+            setattr(subj, key, value)
+    
+        req.set_pubkey(pkey)
+        req.sign(pkey, digest)
+        return req
+    
     def get_cacert(self):
         if not Pathes.ca_cert.exists() or not Pathes.ca_key.exists:
 
@@ -263,7 +354,7 @@ class Certificate(object):
                 sle('Random device failed to produce enough entropy')
                 return False
 
-            self.cakey = createKeyPair(TYPE_RSA, 4096)
+            self.cakey = self.createKeyPair(TYPE_RSA, 4096)
             try:
                 self.cakey.check()
             except MyException("Couln't create key"):
@@ -324,8 +415,12 @@ ps_place = None
 #--------------- class Place --------------
 
 class Place(object):
-    'Place'
-    
+    """
+    Place is a collection of certificate metadata, describing details of
+    deployment place. It is unique per service or server software.
+    It may be re-used at multiple target hosts.
+    Backed up in DB table Places'
+    """
     
     def __init__(self, db, name):
         
