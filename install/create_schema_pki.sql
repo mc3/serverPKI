@@ -146,8 +146,8 @@ CREATE TABLE CertInstances (        -- certificate instances being issued
   cert              TEXT            NOT NULL,       -- 'PEM encoded certificate'
   key               TEXT            NOT NULL,       -- 'PEM encoded key'
   TLSA              TEXT            NOT NULL,       -- 'hex ascii encoded TLSA hash'
-  issued            dd.created,                     -- 'date, where cert is valid'
-  expires           dd.created,                     -- 'date where cert expires'
+  not_before        dd.created,                     -- 'date, where cert is valid'
+  not_after         dd.created,                     -- 'date where cert expires'
   updated           dd.updated,                     -- 'time of record update'
   remarks           TEXT                            -- 'Remarks'
 )
@@ -355,7 +355,7 @@ CREATE OR REPLACE VIEW certs_ids AS
 
 
 CREATE OR REPLACE VIEW inst AS
-    SELECT i.id, s.name, i.state, i.issued, i.expires, i.updated
+    SELECT i.id, s.name, i.state, i.not_before, i.not_after, i.updated
     FROM
         certinstances i, certificates c, subjects s
     WHERE
