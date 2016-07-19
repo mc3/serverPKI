@@ -18,7 +18,6 @@ from time import sleep
 
 from paramiko import SSHClient, HostKeys, AutoAddPolicy
 
-#from pki.certstore import cert_and_key_pathes, TLSA_pathes
 from pki.config import Pathes, SSH_CLIENT_USER_NAME
 from pki.utils import options as opts
 from pki.utils import sld, sli, sln, sle
@@ -29,6 +28,17 @@ class MyException(Exception):
     pass
 
 def deployCerts(certs):
+
+    """
+    Deploy a list of (certificate. key and TLSA file, using sftp).
+    Restart service at target host and reload nameserver.
+    
+    @param certs:       list of certificate meta data instances
+    @type certs:        pki.cert.Certificate instance
+    @rtype:             bool, false if error found
+    @exceptions:
+    Some exceptions (to be replaced by error messages and false return)
+    """
 
     error_found = False
         
@@ -115,6 +125,16 @@ def deployCerts(certs):
 
 def ssh_connection(dest_host):
 
+    """
+    Open a ssh connection.
+    
+    @param dest_host:   fqdn of target host
+    @type dest_host:    string
+    @rtype:             paramiko.SSHClient (connected transport)
+    @exceptions:
+    If unable to connect
+    """
+
     client = SSHClient()
     client.load_host_keys(expanduser('~/.ssh/known_hosts'))
     sld('Connecting to {}'.format(dest_host))
@@ -130,6 +150,26 @@ def ssh_connection(dest_host):
         return client
 
 def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
+
+    """
+    Distribute cert and key to a host, jail (if any) and place.
+    Optional reload the service.
+    
+    @param fd:          file descriptor of memory stream
+    @type fd:           io.StringIO
+    @param dest_host:   fqdn of target host
+    @type dest_host:    string
+    @param dest_dir:    target directory
+    @type dest_dir:     string
+    @param file_name:   file name of key or cert file
+    @type file_name:    string
+    @param place:       place with details about setting mode and uid/gid of file
+    @type place:        pki.cert.Place instance
+    @param jail:        name of jail for service to reload
+    @type jail:         string or None
+    @rtype:             not yet any
+    @exceptions:        none known
+    """
 
     with ssh_connection(dest_host) as client:
         
@@ -229,7 +269,7 @@ def distribute_tlsa_rrs(cert, TLSA_text):
     sli('Distributing TLSA RRs for DANE.')
 
     if Pathes.tlsa_dns_master == '':       # DNS master on local host
-        for (zone, fqdn) in TLSA_pathes(cert): 
+        for (zone, fqdn) in TLSA_zone_and_FQDN(cert): 
             filename = fqdn + '.tlsa'
             dest = str(Pathes.tlsa_repository_root / zone / filename)
             sli('{} => {}'.format(filename, dest))
@@ -242,7 +282,7 @@ def distribute_tlsa_rrs(cert, TLSA_text):
             
             TLSA_zone_cache[zone] = 1
 
-    else:                           # remote DNS master ( **UNTESTED**)
+    else:                           # remote DNS master ( **INCOMPLETE**)
         with ssh_connection(Pathes.tlsa_dns_master) as client:
             with client.open_sftp() as sftp:
                 chdir(str(Pathes.work_tlsa))
@@ -258,14 +298,14 @@ def distribute_tlsa_rrs(cert, TLSA_text):
                                         fat.st_size, fat.st_uid, fat.st_gid, fat.st_mtime))
 
 
-def TLSA_pathes(theCertificate):
+def TLSA_zone_and_FQDN(theCertificate):
     """
-    Retrieve pathes of TLSA RRs.
+    Retrieve zone and FQDN of TLSA RRs.
     
-    @param theCertificate:     cerificate
-    @type theCertificate:      Certificate
-    @rtype:                    List of tuples (may be empty)
-    @rtype                     Each tuple contains: source path, destination dir
+    @param theCertificate:     cerificate meta data
+    @type theCertificate:      pki.cert.Certificate
+    @rtype:                    List of tuples (may be empty) of strings
+    @rtype                     Each tuple contains: zone, FQDN
     @exceptions:
     """
     retval = []

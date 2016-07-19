@@ -46,7 +46,7 @@ TYPE_DSA = crypto.TYPE_DSA
 
 #--------------- local imports --------------
 from pki.config import Pathes, X509atts
-from pki.certstore import store
+##from pki.certstore import store
 
 from pki.utils import sld, sli, sln, sle, options
 
@@ -94,8 +94,8 @@ q_instance = """
         FROM CertInstances
         WHERE
             certificate = $1 AND
-            issued <= 'TODAY'::DATE AND
-            expires >= 'TODAY'::DATE
+            not_before <= 'TODAY'::DATE AND
+            not_after >= 'TODAY'::DATE
         ORDER BY id DESC
         LIMIT 1
 """
@@ -105,7 +105,7 @@ q_tlsa_of_instance = """
         WHERE
             certificate = $1 AND
             state = 'prepublished' AND
-            expires <= 'TODAY'::DATE
+            not_after >= 'TODAY'::DATE
         ORDER BY id DESC
         LIMIT 1
 """
@@ -120,8 +120,8 @@ q_update_instance = """
             cert = $2,
             key = $3, 
             TLSA = $4,
-            issued = CURRENT_DATE::DATE,
-            expires = $5::DATE
+            not_before = CURRENT_DATE::DATE,
+            not_after = $5::DATE
         WHERE id = $1
 """
 
@@ -217,8 +217,12 @@ class Certificate(object):
     
     def instance(self):
         """
-        Return certificate, key and TLSA hash of instance, which is valid today
+        Return certificate, key and TLSA hash of most recent instance, which is valid today
+    
+        @rtype:             Tuple of strings (certificate, key and TLSA hash)
+        @exceptions:        none
         """
+        
         global ps_instance
         
         if not ps_instance:
@@ -230,6 +234,9 @@ class Certificate(object):
     def TLSA_hash(self):
         """
         Return TLSA hash of instance, which is valid today and in prepublish state
+
+        @rtype:             string of TLSA hash
+        @exceptions:        none
         """
         global ps_tlsa_of_instance
         
@@ -241,8 +248,13 @@ class Certificate(object):
         
     def create_instance(self):
         """
-        Issue a new certificate instance and store in the DB table certinstances.
+        Issue a new certificate instance and store it
+        in the DB table certinstances.
+
+        @rtype:             bool, true if success
+        @exceptions:        none
         """
+        
         with self.db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
             if self.cert_type == 'LE': return self._create_LE_instance()
             elif self.cert_type == 'local': return self._create_local_instance()
@@ -280,8 +292,14 @@ class Certificate(object):
         alt_names = [self.name, ]
         if len(self.altnames) > 0:
             alt_names.extend(self.altnames)
-        cert = self._createLocalCertificate(req, instance_serial, 0,
-                                X509atts.lifetime, alt_names, digest='SHA256')
+
+        lifetime_days = X509atts.lifetime/(60*60*24)
+        not_after = datetime.date.today()+datetime.timedelta(days=lifetime_days)
+        sld('Certificate expires after {} days, which will be at {}'.format(
+                                                    lifetime_days, not_after))
+
+        cert = self._createLocalCertificate(req, instance_serial,
+                datetime.date.today(), not_after, alt_names, digest='SHA256')
         
         #?# hostname = self.name[2:] if self.name.startswith('*.') else self.name
         #'store(hostname, self.subject_type, self.cacert_text, cert, pkey, self)
@@ -294,13 +312,9 @@ class Certificate(object):
         if not ps_update_instance:
             ps_update_instance = self.db.prepare(q_update_instance)
             
-        lifetime_days = X509atts.lifetime/(60*60*24)
-        expire_date = datetime.date.today()+datetime.timedelta(days=lifetime_days)
-        sld('Certificate expires after {} days, which will be at {}'.format(
-                                                    lifetime_days, expire_date))
         (updates) = ps_update_instance.first(
                     instance_serial, cert_text.decode('ascii'),
-                    key_text.decode('ascii'), tlsa_hash, expire_date)
+                    key_text.decode('ascii'), tlsa_hash, not_after)
         if updates != 1:
             raise DBStoreException('?Failed to store certificate in DB')
         sli('Cert for %s, serial %d/%x created' % (self.name, instance_serial, instance_serial))
@@ -327,8 +341,14 @@ class Certificate(object):
         except AssertionError:
         	sle('Internal inconsitency: serial is %d/%x but should be %d/%x', (
         		cert.get_serial_number(), cert.get_serial_number(), serial, serial))
-        cert.gmtime_adj_notBefore(notBefore)
-        cert.gmtime_adj_notAfter(notAfter)
+        
+        notBefore_text = str('{:04}{:02}{:02}000000Z'.format(
+                                notBefore.year,notBefore.month,notBefore.day))
+        notAfter_text = str('{:04}{:02}{:02}000000Z'.format(
+                                notAfter.year,notAfter.month,notAfter.day))
+        cert.set_notBefore(notBefore_text.encode('ascii'))
+        cert.set_notAfter(notAfter_text.encode('ascii'))
+        
         cert.set_issuer(self.cacert.get_subject())
         cert.set_subject(req.get_subject())
         cert.set_pubkey(req.get_pubkey())
