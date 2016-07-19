@@ -136,20 +136,18 @@ CREATE TABLE Targets (    -- Target describes where and how certs and keys are d
 
 
 
-CREATE TABLE CertInstance (        -- certificate instances being issued
+CREATE TABLE CertInstances (        -- certificate instances being issued
   id                SERIAL          PRIMARY KEY,    -- 'PK of CertInstance table'
   certificate       int4            NOT NULL        -- 'Certificate Class'
                         REFERENCES Certificates
                         ON DELETE RESTRICT
                         ON UPDATE RESTRICT,
-  state             TEXT            NOT NULL,       -- 'state tbd'
+  state             cert_state      NOT NULL,       -- 'state of instance
   cert              TEXT            NOT NULL,       -- 'PEM encoded certificate'
   key               TEXT            NOT NULL,       -- 'PEM encoded key'
-  cert_key          TEXT            NOT NULL,       -- 'PEM encoded cert+key'
-  CAcert_cert_key   TEXT            NOT NULL,       -- 'PEM encoded cert+key+CAcert'
   TLSA              TEXT            NOT NULL,       -- 'hex ascii encoded TLSA hash'
-  issued            dd.created,                     -- 'time of record update'
-  expires           dd.created,                     -- 'time of record creation'
+  issued            dd.created,                     -- 'date, where cert is valid'
+  expires           dd.created,                     -- 'date where cert expires'
   updated           dd.updated,                     -- 'time of record update'
   remarks           TEXT                            -- 'Remarks'
 )
@@ -356,6 +354,13 @@ CREATE OR REPLACE VIEW certs_ids AS
     ORDER BY c.id, s1.id, s2.id;
 
 
+CREATE OR REPLACE VIEW inst AS
+    SELECT i.id, s.name, i.state, i.issued, i.expires, i.updated
+    FROM
+        certinstances i, certificates c, subjects s
+    WHERE
+        i.certificate = c.id AND s.certificate = c.id AND NOT s.isaltname
+    ORDER BY i.id;
 
                         -- Functions -------------------------------------------
                         

@@ -55,7 +55,10 @@ places = {}
 
 #--------------- classes --------------
 
-class MyException(Exception):
+class DBStoreException(Exception):
+    pass
+
+class KeyCertException(Exception):
     pass
 
 #---------------  prepared SQL queries for class Certificate  --------------
@@ -86,9 +89,29 @@ q_disthosts = """
             LEFT JOIN Jails j ON t.jail = j.id
             LEFT JOIN Places p ON t.place = p.id
 """
+q_instance = """
+    SELECT cert, key, TLSA
+        FROM CertInstances
+        WHERE
+            certificate = $1 AND
+            issued <= 'TODAY'::DATE AND
+            expires >= 'TODAY'::DATE
+        ORDER BY id DESC
+        LIMIT 1
+"""
+q_tlsa_of_instance = """
+    SELECT TLSA
+        FROM CertInstances
+        WHERE
+            certificate = $1 AND
+            state = 'prepublished' AND
+            expires <= 'TODAY'::DATE
+        ORDER BY id DESC
+        LIMIT 1
+"""
 q_insert_instance = """
-    INSERT INTO CertInstances (certificate, state, cert, key, cert_key, CAcert_cert_key, TLSA)
-        VALUES ($1::INTEGER, 'reserved', '', '', '', '', '')
+    INSERT INTO CertInstances (certificate, state, cert, key, TLSA)
+        VALUES ($1::INTEGER, 'reserved', '', '', '')
         RETURNING id::int
 """
 q_update_instance = """
@@ -96,11 +119,9 @@ q_update_instance = """
         SET state = 'issued',
             cert = $2,
             key = $3, 
-            cert_key = $4,
-            CAcert_cert_key = $5,
-            TLSA = $6,
+            TLSA = $4,
             issued = CURRENT_DATE::DATE,
-            expires = $7::DATE
+            expires = $5::DATE
         WHERE id = $1
 """
 
@@ -108,6 +129,8 @@ ps_certificate = None
 ps_altnames = None
 ps_tlsaprefixes = None
 ps_disthosts = None
+ps_instance = None
+ps_tlsa_of_instance = None
 ps_insert_instance = None
 ps_update_instance = None
 
@@ -126,7 +149,18 @@ class Certificate(object):
     
     
     def __init__(self, db, name):
-        
+        """
+        Create a certificate meta data instance
+    
+        @param db:          open database connection
+        @type db:           pki.db.DbConnection instance
+        @param name:        subject name of certificate
+        @type name:         string
+        @rtype:             Certificate instance
+        @exceptions:
+        DBStoreException, KeyCertException, AssertionError
+        """
+
         global ps_certificate, ps_altnames, ps_tlsaprefixes, ps_disthosts
         global places
         
@@ -150,14 +184,14 @@ class Certificate(object):
                 ps_altnames = db.statement_from_id('q_altnames')
             for (name,) in ps_altnames(self.cert_id):
                 self.altnames.append(name)
-            sld('Altnames: '.format(self.altnames))
+            sld('Altnames: {}'.format(self.altnames))
             
             if not ps_tlsaprefixes:
                 db.execute("PREPARE q_tlsaprefixes(integer) AS " + q_tlsaprefixes)
                 ps_tlsaprefixes = db.statement_from_id('q_tlsaprefixes')
             for (name,) in ps_tlsaprefixes(self.cert_id):
                 self.tlsaprefixes.append(name)
-            sld('TLSA prefixes: '.format(self.tlsaprefixes))
+            sld('TLSA prefixes: {}'.format(self.tlsaprefixes))
             
             if not ps_disthosts:
                 db.execute("PREPARE q_disthosts(integer) AS " + q_disthosts)
@@ -181,21 +215,48 @@ class Certificate(object):
                             dh['places'][row['place_name']] = places[row['place_name']]
             sld('Disthosts: {}'.format(self.disthosts))
     
+    def instance(self):
+        """
+        Return certificate, key and TLSA hash of instance, which is valid today
+        """
+        global ps_instance
+        
+        if not ps_instance:
+            self.db.execute("PREPARE q_instance(integer) AS " + q_instance)
+            ps_instance = self.db.statement_from_id('q_instance')
+        cert, key, TLSA = ps_instance.first(self.cert_id)
+        return (cert, key, TLSA)
+    
+    def TLSA_hash(self):
+        """
+        Return TLSA hash of instance, which is valid today and in prepublish state
+        """
+        global ps_tlsa_of_instance
+        
+        if not ps_tlsa_of_instance:
+            self.db.execute("PREPARE q_tlsa_of_instance(integer) AS " + q_tlsa_of_instance)
+            ps_tlsa_of_instance = self.db.statement_from_id('q_tlsa_of_instance')
+        (TLSA,) = ps_tlsa_of_instance.first(self.cert_id)
+        return TLSA
+        
     def create_instance(self):
+        """
+        Issue a new certificate instance and store in the DB table certinstances.
+        """
         with self.db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
-            if self.cert_type == 'LE': return self.create_LE_instance()
-            elif self.cert_type == 'local': return self.create_local_instance()
+            if self.cert_type == 'LE': return self._create_LE_instance()
+            elif self.cert_type == 'local': return self._create_local_instance()
             else: raise AssertionError
         
-    def create_LE_instance(self):
+    def _create_LE_instance(self):
         sle('LE type certificates not yet implemented: {}'.format(self.name))
         sys.exit(1)
         
-    def create_local_instance(self):
+    def _create_local_instance(self):
     
         global ps_insert_instance, ps_update_instance
         
-        if not self.get_cacert(): return False
+        if not self._get_cacert(): return False
         
         sli('Creating key (%d bits) and cert for %s %s and loading %d bytes of random data...' %
                 (int(X509atts.bits), self.subject_type, self.name, int(X509atts.bits)))
@@ -203,23 +264,23 @@ class Certificate(object):
         if not rand.status:
             sle('Random device failed to produce enough entropy')
             return False
-        pkey = self.createKeyPair(TYPE_RSA, X509atts.bits)
+        pkey = self._createKeyPair(TYPE_RSA, X509atts.bits)
         name_dict = X509atts.names
         name_dict['CN'] = self.name
-        req = self.createCertRequest(pkey, 'SHA256', name_dict)
+        req = self._createCertRequest(pkey, 'SHA256', name_dict)
         
         if not ps_insert_instance:
             self.db.execute("PREPARE q_insert_instance(integer) AS " + q_insert_instance)
             ps_insert_instance = self.db.statement_from_id('q_insert_instance')
         (instance_serial) = ps_insert_instance.first(self.cert_id)
         if not instance_serial:
-            raise MyException('?Failed to store new Cerificate in the DB' )
+            raise DBStoreException('?Failed to store new Cerificate in the DB' )
         else:
             sld('Serial of new certificate is {}'.format(instance_serial))    
         alt_names = [self.name, ]
         if len(self.altnames) > 0:
             alt_names.extend(self.altnames)
-        cert = self.createLocalCertificate(req, instance_serial, 0,
+        cert = self._createLocalCertificate(req, instance_serial, 0,
                                 X509atts.lifetime, alt_names, digest='SHA256')
         
         #?# hostname = self.name[2:] if self.name.startswith('*.') else self.name
@@ -229,9 +290,6 @@ class Certificate(object):
         cert_text = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
     
         tlsa_hash = sha256(crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)).hexdigest()
-    
-        cert_plus_cacert_text = cert_text + self.cacert_text
-        key_plus_cert_text = key_text + cert_text
 
         if not ps_update_instance:
             ps_update_instance = self.db.prepare(q_update_instance)
@@ -242,15 +300,13 @@ class Certificate(object):
                                                     lifetime_days, expire_date))
         (updates) = ps_update_instance.first(
                     instance_serial, cert_text.decode('ascii'),
-                    key_text.decode('ascii'), key_plus_cert_text.decode('ascii'),
-                    cert_plus_cacert_text.decode('ascii'), tlsa_hash,
-                    expire_date)
+                    key_text.decode('ascii'), tlsa_hash, expire_date)
         if updates != 1:
-            raise MyException('?Failed to store certificate in DB')
+            raise DBStoreException('?Failed to store certificate in DB')
         sli('Cert for %s, serial %d/%x created' % (self.name, instance_serial, instance_serial))
         return True
         
-    def createLocalCertificate(self, req, serial, notBefore, notAfter, alt_names, digest="sha1"):
+    def _createLocalCertificate(self, req, serial, notBefore, notAfter, alt_names, digest="sha1"):
         """
         Generate a certificate given a certificate request.
     
@@ -293,12 +349,12 @@ class Certificate(object):
             crypto.X509Extension(b'subjectAltName', True, bytes(subj_altnames, 'ascii'))))
         try:
             cert.sign(self.cakey, digest)
-        except Exception:
+        except KeyCertException:
             sle('Wrong pass phrase')
             sys.exit(1) 
         return cert
 
-    def createKeyPair(self, type, bits):
+    def _createKeyPair(self, type, bits):
         """
         Create a public/private key pair.
     
@@ -310,7 +366,7 @@ class Certificate(object):
         pkey.generate_key(type, bits)
         return pkey
     
-    def createCertRequest(self, pkey, digest, name_dict):
+    def _createCertRequest(self, pkey, digest, name_dict):
         """
         Create a certificate request.
     
@@ -337,7 +393,7 @@ class Certificate(object):
         req.sign(pkey, digest)
         return req
     
-    def get_cacert(self):
+    def _get_cacert(self):
         if not Pathes.ca_cert.exists() or not Pathes.ca_key.exists:
 
             sln('No CA cert found. Creating one (just for testing - NOT FOR PRODUCTION). . .')
@@ -354,10 +410,10 @@ class Certificate(object):
                 sle('Random device failed to produce enough entropy')
                 return False
 
-            self.cakey = self.createKeyPair(TYPE_RSA, 4096)
+            self.cakey = self._createKeyPair(TYPE_RSA, 4096)
             try:
                 self.cakey.check()
-            except MyException("Couln't create key"):
+            except KeyCertException("Couln't create key"):
                 sys.exit(1)
                 
             self.cacert = crypto.X509()
@@ -392,12 +448,12 @@ class Certificate(object):
         try:
             sli('Using CA key at {}'.format(Pathes.ca_key))
             self.cakey = crypto.load_privatekey(crypto.FILETYPE_PEM, Path.open(Pathes.ca_key, 'r').read())
-        except Exception:
+        except KeyCertException:
             sle('Wrong pass phrase')
             return False 
         
         self.cacert = crypto.load_certificate(crypto.FILETYPE_PEM, Path.open(Pathes.ca_cert, 'r').read())
-        self.cacert_text = Path.open(Pathes.ca_cert, 'rb').read()
+        self.cacert_text = Path.open(Pathes.ca_cert, 'r').read()
         return True
 
 #---------------  prepared SQL queries for class Place  --------------

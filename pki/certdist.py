@@ -18,7 +18,7 @@ from time import sleep
 
 from paramiko import SSHClient, HostKeys, AutoAddPolicy
 
-from pki.certstore import cert_and_key_pathes, TLSA_pathes
+#from pki.certstore import cert_and_key_pathes, TLSA_pathes
 from pki.config import Pathes, SSH_CLIENT_USER_NAME
 from pki.utils import options as opts
 from pki.utils import sld, sli, sln, sle
@@ -43,12 +43,19 @@ def deployCerts(certs):
     sld('limit_hosts={}, only_host={}, skip_host={}'.format(
                                             limit_hosts, only_host, skip_host))
     
-    chdir(str(Pathes.work))
-    
     for cert in certs.values():
          
         if len(cert.disthosts) == 0: continue
         
+        (cert_text,key_text,TLSA_text) = cert.instance()
+        if not cert_text:
+            sle('No valid cerificate for {} in DB - create it first'.format(
+                                                                    cert.name))
+            raise MyException('No valid cerificate for {} in DB - '
+                                            'create it first'.format(cert.name))
+        cert_plus_cacert_text = cert_text + cert.cacert_text
+        key_plus_cert_text = key_text + cert_text
+
         for fqdn,dh in cert.disthosts.items():
         
             if fqdn in skip_host: continue
@@ -58,42 +65,48 @@ def deployCerts(certs):
             
             sld('{}: {}'.format(cert.name, fqdn))
             
-            if dh['jails']:
-                for jail in ( dh['jails'].keys() or '' ):
+            for jail in ( dh['jails'].keys() or ('',) ):   # jail is empty if no jails
             
-                    jailroot = dh['jailroot'] if dh['jailroot'] else ''
-                    dest_path = PurePath('/', jailroot, jail)
-                    sld('[{}: {}: {}]'.format(cert.name, fqdn, dest_path))                
+                jailroot = dh['jailroot'] if jail != '' else '' # may also be empty
+                dest_path = PurePath('/', jailroot, jail)
+                sld('{}: {}: {}'.format(cert.name, fqdn, dest_path))                
     
-                    if not dh['places']:
-                        sle('{} subject has no place attribute.'.format(cert.name))
-                        error_found = True
-                        return False
-                        
-                    for place in dh['places'].values():
+                if not dh['places']:
+                    sle('{} subject has no place attribute.'.format(cert.name))
+                    error_found = True
+                    return False
                     
-                        if place.cert_path:
-                            dp = PurePath(dest_path, place.cert_path)
-                            sld('{}: {}: {}'.format(
-                                                        cert.name, fqdn, dp))
-                            distribute_cert(cert.name, cert.subject_type, fqdn,
-                                                    dp, place, jail, 'c')
-                        else:
-                            sle('Missing cert path in place "()" for cert'
-                                ' "{}"'.format(place.name, cert.name))
-                        if place.key_path:
-                            dp = PurePath(dest_path, place.key_path)
-                        elif (place.cert_file_type != 'combined' and 
-                            place.cert_file_type != 'combined cacert'):
-                            sld('{}: {}: {}'.format(
-                                                        cert.name, fqdn, dp))
-                            distribute_cert(cert.name, cert.subject_type, fqdn,
-                                                    dp, place, jail, 'k')
+                for place in dh['places'].values():
                 
+                    sld('Handling jail "{}" and place {}'.format(jail, place.name))
+                                   
+                    fd_key = StringIO(key_text)
+                    fd_cert = StringIO(cert_text)
+                
+                    key_file_name = key_name(cert.name, cert.subject_type)
+                    cert_file_name = cert_name(cert.name, cert.subject_type)
+                    dest_dir = PurePath(dest_path, place.cert_path)
+                
+                    if place.key_path:
+                        dest_dir = PurePath(dest_path, place.key_path)
+                        distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
+                    
+                    elif place.cert_file_type == 'separate':
+                        distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
+                    
+                    elif place.cert_file_type == 'combined':
+                        cert_file_name = key_cert_name(cert.name, cert.subject_type)
+                        fd_cert = StringIO(key_text + cert_text)
+                
+                    elif place.cert_file_type == 'combined cacert':
+                        cert_file_name = cert_cacert_name(cert.name, cert.subject_type)
+                        fd_cert = StringIO(key_text + cert_text + cert.cacert_text)
+                    
+                    distribute_cert(fd_cert, fqdn, dest_dir, cert_file_name, place, jail)
+            
         sli('')
         if not opts.no_TLSA:
-            sli('')
-            distribute_tlsa_rrs(cert)
+            distribute_tlsa_rrs(cert, TLSA_text)
         
     updateSOAofUpdatedZones()
     reloadNameServer()
@@ -116,60 +129,64 @@ def ssh_connection(dest_host):
         sld('Connected to host {}'.format(dest_host))
         return client
 
-def distribute_cert(subject, subject_type, dest_host, dest_path, place, jail, what):
+def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
 
     with ssh_connection(dest_host) as client:
+        
         with client.open_sftp() as sftp:
             try:
-                sftp.chdir(str(dest_path))
+                sftp.chdir(str(dest_dir))
             except IOError:
                 sln('{}:{} does not exist - creating\n\t{}'.format(
-                            dest_host, dest_path, sys.exc_info()[0].__name__))
+                            dest_host, dest_dir, sys.exc_info()[0].__name__))
                 try:
-                    sftp.mkdir(str(dest_path))   
+                    sftp.mkdir(str(dest_dir))   
                 except IOError:
                     sle('Cant create {}:{}: Missing parent?\n\t{}'.format(
-                            dest_host, dest_path, sys.exc_info()[0].__name__))
+                            dest_host, dest_dir, sys.exc_info()[0].__name__))
                     raise
-                sftp.chdir(str(dest_path))
-            pl = cert_and_key_pathes(subject, subject_type, place, what)            
-            for ppath in pl:
-                path = str(ppath)
-                sli('{}/{} => {}:{}'.format(subject, path, dest_host, dest_path))
-                fat = sftp.put(subject + '/' + path, path, confirm=True)
-                sld('size={}, uid={}, gid={}, mtime={}'.format(
-                            fat.st_size, fat.st_uid, fat.st_gid, fat.st_mtime))
-                if 'key' in path:
-                    sld('Setting mode to 0o400 of {}:{}/{}'.format(
-                                                                    dest_host, dest_path, path))
-                    mode = 0o400
-                    if place.mode: mode = int(place.mode,8)
-                    sftp.chmod(path, mode)
-                    if place.pgLink:
-                        try:
-                            sftp.unlink('postgresql.key')
-                        except IOError:
-                            pass            # none exists: ignore
-                        sftp.symlink(path, 'postgresql.key')
-                        sld('{} => postgresql.key'.format(path))
-                     
-                if 'key' in path or place.chownBoth:
-                    uid = gid = 0
-                    if place.uid: uid = place.uid
-                    if place.gid: gid = place.gid
-                    if uid != 0 or gid != 0:
-                        sld('Setting uid/gid to {}:{} of {}:{}/{}'.format(
-                                                            uid, gid, dest_host, dest_path, path))
-                        sftp.chown(path, uid, gid)
-                elif place.pgLink:
+                sftp.chdir(str(dest_dir))
+            
+            sli('{} => {}:{}'.format(file_name, dest_host, dest_dir))
+            fat = sftp.putfo(fd, file_name, confirm=True)
+            sld('size={}, uid={}, gid={}, mtime={}'.format(
+                        fat.st_size, fat.st_uid, fat.st_gid, fat.st_mtime))
+
+            if 'key' in file_name:
+                sld('Setting mode to 0o400 of {}:{}/{}'.format(
+                                    dest_host, dest_dir, file_name))
+                mode = 0o400
+                if place.mode: mode = int(place.mode,8)
+                sftp.chmod(file_name, mode)
+                if place.pgLink:
                     try:
-                        sftp.unlink('postgresql.crt')
+                        sftp.unlink('postgresql.key')
                     except IOError:
                         pass            # none exists: ignore
-                    sftp.symlink(path, 'postgresql.crt')
-                    sld('{} => postgresql.crt'.format(path))
-        if place.reload_command:
-            cmd = str((place.reload_command).format(jail))
+                    sftp.symlink(file_name, 'postgresql.key')
+                    sld('{} => postgresql.key'.format(file_name))
+                 
+            if 'key' in file_name or place.chownBoth:
+                uid = gid = 0
+                if place.uid: uid = place.uid
+                if place.gid: gid = place.gid
+                if uid != 0 or gid != 0:
+                    sld('Setting uid/gid to {}:{} of {}:{}/{}'.format(
+                                    uid, gid, dest_host, dest_dir, file_name))
+                    sftp.chown(file_name, uid, gid)
+            elif place.pgLink:
+                try:
+                    sftp.unlink('postgresql.crt')
+                except IOError:
+                    pass            # none exists: ignore
+                sftp.symlink(file_name, 'postgresql.crt')
+                sld('{} => postgresql.crt'.format(file_name))
+        
+        if jail and place.reload_command:
+            try:
+                cmd = str((place.reload_command).format(jail))
+            except:             #No "{}" in reload command: means no jail
+                cmd = place.reload_command
             sli('Executing "{}" on host {}'.format(cmd, dest_host))
 
             with client.get_transport().open_session() as chan:
@@ -191,15 +208,38 @@ def distribute_cert(subject, subject_type, dest_host, dest_path, place, jail, wh
                 else:
                     sli(remote_result_msg)
 
+
+def key_name(subject, subject_type):
+    return str('%s_%s_key.pem' % (subject, subject_type))
+
+def cert_name(subject, subject_type):
+    return str('%s_%s_cert.pem' % (subject, subject_type))
+
+def cert_cacert_name(subject, subject_type):
+    return str('%s_%s_cert_cacert.pem' % (subject, subject_type))
+
+def key_cert_name(subject, subject_type):
+    return str('%s_%s_key_cert.pem' % (subject, subject_type))
+
+
+
 # **TODO** Implement TLSA rollover. Keep old TLSA in *.old:tlsa
-def distribute_tlsa_rrs(cert):
+def distribute_tlsa_rrs(cert, TLSA_text):
     
     sli('Distributing TLSA RRs for DANE.')
+
     if Pathes.tlsa_dns_master == '':       # DNS master on local host
-        for tlsa_source_path, zone in TLSA_pathes(cert): 
-            dest = str(Pathes.tlsa_repository_root / zone)
-            sli('{} => {}'.format(str(tlsa_source_path), dest))
-            copy2(str(tlsa_source_path), dest)
+        for (zone, fqdn) in TLSA_pathes(cert): 
+            filename = fqdn + '.tlsa'
+            dest = str(Pathes.tlsa_repository_root / zone / filename)
+            sli('{} => {}'.format(filename, dest))
+            tlsa_lines = []
+            for prefix in cert.tlsaprefixes:
+                tlsa_lines.append(str(prefix.format(fqdn) + TLSA_text + '\n'))
+
+            with open(dest, 'w') as file:
+                file.writelines(tlsa_lines)
+            
             TLSA_zone_cache[zone] = 1
 
     else:                           # remote DNS master ( **UNTESTED**)
@@ -216,6 +256,25 @@ def distribute_tlsa_rrs(cert):
                         fat = sftp.put(str(child), str(child), confirm=True)
                         sld('size={}, uid={}, gid={}, mtime={}'.format(
                                         fat.st_size, fat.st_uid, fat.st_gid, fat.st_mtime))
+
+
+def TLSA_pathes(theCertificate):
+    """
+    Retrieve pathes of TLSA RRs.
+    
+    @param theCertificate:     cerificate
+    @type theCertificate:      Certificate
+    @rtype:                    List of tuples (may be empty)
+    @rtype                     Each tuple contains: source path, destination dir
+    @exceptions:
+    """
+    retval = []
+    
+    for fqdn in theCertificate.altnames + [theCertificate.name]:
+        fqdn_tags = fqdn.split(sep='.')
+        dest_zone = '.'.join(fqdn_tags[-2::])
+        retval.append((dest_zone, fqdn))
+    return retval
 
 def updateSOAofUpdatedZones():
     
