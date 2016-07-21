@@ -14,6 +14,7 @@ CREATE TABLE Certificates (     -- The certificate class
   type              dd.cert_type    NOT NULL,
   disabled          BOOLEAN         NOT NULL
                                     DEFAULT false,
+  authorized_until  datetime,                       -- 'termination date of LE authrization'
   updated           dd.updated,                     -- 'time of record update'
   created           dd.created,                     -- 'time of record update'
   remarks           TEXT                            -- 'Remarks'
@@ -306,7 +307,8 @@ CREATE TRIGGER Ensure_jail_sits_on_correct_disthost BEFORE INSERT OR UPDATE
 
 CREATE OR REPLACE VIEW certs AS
     SELECT s1.type AS "Subject", s1.name AS "Cert Name",
-                c.type AS "Type", s2.name AS "Alt Name", s.name AS "TLSA",
+                c.type AS "Type", c.authorized_until::DATE AS "authorized",
+                s2.name AS "Alt Name", s.name AS "TLSA",
                 s.port AS "Port", d.fqdn AS "Dist Host", j.name AS "Jail",
                 p.name AS "Place"
     FROM Subjects s1
@@ -330,7 +332,8 @@ CREATE OR REPLACE VIEW certs AS
 
 CREATE OR REPLACE VIEW certs_ids AS
     SELECT c.id AS c_id, s1.id AS s1_id, s1.type AS "Subject Type",
-                s1.name AS "Cert Name", c.type AS "Type", s2.id AS s2_id,
+                s1.name AS "Cert Name", c.type AS "Type", 
+                c.authorized_until::DATE AS "authorized", s2.id AS s2_id,
                 s2.name AS "Alt Name", s.id AS s_id, s.name AS "TLSA",
                 s.port AS "Port", t.id AS t_id, d.id AS d_id, d.fqdn AS "FQDN",
                 j.id AS j_id, j.name AS "Jail", p.id AS p_id, p.name AS "Place"
@@ -355,7 +358,7 @@ CREATE OR REPLACE VIEW certs_ids AS
 
 
 CREATE OR REPLACE VIEW inst AS
-    SELECT i.id, s.name, i.state, i.not_before, i.not_after, i.updated
+    SELECT i.id, s.name, i.state, i.not_before, i.not_after, i.TLSA, i.updated
     FROM
         certinstances i, certificates c, subjects s
     WHERE

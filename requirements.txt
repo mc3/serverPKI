@@ -1,9 +1,13 @@
-cffi==0.9.2
-cryptography==0.8
+cffi==1.6.0
+cryptography==1.4
 ecdsa==0.13
- -e git+https://github.com/mbr/paramiko.git@b7fbb8def62dd4ac8b99059fd8b57b58dd5cf9ec#egg=paramiko-master
-pyasn1==0.1.7
-pycparser==2.10
+idna==2.1
+manuale==1.0.2
+paramiko==2.0.1
+py-postgresql==1.1.0
+pyasn1==0.1.9
+pycparser==2.14
 pycrypto==2.6.1
-pyOpenSSL==0.14
-six==1.9.0
+pyOpenSSL==16.0.0
+requests==2.10.0
+six==1.10.0

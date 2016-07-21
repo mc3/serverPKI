@@ -11,8 +11,7 @@ class Pathes(object):
     db = home / 'db'
     ca_cert = db / 'ca_cert.pem'
     ca_key = db / 'ca_key.pem'
-    ca_serial = db / 'ca_serial.txt'
-    
+    le_account = db / 'account.json'    
     work = home / 'work'
     work_tlsa = work / 'TLSA'
     
@@ -36,7 +35,8 @@ class X509atts(object):
                 }
     
     lifetime = 60*60*24*370                         # 1 year
-    bits = 2048
+    ##bits = 2048
+    bits = 4096
 
 DEBUG = True
 
@@ -52,3 +52,7 @@ dbAccounts = {  'pki_dev':  {'dbHost':       'db1.in.chaos1.de',
                             'dbSearchPath':   'pki,dd,public'}}
 
 SSH_CLIENT_USER_NAME = 'root'
+
+##LE_SERVER = 'https://acme-v01.api.letsencrypt.org'
+LE_SERVER = 'https://acme-staging.api.letsencrypt.org'
+
