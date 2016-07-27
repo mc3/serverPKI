@@ -87,7 +87,7 @@ our_cert_names = sorted(list(cert_name_set))
 
 for name in our_cert_names:
     c = Certificate(db, name)
-    our_certs[name] = c
+    if c: our_certs[name] = c
 
 if opts.check_only:
     sli('No syntax errors found in configuration.')

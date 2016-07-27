@@ -130,3 +130,73 @@ def options_set():
             
             opts_set += ' '
     return opts_set
+
+
+#---------------  prepared SQL queries for create/update _local_instance  --------------
+
+q_insert_instance = """
+    INSERT INTO CertInstances (certificate, state, cert, key, TLSA)
+        VALUES ($1::INTEGER, 'reserved', '', '', '')
+        RETURNING id::int
+"""
+q_update_instance = """
+    UPDATE CertInstances 
+        SET state = 'issued',
+            cert = $2,
+            key = $3, 
+            TLSA = $4,
+            not_before = CURRENT_DATE::DATE,
+            not_after = $5::DATE
+        WHERE id = $1
+"""
+q_update_state_of_instance = """
+    UPDATE CertInstances 
+        SET state = $2,
+        WHERE id = $1
+"""
+
+ps_insert_instance = None
+ps_update_instance = None
+ps_update_state_of_instance = None
+
+def insert_certinstance(db, certificate_id):
+    
+    global ps_insert_instance
+    
+    if not ps_insert_instance:
+        db.execute("PREPARE q_insert_instance(integer) AS " + q_insert_instance)
+        ps_insert_instance = db.statement_from_id('q_insert_instance')
+    (certinstance_id) = ps_insert_instance.first(
+                certificate_id
+    )
+    return certinstance_id
+
+
+def update_certinstance(db, certinstance_id, cert_pem, key_pem, TLSA_hash,
+                                                    not_before, not_after):
+    
+    global ps_update_instance
+
+    if not ps_update_instance:
+        ps_update_instance = db.prepare(q_update_instance)
+
+    (updates) = ps_update_instance.first(
+                certinstance_id,
+                cert_pem,
+                key_pem,
+                tlsa_hash,
+                not_before,
+                not_after
+    )
+
+def update_certinstance(db, certinstance_id, state):
+    
+    global ps_update_state_of_instance
+
+    if not ps_update_state_of_instance:
+        ps_update_state_of_instance = db.prepare(q_update_state_of_instance)
+
+    (updates) = ps_update_state_of_instance.first(
+                certinstance_id,
+                state,
+    )

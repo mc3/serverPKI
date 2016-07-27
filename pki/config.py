@@ -24,25 +24,18 @@ class X509atts(object):
     Definition of fixed X.509 cert attributes
     """
     names = {   'C':    'DE',
-                'ST':   'Hessen',
                 'L':    'Frankfurt am Main',
                 'O':    'LECHNER-RAU',
-                'OU':   'Secure Internet Server'
+                'CN':   'Lechner-Rau.DE'
             }
     
     extensions = {
     
                 }
     
-    lifetime = 60*60*24*370                         # 1 year
-    ##bits = 2048
+    lifetime = 375                         # 1 year
     bits = 4096
 
-DEBUG = True
-
-def debugging(arg):
-    global DEBUG
-    DEBUG = arg
 
 # Database accounts
 dbAccounts = {  'pki_dev':  {'dbHost':       'db1.in.chaos1.de',
@@ -56,3 +49,15 @@ SSH_CLIENT_USER_NAME = 'root'
 ##LE_SERVER = 'https://acme-v01.api.letsencrypt.org'
 LE_SERVER = 'https://acme-staging.api.letsencrypt.org'
 
+# subjects in table Subjects:
+
+SUBJECT_LOCAL_CA = 'Local CA'
+SUBJECT_LE_CA = 'Lets Encrypt CA'
+
+
+# do we need his:  ??
+DEBUG = True
+
+def debugging(arg):
+    global DEBUG
+    DEBUG = arg

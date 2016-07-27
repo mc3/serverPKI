@@ -57,13 +57,13 @@ def deployCerts(certs):
          
         if len(cert.disthosts) == 0: continue
         
-        (cert_text,key_text,TLSA_text) = cert.instance()
+        (cert_text,key_text,TLSA_text, cacert_text) = cert.instance()
         if not cert_text:
             sle('No valid cerificate for {} in DB - create it first'.format(
                                                                     cert.name))
             raise MyException('No valid cerificate for {} in DB - '
                                             'create it first'.format(cert.name))
-        cert_plus_cacert_text = cert_text + cert.cacert_text
+        cert_plus_cacert_text = cert_text + cacert_text
         key_plus_cert_text = key_text + cert_text
 
         for fqdn,dh in cert.disthosts.items():
@@ -110,7 +110,7 @@ def deployCerts(certs):
                 
                     elif place.cert_file_type == 'combined cacert':
                         cert_file_name = cert_cacert_name(cert.name, cert.subject_type)
-                        fd_cert = StringIO(key_text + cert_text + cert.cacert_text)
+                        fd_cert = StringIO(key_text + cert_text + cacert_text)
                     
                     distribute_cert(fd_cert, fqdn, dest_dir, cert_file_name, place, jail)
             

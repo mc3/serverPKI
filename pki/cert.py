@@ -73,14 +73,23 @@ q_certificate = """
         FROM Certificates c, Subjects s
         WHERE s.name = $1 AND s.certificate = c.id
 """
+q_cacert = """
+    SELECT ca.cert, ca.key
+        FROM Subjects s, Certificates c, Certinstances ca
+        WHERE
+            s.type = 'CA' AND
+            s.certificate = c.id AND
+            c.type = $1 AND
+            ca.certificate = c.id
+        ORDER BY ca.id DESC
+        LIMIT 1
+"""
 q_altnames = """
     SELECT s.name
         FROM Subjects s
         WHERE s.certificate = $1 AND s.isAltName = TRUE
 """
-## Needing one TLSA RR per altname
-## relationship of altname to zone directory **TBD**
-## certstore.store_TLSAs currently assumes all hosted domains have 2 tags
+## Currently assumes all hosted domains have 2 tags
 ## How can we distinguish prepublished TLSA RRs from others?
 q_tlsaprefixes = """
     SELECT s.tlsaprefix
@@ -95,13 +104,14 @@ q_disthosts = """
             LEFT JOIN Places p ON t.place = p.id
 """
 q_instance = """
-    SELECT cert, key, TLSA
-        FROM CertInstances
+    SELECT ci.cert, ci.key, ci.TLSA, ca.cert
+        FROM CertInstances ci, CertInstances ca
         WHERE
-            certificate = $1 AND
-            not_before <= 'TODAY'::DATE AND
-            not_after >= 'TODAY'::DATE
-        ORDER BY id DESC
+            ci.certificate = $1 AND
+            ci.not_before <= 'TODAY'::DATE AND
+            ci.not_after >= 'TODAY'::DATE AND
+            ci.CAcert = ca.id
+        ORDER BY ci.id DESC
         LIMIT 1
 """
 q_tlsa_of_instance = """
@@ -116,6 +126,7 @@ q_tlsa_of_instance = """
 """
 
 ps_certificate = None
+ps_cacert = None
 ps_altnames = None
 ps_tlsaprefixes = None
 ps_disthosts = None
@@ -131,9 +142,9 @@ class Certificate(object):
     In memory representation of DB backed meta information.
     """
     
-    cakey = None
-    cacert = None
-    cacert_text = ''
+    cakey = None        # PEM encoded key text
+    cacert = None       # cacert instance
+    cacert_text = ''    # PEM encoded cacert text
     
     
     def __init__(self, db, name):
@@ -165,6 +176,9 @@ class Certificate(object):
                 ps_certificate = db.statement_from_id('q_certificate')
             self.cert_id, self.cert_type, self.disabled, self.authorized_until,\
                         self.subject_type = ps_certificate.first(name)
+            if not self.cert_id:
+                sln('Missing cert {} in DB.'format(name))
+                return None
             sld('------ cert {} {}'.format(self.name, 
                         self.cert_type + ' DISABLED' if self.disabled else ''))
             if not ps_altnames:
@@ -205,9 +219,11 @@ class Certificate(object):
     
     def instance(self):
         """
-        Return certificate, key and TLSA hash of most recent instance, which is valid today
+        Return certificate, key, TLSA hash and CA certificate of most recent
+        instance, which is valid today
     
-        @rtype:             Tuple of strings (certificate, key and TLSA hash)
+        @rtype:             Tuple of strings
+                            (cert, key, TLSA hash and CA cert)
         @exceptions:        none
         """
         
@@ -216,8 +232,8 @@ class Certificate(object):
         if not ps_instance:
             self.db.execute("PREPARE q_instance(integer) AS " + q_instance)
             ps_instance = self.db.statement_from_id('q_instance')
-        cert, key, TLSA = ps_instance.first(self.cert_id)
-        return (cert, key, TLSA)
+        cert_pem, key_pem, TLSA, CAcert = ps_instance.first(self.cert_id)
+        return (cert_pem, key_pem, TLSA, cacert_ipem)
     
     def TLSA_hash(self):
         """
@@ -248,68 +264,25 @@ class Certificate(object):
             elif self.cert_type == 'local': return create_local_instance(self)
             else: raise AssertionError
         
-    def _get_cacert(self):
-        if not Pathes.ca_cert.exists() or not Pathes.ca_key.exists:
+    def get_cacert(self):
 
-            sln('No CA cert found. Creating one (just for testing - NOT FOR PRODUCTION). . .')
-            if not Pathes.ca_serial.exists():
-                try:
-                    fd = Path.open(Pathes.ca_serial, "w")
-                    fd.write(str(0)+'\n')
-                except IOError:
-                    sle('Could not create serial in db: ' + str(Pathes.ca_serial))
-                    sys.exit(1)
-                    
-            rand.load_file('/dev/urandom', 4096)
-            if not rand.status:
-                sle('Random device failed to produce enough entropy')
-                return False
+        global ps_cacert
 
-            self.cakey = self._createKeyPair(TYPE_RSA, 4096)
-            try:
-                self.cakey.check()
-            except KeyCertException("Couln't create key"):
-                sys.exit(1)
-                
-            self.cacert = crypto.X509()
-            self.cacert.set_version(2)         # X509.v3
-            
-            serial = Serial()
-            my_serial = serial.next()
-            self.cacert.set_serial_number(my_serial)
-
-            self.cacert.get_subject().commonName = "Authority Certificate for Testing serverPKI"
-            self.cacert.set_issuer(self.cacert.get_subject())
-            self.cacert.set_pubkey(self.cakey)
-            
-            self.cacert.gmtime_adj_notBefore(0)
-            self.cacert.gmtime_adj_notAfter(60*60*24*365*10) # 10 years
-
-            caext = crypto.X509Extension((b'basicConstraints'), False, (b'CA:true'))
-            self.cacert.add_extensions([caext])
-            self.cacert.sign(self.cakey, "SHA256")
-            
-            p = Path(Pathes.ca_key)
-            with p.open('wb') as f:
-                f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, self.cakey))
-            p.chmod(0o600)
-            
-            p = Path(Pathes.ca_cert)
-            with p.open('wb') as f:
-                f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, self.cacert))
-            
-            sln('CA cert created for testing.')
-            
-        try:
-            sli('Using CA key at {}'.format(Pathes.ca_key))
-            self.cakey = crypto.load_privatekey(crypto.FILETYPE_PEM, Path.open(Pathes.ca_key, 'r').read())
-        except KeyCertException:
-            sle('Wrong pass phrase')
-            return False 
+        if self.cacert: return True         # already there
         
-        self.cacert = crypto.load_certificate(crypto.FILETYPE_PEM, Path.open(Pathes.ca_cert, 'r').read())
-        self.cacert_text = Path.open(Pathes.ca_cert, 'r').read()
-        return True
+        if not ps_cacert:                   # not there - lookup in DB
+            ps_cacert = self.db.prepare(q_cacert)
+        cacert_text, cakey_text = ps_cacert.first(self.cert_type)
+        if self.cacert_text:                # found it ?
+            self.cacert = crypto.load_certificate(crypto.FILETYPE_PEM, cacert_text)
+            self.cakey = crypto.load_privatekey(crypto.FILETYPE_PEM, cakey_text)
+            return True                     # yes - done
+                                            # not in DB - create one
+        self.cacert self.cakey = cacert.create_cacert(self.db)
+        if self.cacert:
+            return True
+        else:
+            return False
 
 #---------------  prepared SQL queries for class Place  --------------
 

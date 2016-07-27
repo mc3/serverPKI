@@ -14,7 +14,7 @@ CREATE TABLE Certificates (     -- The certificate class
   type              dd.cert_type    NOT NULL,
   disabled          BOOLEAN         NOT NULL
                                     DEFAULT false,
-  authorized_until  datetime,                       -- 'termination date of LE authrization'
+  authorized_until  datetime,                       -- 'termination date of LE authorization'
   updated           dd.updated,                     -- 'time of record update'
   created           dd.created,                     -- 'time of record update'
   remarks           TEXT                            -- 'Remarks'
@@ -144,9 +144,13 @@ CREATE TABLE CertInstances (        -- certificate instances being issued
                         ON DELETE RESTRICT
                         ON UPDATE RESTRICT,
   state             cert_state      NOT NULL,       -- 'state of instance
-  cert              TEXT            NOT NULL,       -- 'PEM encoded certificate'
-  key               TEXT            NOT NULL,       -- 'PEM encoded key'
+  cert              BYTEA           NOT NULL,       -- 'PEM encoded certificate'
+  key               BYTEA           NOT NULL,       -- 'PEM encoded key'
   TLSA              TEXT            NOT NULL,       -- 'hex ascii encoded TLSA hash'
+  CAcert            int4            NOT NULL        -- 'cert of issuing CA'
+                        REFERENCES CertInstances
+                        ON DELETE RESTRICT
+                        ON UPDATE RESTRICT,
   not_before        dd.created,                     -- 'date, where cert is valid'
   not_after         dd.created,                     -- 'date where cert expires'
   updated           dd.updated,                     -- 'time of record update'
@@ -301,6 +305,41 @@ DROP TRIGGER IF EXISTS Ensure_jail_sits_on_correct_disthost ON Targets;
 CREATE TRIGGER Ensure_jail_sits_on_correct_disthost BEFORE INSERT OR UPDATE
     ON Targets FOR EACH ROW
     EXECUTE PROCEDURE Ensure_jail_sits_on_correct_disthost();
+
+
+CREATE OR REPLACE FUNCTION Update_updated() RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.updated := now;
+        RETURN NEW;
+    END;
+$$ LANGUAGE 'plpgsql';
+
+GRANT EXECUTE ON FUNCTION Update_updated() TO pki_dev;
+
+DROP TRIGGER IF EXISTS Update_updated ON Certificates;
+CREATE TRIGGER Update_updated_Certificates BEFORE UPDATE
+    ON Certificates FOR EACH ROW
+    EXECUTE PROCEDURE Update_updated();
+
+DROP TRIGGER IF EXISTS Update_updated ON Certinstances;
+CREATE TRIGGER Update_updated_Certinstances BEFORE UPDATE
+    ON Certinstances FOR EACH ROW
+    EXECUTE PROCEDURE Update_updated();
+
+DROP TRIGGER IF EXISTS Update_updated ON Disthosts;
+CREATE TRIGGER Update_updated_Disthosts BEFORE UPDATE
+    ON Disthosts FOR EACH ROW
+    EXECUTE PROCEDURE Update_updated();
+
+DROP TRIGGER IF EXISTS Update_updated ON Places;
+CREATE TRIGGER Update_updated_Places BEFORE UPDATE
+    ON Places FOR EACH ROW
+    EXECUTE PROCEDURE Update_updated();
+
+DROP TRIGGER IF EXISTS Update_updated ON Subjects;
+CREATE TRIGGER Update_updated_Subjects BEFORE UPDATE
+    ON Subjects FOR EACH ROW
+    EXECUTE PROCEDURE Update_updated();
 
 
                         -- Views --------------------------------------------

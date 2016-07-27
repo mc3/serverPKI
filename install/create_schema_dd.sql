@@ -31,7 +31,7 @@ CREATE DOMAIN dd.port_number
 ALTER DOMAIN dd.port_number OWNER TO pki_dev;
 
 ------------------------------ type of Subject
-CREATE TYPE dd.subject_type AS ENUM ('client', 'server');
+CREATE TYPE dd.subject_type AS ENUM ('CA', 'client', 'server');
 ALTER TYPE dd.subject_type OWNER TO pki_dev;
 
 ------------------------------ type of Place
