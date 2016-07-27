@@ -26,7 +26,7 @@ class X509atts(object):
     names = {   'C':    'DE',
                 'L':    'Frankfurt am Main',
                 'O':    'LECHNER-RAU',
-                'CN':   'Lechner-Rau.DE'
+                'CN':   'Lechner-Rau internal CA'
             }
     
     extensions = {

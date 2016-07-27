@@ -73,17 +73,6 @@ q_certificate = """
         FROM Certificates c, Subjects s
         WHERE s.name = $1 AND s.certificate = c.id
 """
-q_cacert = """
-    SELECT ca.cert, ca.key
-        FROM Subjects s, Certificates c, Certinstances ca
-        WHERE
-            s.type = 'CA' AND
-            s.certificate = c.id AND
-            c.type = $1 AND
-            ca.certificate = c.id
-        ORDER BY ca.id DESC
-        LIMIT 1
-"""
 q_altnames = """
     SELECT s.name
         FROM Subjects s
@@ -233,7 +222,7 @@ class Certificate(object):
             self.db.execute("PREPARE q_instance(integer) AS " + q_instance)
             ps_instance = self.db.statement_from_id('q_instance')
         cert_pem, key_pem, TLSA, CAcert = ps_instance.first(self.cert_id)
-        return (cert_pem, key_pem, TLSA, cacert_ipem)
+        return (cert_pem, key_pem, TLSA, cacert_pem)
     
     def TLSA_hash(self):
         """
@@ -264,25 +253,6 @@ class Certificate(object):
             elif self.cert_type == 'local': return create_local_instance(self)
             else: raise AssertionError
         
-    def get_cacert(self):
-
-        global ps_cacert
-
-        if self.cacert: return True         # already there
-        
-        if not ps_cacert:                   # not there - lookup in DB
-            ps_cacert = self.db.prepare(q_cacert)
-        cacert_text, cakey_text = ps_cacert.first(self.cert_type)
-        if self.cacert_text:                # found it ?
-            self.cacert = crypto.load_certificate(crypto.FILETYPE_PEM, cacert_text)
-            self.cakey = crypto.load_privatekey(crypto.FILETYPE_PEM, cakey_text)
-            return True                     # yes - done
-                                            # not in DB - create one
-        self.cacert self.cakey = cacert.create_cacert(self.db)
-        if self.cacert:
-            return True
-        else:
-            return False
 
 #---------------  prepared SQL queries for class Place  --------------
 
