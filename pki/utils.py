@@ -135,8 +135,8 @@ def options_set():
 #---------------  prepared SQL queries for create/update _local_instance  --------------
 
 q_insert_instance = """
-    INSERT INTO CertInstances (certificate, state, cert, key, TLSA)
-        VALUES ($1::INTEGER, 'reserved', '', '', '')
+    INSERT INTO CertInstances (certificate, state, cert, key, TLSA, cacert)
+        VALUES ($1::INTEGER, 'reserved', '', '', '', 0)
         RETURNING id::int
 """
 q_update_instance = """
@@ -145,8 +145,9 @@ q_update_instance = """
             cert = $2,
             key = $3, 
             TLSA = $4,
-            not_before = CURRENT_DATE::DATE,
-            not_after = $5::DATE
+            cacert = $1,
+            not_before = $5::TIMESTAMP,
+            not_after = $6::TIMESTAMP
         WHERE id = $1
 """
 q_update_state_of_instance = """
@@ -166,7 +167,7 @@ def insert_certinstance(db, certificate_id):
     if not ps_insert_instance:
         db.execute("PREPARE q_insert_instance(integer) AS " + q_insert_instance)
         ps_insert_instance = db.statement_from_id('q_insert_instance')
-    (certinstance_id) = ps_insert_instance.first(
+    certinstance_id = ps_insert_instance.first(
                 certificate_id
     )
     return certinstance_id
@@ -184,12 +185,13 @@ def update_certinstance(db, certinstance_id, cert_pem, key_pem, TLSA_hash,
                 certinstance_id,
                 cert_pem,
                 key_pem,
-                tlsa_hash,
+                TLSA_hash,
                 not_before,
                 not_after
     )
+    return updates
 
-def update_certinstance(db, certinstance_id, state):
+def update_state_of_instance(db, certinstance_id, state):
     
     global ps_update_state_of_instance
 
@@ -200,3 +202,4 @@ def update_certinstance(db, certinstance_id, state):
                 certinstance_id,
                 state,
     )
+    return updates

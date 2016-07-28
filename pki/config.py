@@ -34,7 +34,7 @@ class X509atts(object):
                 }
     
     lifetime = 375                         # 1 year
-    bits = 4096
+    bits = 2048
 
 
 # Database accounts
@@ -52,6 +52,9 @@ LE_SERVER = 'https://acme-staging.api.letsencrypt.org'
 # subjects in table Subjects:
 
 SUBJECT_LOCAL_CA = 'Local CA'
+LOCAL_CA_BITS = 4096
+LOCAL_CA_LIFETIME = 3680
+
 SUBJECT_LE_CA = 'Lets Encrypt CA'
 
 

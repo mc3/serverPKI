@@ -34,8 +34,8 @@
 # requires python 3.4.
 
 #--------------- imported modules --------------
+import binascii
 import datetime
-from hashlib import sha256
 import logging
 from pathlib import Path
 import os
@@ -56,9 +56,9 @@ TYPE_DSA = crypto.TYPE_DSA
 
 #--------------- local imports --------------
 from pki.config import Pathes, X509atts
-from pki.db import insert_certinstance, update_certinstance
 from pki.cacert import get_cacert_and_key
 from pki.utils import sld, sli, sln, sle, options
+from pki.utils import insert_certinstance, update_certinstance
 
 #--------------- Places --------------
 places = {}
@@ -77,15 +77,15 @@ class KeyCertException(Exception):
     
 def issue_local_cert(cert_meta):
     
-    (cacert, cakey) = cacert.get_cacert_and_key(cert_meta.db)
+    (cacert, cakey) = get_cacert_and_key(cert_meta.db)
     
-    (instance_serial) = insert_certinstance(db, cert_meta.cert_id)
+    instance_serial = insert_certinstance(cert_meta.db, cert_meta.cert_id)
     if not instance_serial:
         raise DBStoreException('?Failed to store new Cerificate in the DB' )
     else:
         sld('Serial of new certificate is {}'.format(instance_serial))    
 
-    sli('Creating key (%d bits) and cert for %s %s'.format(
+    sli('Creating key ({} bits) and cert for {} {}'.format(
             int(X509atts.bits),
             cert_meta.subject_type,
             cert_meta.name)
@@ -100,25 +100,25 @@ def issue_local_cert(cert_meta):
     key_pem = key.private_bytes(
          encoding=serialization.Encoding.PEM,
          format=serialization.PrivateFormat.TraditionalOpenSSL,
-         encryption_algorithm=serialization.NoEncryption)
+         encryption_algorithm=serialization.NoEncryption())
 
     builder = x509.CertificateBuilder()
     builder = builder.subject_name(x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, cert_meta.name),
     ]))
-    builder = builder.issuer_name(x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, cacert.subject),
-    ]))
+    builder = builder.issuer_name(x509.Name(
+        cacert.subject,
+    ))
 
-    one_day = datetime.timedelta(1, 0, 0)
-    not_valid_before = datetime.datetime.today() - one_day
+    not_valid_before = datetime.datetime.utcnow() - datetime.timedelta(
+                                                    days=1)
+    not_valid_after = datetime.datetime.utcnow() + datetime.timedelta(
+                                                    days=X509atts.lifetime)
     builder = builder.not_valid_before(not_valid_before)
-    
-    not_valid_after = datetime.datetime.today() + datetime.timedelta(days=X509atts.lifetime)
-    builder = builder.not_valid_after(not_valid_after))
+    builder = builder.not_valid_after(not_valid_after)
     builder = builder.serial_number(int(instance_serial))
-
-    public_key = private_key.public_key()
+    
+    public_key = key.public_key()
     builder = builder.public_key(public_key)
 
     builder = builder.add_extension(
@@ -131,23 +131,23 @@ def issue_local_cert(cert_meta):
 
     ski = x509.SubjectKeyIdentifier.from_public_key(key.public_key())
     builder = builder.add_extension(
-                x509.subjectKeyIdentifier(
-                    digest=ski
-                ),
+                ski,
                 critical=False,
     )
     
-    ski = cacert.extensions.get_extension_for_class(x509.SubjectKeyIdentifier)
-    builder = builder.add_extension(
-                x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
-                    ski
-                ),
-                critical=False,
-    )
-    
+    try:
+        ski = cacert.extensions.get_extension_for_class(x509.SubjectKeyIdentifier)
+        builder = builder.add_extension(
+                    x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
+                    ski),
+                    critical=False,
+        )
+    except x509.extensions.ExtensionNotFound:
+        sln('Could not add a AuthorityKeyIdentifier, because CA has no SubjectKeyIdentifier')
+        
     alt_names = [x509.DNSName(cert_meta.name), ]
     for n in cert_meta.altnames:
-         alt_names.extend(x509.DNSName(n))
+         alt_names.append(x509.DNSName(n))
     builder = builder.add_extension(
                 x509.SubjectAlternativeName(
                     alt_names
@@ -156,43 +156,55 @@ def issue_local_cert(cert_meta):
     )
     builder = builder.add_extension(
                 x509.KeyUsage(
-                    digitalSignature = True,
+                    digital_signature = True,
                     key_encipherment = True if cert_meta.subject_type == 'server' else False,
+                    content_commitment = False,
+                    data_encipherment = False,
+                    key_agreement = False,
+                    key_cert_sign = False,
+                    crl_sign = False,
+                    encipher_only = False,
+                    decipher_only = False
                 ),
                 critical=True,
     )
-    builder = builder.add_extension(
+    
+    eku = None
+    if cert_meta.subject_type == 'server': eku = x509.oid.ExtendedKeyUsageOID.SERVER_AUTH
+    elif cert_meta.subject_type == 'client': eku = x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH
+    if eku:
+        builder = builder.add_extension(
                 x509.ExtendedKeyUsage(
-                    serverAuth = True if cert_meta.subject_type == 'server' else False,
-                    clientAuth = True if cert_meta.subject_type == 'client' else False,
+                    (eku,)
                ),
                 critical=True,
-    )
+        )
     
     cert = builder.sign(
-        private_key=private_key, algorithm=hashes.SHA256(),
+        private_key=key, algorithm=hashes.SHA256(),
         backend=default_backend()
+    )
     
     # convert our cert to PEM format to store in DB backend for safe keeping.
-    cert_pem = cert.public_bytes(serialization.Encoding.PEM))
-    sln('Certificate for {} {}, serial {}, valid until {} created.'.format(
+    cert_pem = cert.public_bytes(serialization.Encoding.PEM)
+    sli('Certificate for {} {}, serial {}, valid until {} created.'.format(
                     cert_meta.subject_type,
                     cert_meta.name,
                     instance_serial,
-                    not_valid_after.isoformat)
+                    not_valid_after.isoformat())
     )
     tlsa_hash = binascii.hexlify(
-        cert.fingerprint(SHA256())).decode('ascii').upper()
+        cert.fingerprint(hashes.SHA256())).decode('ascii').upper()
     
     
     (updates) = update_certinstance(
-                db,
+                cert_meta.db,
                 instance_serial,
                 cert_pem,
                 key_pem,
                 tlsa_hash,
-                not_after,
-                not_before
+                not_valid_before,
+                not_valid_after,
     )
     if updates != 1:
         raise DBStoreException('?Failed to store certificate in DB')

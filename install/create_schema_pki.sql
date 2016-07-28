@@ -150,7 +150,8 @@ CREATE TABLE CertInstances (        -- certificate instances being issued
   CAcert            int4            NOT NULL        -- 'cert of issuing CA'
                         REFERENCES CertInstances
                         ON DELETE RESTRICT
-                        ON UPDATE RESTRICT,
+                        ON UPDATE RESTRICT
+                        INITIALLY DEFERRED,
   not_before        dd.created,                     -- 'date, where cert is valid'
   not_after         dd.created,                     -- 'date where cert expires'
   updated           dd.updated,                     -- 'time of record update'
@@ -309,7 +310,7 @@ CREATE TRIGGER Ensure_jail_sits_on_correct_disthost BEFORE INSERT OR UPDATE
 
 CREATE OR REPLACE FUNCTION Update_updated() RETURNS TRIGGER AS $$
     BEGIN
-        NEW.updated := now;
+        NEW.updated := 'now';
         RETURN NEW;
     END;
 $$ LANGUAGE 'plpgsql';

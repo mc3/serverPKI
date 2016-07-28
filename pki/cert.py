@@ -53,7 +53,7 @@ from pki.config import Pathes, X509atts, LE_SERVER
 
 from pki.utils import sld, sli, sln, sle, options
 from pki.issue_LE import create_LE_instance
-from pki.issue_local import create_local_instance
+from pki.issue_local import issue_local_cert
 
 #--------------- Places --------------
 places = {}
@@ -131,10 +131,6 @@ class Certificate(object):
     In memory representation of DB backed meta information.
     """
     
-    cakey = None        # PEM encoded key text
-    cacert = None       # cacert instance
-    cacert_text = ''    # PEM encoded cacert text
-    
     
     def __init__(self, db, name):
         """
@@ -166,7 +162,7 @@ class Certificate(object):
             self.cert_id, self.cert_type, self.disabled, self.authorized_until,\
                         self.subject_type = ps_certificate.first(name)
             if not self.cert_id:
-                sln('Missing cert {} in DB.'format(name))
+                sln('Missing cert {} in DB.'.format(name))
                 return None
             sld('------ cert {} {}'.format(self.name, 
                         self.cert_type + ' DISABLED' if self.disabled else ''))
@@ -221,8 +217,12 @@ class Certificate(object):
         if not ps_instance:
             self.db.execute("PREPARE q_instance(integer) AS " + q_instance)
             ps_instance = self.db.statement_from_id('q_instance')
-        cert_pem, key_pem, TLSA, CAcert = ps_instance.first(self.cert_id)
-        return (cert_pem, key_pem, TLSA, cacert_pem)
+        cert_pem, key_pem, TLSA, cacert_pem = ps_instance.first(self.cert_id)
+        return (
+            cert_pem.decode('utf-8'),
+            key_pem.decode('utf-8'),
+            TLSA,
+            cacert_pem.decode('utf-8'))
     
     def TLSA_hash(self):
         """
@@ -250,7 +250,7 @@ class Certificate(object):
         
         with self.db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
             if self.cert_type == 'LE': return create_LE_instance(self)
-            elif self.cert_type == 'local': return create_local_instance(self)
+            elif self.cert_type == 'local': return issue_local_cert(self)
             else: raise AssertionError
         
 
