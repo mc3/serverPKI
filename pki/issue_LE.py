@@ -52,9 +52,9 @@ from manuale import cli as manuale_cli
 from manuale import errors as manuale_errors
 
 #--------------- local imports --------------
-from pki.config import Pathes, X509atts, LE_SERVER
-
-from pki.utils import sld, sli, sln, sle, options
+from pki.cacert import create_CAcert_meta
+from pki.config import Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA
+from pki.utils import sld, sli, sln, sle, options, update_certinstance
 
 # --------------- manuale logging ----------------
 
@@ -75,17 +75,17 @@ class KeyCertException(Exception):
 
 q_insert_LE_instance = """
     INSERT INTO CertInstances 
-            (certificate, state, cert, key, TLSA, not_before, not_after)
-        VALUES ($1::INTEGER, 'issued', $2, $3, $4, $5::TIMESTAMP, $6::TIMESTAMP)
+            (certificate, state, cert, key, TLSA, cacert, not_before, not_after)
+        VALUES ($1::INTEGER, 'issued', $2, $3, $4, $5, $6::TIMESTAMP, $7::TIMESTAMP)
         RETURNING id::int
 """
 ps_insert_LE_instance = None
 
         
-#--------------- class Certificate --------------
+#--------------- public functions --------------
 
         
-def create_LE_instance(cert_meta):
+def issue_LE_cert(cert_meta):
 
     global ps_insert_LE_instance
 
@@ -122,42 +122,82 @@ def create_LE_instance(cert_meta):
         result = acme.issue_certificate(csr)
     except IOError as e:
         sle("Connection or service request failed. Aborting.")
-        raise ManualeError(e)
+        raise manuale_errors.ManualeError(e)
     try:
         certificate = manuale_crypto.load_der_certificate(result.certificate)
     except IOError as e:
         sle("Failed to load new certificate. Aborting.")
         raise ManualeError(e)
-    ##except:
-    ##    return False
+
+    sli('Certificate issued. Valid until {}'.format(not_valid_after.isoformat()))
+
+    if result.intermediate:
+        intcert = manuale_crypto.load_der_certificate(result.intermediate)
+        intcert_instance_id = _get_intermediate_instance(cert_meta.db, intcert)
+    else:
+        sle('Missing intermediate cert. Can''t store in DB')
+        exit(1)
+
     not_valid_before = certificate.not_valid_before
     not_valid_after = certificate.not_valid_after
-    sli('Certificate issued. Valid until {}'.format(not_valid_after.isoformat()))
+
+    cert_pem = manuale_crypto.export_pem_certificate(certificate)
+    key_pem = manuale_crypto.export_rsa_key(certificate_key)
     tlsa_hash = binascii.hexlify(
         certificate.fingerprint(SHA256())).decode('ascii').upper()
     sli('Hash is: {}'.format(tlsa_hash))
 
-    
+
     if not ps_insert_LE_instance:
         ps_insert_LE_instance = cert_meta.db.prepare(q_insert_LE_instance)
-    """
-    if not ps_insert_LE_instance:
-        cert_meta.db.execute("PREPARE q_insert_LE_instance(integer, text, text, text, timestamp, timestamp) AS " + q_insert_LE_instance)
-        ps_insert_LE_instance = cert_meta.db.statement_from_id('q_insert_LE_instance')
-    """
-    c = manuale_crypto.export_pem_certificate(certificate).decode('ascii')
-    if result.intermediate:
-        c += manuale_crypto.export_pem_certificate(
-            manuale_crypto.load_der_certificate(result.intermediate)).decode('ascii')
-    (instance_serial) = ps_insert_LE_instance.first(
+    (instance_id) = ps_insert_LE_instance.first(
             cert_meta.cert_id,
-            c,
-            manuale_crypto.export_rsa_key(certificate_key).decode('ascii'),
+            cert_pem,
+            key_pem,
             tlsa_hash,
+            intcert_instance_id,
             not_valid_before,
             not_valid_after)
-    if instance_serial:
+    if instance_id:
         return True
     sle('Failed to store new cert in DB backend')
     
     
+#---------------  prepared SQL queries for private functions  --------------
+
+q_query_LE_intermediate = """
+    SELECT id from CertInstances
+        WHERE TLSA == $1 
+"""
+ps_query_LE_intermediate = None
+
+        
+#--------------- private functions --------------
+
+def _get_intermediate_instance(db, int_cert):
+
+    global ps_query_LE_intermediate
+    
+    hash = binascii.hexlify(
+        int_cert.fingerprint(SHA256())).decode('ascii').upper()
+    
+    if not ps_query_LE_intermediate:
+        ps_query_LE_intermediate = db.prepare(q_query_LE_intermediate)
+    (instance_id) = ps_query_LE_intermediate.first(hash)
+    if instance_id:
+        return instance_id
+    
+    # new intermediate - put it into DB
+    
+    instance_id = create_CAcert_meta(db, 'LE', SUBJECT_LE_CA)
+    
+    not_valid_before = int_cert.not_valid_before
+    not_valid_after = int_cert.not_valid_after
+
+    cert_pem = manuale_crypto.export_pem_certificate(int_cert)
+    
+    (updates) = update_certinstance(db, instance_id, cert_pem, '', hash,
+                                    not_valid_before, not_valid_after)
+    if updates != 1:
+        raise DBStoreException('?Failed to store intermediate certificate in DB')
+    return instance_id

@@ -52,7 +52,7 @@ TYPE_DSA = crypto.TYPE_DSA
 from pki.config import Pathes, X509atts, LE_SERVER
 
 from pki.utils import sld, sli, sln, sle, options
-from pki.issue_LE import create_LE_instance
+from pki.issue_LE import issue_LE_cert
 from pki.issue_local import issue_local_cert
 
 #--------------- Places --------------
@@ -249,7 +249,7 @@ class Certificate(object):
         """
         
         with self.db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
-            if self.cert_type == 'LE': return create_LE_instance(self)
+            if self.cert_type == 'LE': return issue_LE_cert(self)
             elif self.cert_type == 'local': return issue_local_cert(self)
             else: raise AssertionError
         

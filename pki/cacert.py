@@ -104,7 +104,7 @@ def get_cacert_and_key(db):
         return (cacert, cakey)
         
     # create rows for cacert meta and instance
-    cacert_instance_id = _create_CAcert_meta(db, 'local', SUBJECT_LOCAL_CA)
+    cacert_instance_id = create_CAcert_meta(db, 'local', SUBJECT_LOCAL_CA)
     if not cacert_instance_id:
         raise DBStoreException('?Failed to store certificate in DB')
     
@@ -330,7 +330,7 @@ ps_query_CA_subject_and_certificate = None
 
 #--------------- function --------------
 
-def _create_CAcert_meta(db, cert_type, name):
+def create_CAcert_meta(db, cert_type, name):
     
     global ps_query_CA_subject_and_certificate
     
