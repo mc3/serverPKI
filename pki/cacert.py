@@ -341,12 +341,12 @@ def create_CAcert_meta(db, cert_type, name):
     
     if not certificate_id:      # no subject and certifcate - create both
         ps = db.prepare(q_insert_cacert)
-        certificate_id = ps(cert_type)
+        certificate_id = ps.first(cert_type)
         if not certificate_id:
             sle('Failed to create row in Certificates for {}'.format(name))
             return None
         ps = db.prepare(q_insert_cacert_subject)
-        subject_id = ps('CA', name, certificate_id)
+        subject_id = ps.first('CA', name, certificate_id)
         if not subject_id:
             sle('Failed to create row in Subjects for {}'.format(name))
             return None

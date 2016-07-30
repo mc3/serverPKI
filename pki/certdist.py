@@ -13,7 +13,6 @@ from os.path import expanduser
 from os import chdir
 import subprocess
 from shutil import copy2
-import re
 from time import sleep
 
 from paramiko import SSHClient, HostKeys, AutoAddPolicy
@@ -57,12 +56,14 @@ def deployCerts(certs):
          
         if len(cert.disthosts) == 0: continue
         
-        (cert_text,key_text,TLSA_text, cacert_text) = cert.instance()
-        if not cert_text:
+        result = cert.instance()
+        if not result:
             sle('No valid cerificate for {} in DB - create it first'.format(
                                                                     cert.name))
             raise MyException('No valid cerificate for {} in DB - '
                                             'create it first'.format(cert.name))
+        cert_text,key_text,TLSA_text, cacert_text = result
+        
         cert_plus_cacert_text = cert_text + cacert_text
         key_plus_cert_text = key_text + cert_text
 

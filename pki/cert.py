@@ -78,7 +78,6 @@ q_altnames = """
         FROM Subjects s
         WHERE s.certificate = $1 AND s.isAltName = TRUE
 """
-## Currently assumes all hosted domains have 2 tags
 ## How can we distinguish prepublished TLSA RRs from others?
 q_tlsaprefixes = """
     SELECT s.tlsaprefix
@@ -93,7 +92,7 @@ q_disthosts = """
             LEFT JOIN Places p ON t.place = p.id
 """
 q_instance = """
-    SELECT ci.cert, ci.key, ci.TLSA, ca.cert
+    SELECT ci.cert, ci.key, ci.hash, ca.cert
         FROM CertInstances ci, CertInstances ca
         WHERE
             ci.certificate = $1 AND
@@ -104,7 +103,7 @@ q_instance = """
         LIMIT 1
 """
 q_tlsa_of_instance = """
-    SELECT TLSA
+    SELECT hash
         FROM CertInstances
         WHERE
             certificate = $1 AND
@@ -112,6 +111,11 @@ q_tlsa_of_instance = """
             not_after >= 'TODAY'::DATE
         ORDER BY id DESC
         LIMIT 1
+"""
+q_update_authorized_until = """
+    UPDATE Certificates
+        SET authorized_until = $2::DATE
+        WHERE id = $1
 """
 
 ps_certificate = None
@@ -121,6 +125,7 @@ ps_tlsaprefixes = None
 ps_disthosts = None
 ps_instance = None
 ps_tlsa_of_instance = None
+ps_update_authorized_until = None
 
         
 #--------------- class Certificate --------------
@@ -217,12 +222,15 @@ class Certificate(object):
         if not ps_instance:
             self.db.execute("PREPARE q_instance(integer) AS " + q_instance)
             ps_instance = self.db.statement_from_id('q_instance')
-        cert_pem, key_pem, TLSA, cacert_pem = ps_instance.first(self.cert_id)
-        return (
-            cert_pem.decode('utf-8'),
-            key_pem.decode('utf-8'),
-            TLSA,
-            cacert_pem.decode('utf-8'))
+        sld('instance: {}'.format(self.cert_id))
+        result = ps_instance.first(self.cert_id)
+        if result:
+            (cert_pem, key_pem, TLSA, cacert_pem) = result
+            return (
+                cert_pem.decode('utf-8'),
+                key_pem.decode('utf-8'),
+                TLSA,
+                cacert_pem.decode('utf-8'))
     
     def TLSA_hash(self):
         """
@@ -253,6 +261,26 @@ class Certificate(object):
             elif self.cert_type == 'local': return issue_local_cert(self)
             else: raise AssertionError
         
+    
+    def update_authorized_until(self, until):
+        """
+        Update authorized_until of current Certificates instance.
+
+        @param until:       date and time where LE authrization expires
+        @type until:        datetime.datetime instance
+        @rtype:             string of TLSA hash
+        @exceptions:        none
+        """
+        global ps_update_authorized_until
+        
+        if not ps_update_authorized_until:
+            ps_update_authorized_until = self.db.prepare(q_update_authorized_until)
+    
+        (updates) = ps_update_authorized_until.first(
+                    self.cert_id,
+                    until
+        )
+        return updates
 
 #---------------  prepared SQL queries for class Place  --------------
 

@@ -14,7 +14,7 @@ CREATE TABLE Certificates (     -- The certificate class
   type              dd.cert_type    NOT NULL,
   disabled          BOOLEAN         NOT NULL
                                     DEFAULT false,
-  authorized_until  datetime,                       -- 'termination date of LE authorization'
+  authorized_until  TIMESTAMP,                      -- 'termination date of LE authorization'
   updated           dd.updated,                     -- 'time of record update'
   created           dd.created,                     -- 'time of record update'
   remarks           TEXT                            -- 'Remarks'
@@ -146,14 +146,14 @@ CREATE TABLE CertInstances (        -- certificate instances being issued
   state             cert_state      NOT NULL,       -- 'state of instance
   cert              BYTEA           NOT NULL,       -- 'PEM encoded certificate'
   key               BYTEA           NOT NULL,       -- 'PEM encoded key'
-  TLSA              TEXT            NOT NULL,       -- 'hex ascii encoded TLSA hash'
+  hash              TEXT            NOT NULL,       -- 'hex ascii encoded TLSA hash'
   CAcert            int4            NOT NULL        -- 'cert of issuing CA'
                         REFERENCES CertInstances
                         ON DELETE RESTRICT
                         ON UPDATE RESTRICT
                         INITIALLY DEFERRED,
-  not_before        dd.created,                     -- 'date, where cert is valid'
-  not_after         dd.created,                     -- 'date where cert expires'
+  not_before        TIMESTAMP,                      -- 'date, where cert is valid'
+  not_after         TIMESTAMP,                      -- 'date where cert expires'
   updated           dd.updated,                     -- 'time of record update'
   remarks           TEXT                            -- 'Remarks'
 )
