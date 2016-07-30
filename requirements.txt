@@ -2,6 +2,7 @@ cffi==1.6.0
 cryptography==1.4
 ecdsa==0.13
 idna==2.1
+iso8601
 manuale==1.0.2
 paramiko==2.0.1
 py-postgresql==1.1.0

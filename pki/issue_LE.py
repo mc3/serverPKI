@@ -41,11 +41,12 @@ import logging
 from pathlib import Path
 import os
 import sys
+import time
 
+import iso8601
 from cryptography.hazmat.primitives.hashes import SHA256
 
-
-from manuale import acme as manuale_acme
+from manuale.acme import Acme
 from manuale import crypto as manuale_crypto
 from manuale import issue as manuale_issue
 from manuale import cli as manuale_cli
@@ -55,6 +56,8 @@ from manuale import errors as manuale_errors
 from pki.cacert import create_CAcert_meta
 from pki.config import Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA
 from pki.utils import sld, sli, sln, sle, options, update_certinstance
+from pki.utils import zone_and_FQDN_from_altnames, updateSOAofUpdatedZones
+from pki.utils import reloadNameServer, updateZoneCache
 
 # --------------- manuale logging ----------------
 
@@ -107,16 +110,17 @@ def issue_LE_cert(cert_meta):
         sle('Problem with Lets Encrypt account data at {}'.format(
                                                 str(Pathes.le_account)))
         exit(1)
+
     if not (cert_meta.authorized_until and
                     cert_meta.authorized_until >= datetime.datetime.now()):
-        sle('LE Authorization not yet implemented')                    # needing authorization
-        exit(1)
-    ##try:
+        _authorize(cert_meta, account)
+    
+    exit(1)
     sli('Creating key (%d bits) and cert for %s %s' %
         (int(X509atts.bits), cert_meta.subject_type, cert_meta.name))
     certificate_key = manuale_crypto.generate_rsa_key(X509atts.bits)
     csr = manuale_crypto.create_csr(certificate_key, alt_names)
-    acme = manuale_acme.Acme(LE_SERVER, account)
+    acme = Acme(LE_SERVER, account)
     try:
         sli('Requesting certificate issuance from LE...')
         result = acme.issue_certificate(csr)
@@ -128,8 +132,6 @@ def issue_LE_cert(cert_meta):
     except IOError as e:
         sle("Failed to load new certificate. Aborting.")
         raise ManualeError(e)
-
-    sli('Certificate issued. Valid until {}'.format(not_valid_after.isoformat()))
 
     if result.intermediate:
         intcert = manuale_crypto.load_der_certificate(result.intermediate)
@@ -145,6 +147,8 @@ def issue_LE_cert(cert_meta):
     key_pem = manuale_crypto.export_rsa_key(certificate_key)
     tlsa_hash = binascii.hexlify(
         certificate.fingerprint(SHA256())).decode('ascii').upper()
+
+    sli('Certificate issued. Valid until {}'.format(not_valid_after.isoformat()))
     sli('Hash is: {}'.format(tlsa_hash))
 
 
@@ -201,3 +205,120 @@ def _get_intermediate_instance(db, int_cert):
     if updates != 1:
         raise DBStoreException('?Failed to store intermediate certificate in DB')
     return instance_id
+
+def _authorize(cert_meta, account):
+
+    acme = Acme(LE_SERVER, account)
+    thumbprint = manuale_crypto.generate_jwk_thumbprint(account.key)
+
+    FQDNs = [cert_meta.name, ]
+    if len(cert_meta.altnames) > 0:
+        FQDNs.extend(cert_meta.altnames)
+
+    ##try:
+    # Get pending authorizations for each fqdn
+    authz = {}
+    for fqdn in FQDNs:
+        sli("Requesting challenge for {}.".format(fqdn))
+        created = acme.new_authorization(fqdn)
+        auth = created.contents
+        auth['uri'] = created.uri
+        
+        # Find the DNS challenge
+        try:
+            auth['challenge'] = [ch for ch in auth.get('challenges', []) if ch.get('type') == 'dns-01'][0]
+        except IndexError:
+            raise ManualeError("Manuale only supports the dns-01 challenge. The server did not return one.")
+        
+        auth['key_authorization'] = "{}.{}".format(auth['challenge'].get('token'), thumbprint)
+        digest = sha256()
+        digest.update(auth['key_authorization'].encode('ascii'))
+        auth['txt_record'] = manuale_crypto.jose_b64(digest.digest())
+        
+        authz[fqdn] = auth
+    
+    zones = {}
+    
+    sld('Calling zone_and_FQDN_from_altnames()')
+    for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta):
+        if zone in zones:
+            zones[zone].append(fqdn)
+        else:
+            zones[zone] = [fqdn]
+    sld('zones: {}'.format(zones))
+    # write one file with TXT RRS into related zone directory:
+    for zone in zones.keys():
+        dest = str(Pathes.zone_file_root / zone / Pathes.zone_file_include_name)
+        lines = []
+        for fqdn in zones[zone]:
+            sld('fqdn: {}'.format(fqdn))
+            auth = authz[fqdn]
+            lines.append(str('  _acme-challenge.{}.  IN TXT  \"{}\"\n'.format(fqdn, auth['txt_record'])))
+        sli('Writing RRs: {}'.format(lines))
+        with open(dest, 'w') as file:
+            file.writelines(lines)
+        updateZoneCache(zone)
+    
+    updateSOAofUpdatedZones()
+    reloadNameServer()
+    
+    # Verify each fqdn
+    done, failed = set(), set()
+    authorized_until = None
+    
+    for fqdn in FQDNs:
+        sli('')
+        auth = authz[fqdn]
+        challenge = auth['challenge']
+        acme.validate_authorization(challenge['uri'], 'dns-01', auth['key_authorization'])
+
+        while True:
+            sli("{}: waiting for verification. Checking in 5 seconds.".format(fqdn))
+            time.sleep(5)
+
+            response = acme.get_authorization(auth['uri'])
+            status = response.get('status')
+            if status == 'valid':
+                done.add(fqdn)
+                expires = response.get('expires', '(not provided)')
+                if not authorized_until:
+                    authorized_until = iso8601.parse_date(expires)
+                sli("{}: OK! Authorization lasts until {}.".format(fqdn, expires))
+                break
+            elif status != 'pending':
+                failed.add(fqdn)
+
+                # Failed, dig up details
+                error_type, error_reason = "unknown", "N/A"
+                try:
+                    challenge = [ch for ch in response.get('challenges', []) if ch.get('type') == 'dns-01'][0]
+                    error_type = challenge.get('error').get('type')
+                    error_reason = challenge.get('error').get('detail')
+                except (ValueError, IndexError, AttributeError, TypeError):
+                    pass
+
+                sle("{}: {} ({})".format(fqdn, error_reason, error_type))
+                break
+
+    # make include files empty
+    for zone in zones.keys():
+        dest = str(Pathes.zone_file_root / zone / Pathes.zone_file_include_name)
+        with open(dest, 'w') as file:
+            file.writelines(('', ))
+        updateZoneCache(zone)
+    updateSOAofUpdatedZones()
+    reloadNameServer()
+
+
+    logger.info("")
+    if failed:
+        sle("{} fqdn(s) authorized, {} failed.".format(len(done), len(failed)))
+        sli("Authorized: {}".format(' '.join(done) or "N/A"))
+        sle("Failed: {}".format(' '.join(failed)))
+    else:
+        sli("{} fqdn(s) authorized. Let's Encrypt!".format(len(done)))
+    """
+    except IOError as e:
+        sle('A connection or service error occurred. Aborting.')
+        raise ManualeError(e)
+    """

@@ -321,7 +321,7 @@ q_insert_cacert_subject = """
         RETURNING id::int
 """
 q_insert_cacert_instance = """
-    INSERT INTO CertInstances (certificate, state, cert, key, TLSA)
+    INSERT INTO CertInstances (certificate, state, cert, key, hash)
         VALUES ($1::INTEGER, 'reserved', '', '', '')
         RETURNING id::int
 """

@@ -16,8 +16,15 @@ class Pathes(object):
     work_tlsa = work / 'TLSA'
     
     tlsa_dns_master = ''
-    ##tlsa_repository_root = Path('/usr/local/etc/namedb/master/signed')
-    tlsa_repository_root = Path('/tmp')
+    dns_key = db / 'dns'
+    
+    
+    # required convention: zone_file_root/example.com/example.com.zone
+    
+    zone_file_root = Path('/usr/local/etc/namedb/master/signed')
+    ##zone_file_root = Path('/tmp')
+    zone_file_include_name = 'acme_challenges.inc'
+    
     
 class X509atts(object):
     """

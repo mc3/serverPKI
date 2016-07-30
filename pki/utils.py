@@ -2,7 +2,15 @@
 utility module of CA
 """
 #--------------- imported modules --------------
+from datetime import datetime
 import optparse
+import subprocess
+import re
+import syslog
+
+from pki.config import Pathes, SSH_CLIENT_USER_NAME
+
+#--------- globals ***DO WE NEED THIS?*** ----------
 
 global options
 
@@ -58,9 +66,6 @@ options, args = parser.parse_args()
 if options.debug: options.verbose = True
 
 
-#--------------- imported modules --------------
-
-import syslog
 
 #--------------- logging functions --------------
 
@@ -132,10 +137,96 @@ def options_set():
     return opts_set
 
 
-#---------------  prepared SQL queries for create/update _local_instance  --------------
+#-------------------------  DNS server functions ----------------------------
+
+zone_cache = {}
+
+def updateZoneCache(zone):
+    
+    global zone_cache
+    
+    zone_cache[zone] = 1
+    
+
+def zone_and_FQDN_from_altnames(cert_meta):
+    """
+    Retrieve zone and FQDN of TLSA RRs.
+    
+    @param cert_meta:          certificate meta data
+    @type cert_meta:           pki.cert.Certificate
+    @rtype:                    List of tuples (may be empty) of strings
+    @rtype                     Each tuple contains: zone, FQDN
+    @exceptions:
+    """
+    retval = []
+    sld('in zone_and_FQDN_from_altnames()')
+    alt_names = [cert_meta.name, ]
+    if len(cert_meta.altnames) > 0:
+        alt_names.extend(cert_meta.altnames)
+    
+    for fqdn in alt_names :
+        fqdn_tags = fqdn.split(sep='.')
+        sld('fqdn tags: {}'.format(fqdn_tags))
+        for i in range(1, len(fqdn_tags)+1):
+            zone = '.'.join(fqdn_tags[-i::])
+            sld('i={}, zone={}'.format(i, zone))
+            if (Pathes.zone_file_root / zone).exists():
+                sld('{}'.format(str(Pathes.zone_file_root / zone)))
+                retval.append((zone, fqdn))
+                break
+    return retval
+
+def updateSOAofUpdatedZones():
+    
+    global zone_cache
+    
+    timestamp = datetime.now()
+    current_date = timestamp.strftime('%Y%m%d')
+
+    for zone in zone_cache:
+
+        filename = Pathes.zone_file_root / zone / str(zone + '.zone')
+        with filename.open('r', encoding="ASCII") as fd:
+            try:
+                zf = fd.read()
+            except:                 # file not found or not readable
+                raise MyException("Can't read zone file " + filename)
+        old_serial = [line for line in zf.splitlines() if 'Serial number' in line][0]
+        sld('Updating SOA: zone file {}'.format(filename))
+        sea = re.search('(\d{8})(\d{2})(\s*;\s*)(Serial number)', zf)
+        old_date = sea.group(1)
+        daily_change = sea.group(2)
+        if old_date == current_date:
+           daily_change = str('%02d' % (int(daily_change) +1, ))
+        else:
+            daily_change = '01'
+        zf = re.sub('\d{10}', current_date + daily_change, zf, count=1)
+        new_serial = [line for line in zf.splitlines() if 'Serial number' in line][0]
+        sld('Updating SOA: SOA before and after update:\n{}\n{}'.format(old_serial,new_serial))
+        with filename.open('w', encoding="ASCII") as fd:
+            try:
+                fd.write(zf)
+            except:                 # file not found or not readable
+                raise MyException("Can't write zone file " + filename)
+
+def reloadNameServer():
+
+    global zone_cache
+    
+    if len(zone_cache) > 0:
+        try:
+             sld('Reloading nameserver')
+             subprocess.call(['rndc', '-k', str(Pathes.dns_key),'reload'])
+        except subprocess.SubprocessError as e:
+             sle('Error while reloading nameserver: \n{}: {}'.format(e.cmd, e.output))
+    
+    zone_cache = {}
+ 
+ 
+ #---------------  prepared SQL queries for create/update _local_instance  --------------
 
 q_insert_instance = """
-    INSERT INTO CertInstances (certificate, state, cert, key, TLSA, cacert)
+    INSERT INTO CertInstances (certificate, state, cert, key, hash, cacert)
         VALUES ($1::INTEGER, 'reserved', '', '', '', 0)
         RETURNING id::int
 """
