@@ -95,7 +95,7 @@ q_instance = """
     SELECT ci.cert, ci.key, ci.hash, ca.cert
         FROM CertInstances ci, CertInstances ca
         WHERE
-            ci.certificate = $1 AND
+            ci.certificate = $1::INT AND
             ci.not_before <= 'TODAY'::DATE AND
             ci.not_after >= 'TODAY'::DATE AND
             ci.CAcert = ca.id
@@ -222,10 +222,10 @@ class Certificate(object):
         if not ps_instance:
             self.db.execute("PREPARE q_instance(integer) AS " + q_instance)
             ps_instance = self.db.statement_from_id('q_instance')
-        sld('instance: {}'.format(self.cert_id))
         result = ps_instance.first(self.cert_id)
         if result:
             (cert_pem, key_pem, TLSA, cacert_pem) = result
+            sld('Hash of selected Certinstance is {}'.format(TLSA))
             return (
                 cert_pem.decode('utf-8'),
                 key_pem.decode('utf-8'),

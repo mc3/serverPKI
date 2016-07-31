@@ -284,6 +284,8 @@ def distribute_tlsa_rrs(cert, TLSA_text):
             updateZoneCache(zone)
 
     else:                           # remote DNS master ( **INCOMPLETE**)
+        sle('Remote DNS master server is currently not supported. Must be on same host as this script.')
+        exit(1)
         with ssh_connection(Pathes.tlsa_dns_master) as client:
             with client.open_sftp() as sftp:
                 chdir(str(Pathes.work_tlsa))

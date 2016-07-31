@@ -159,17 +159,14 @@ def zone_and_FQDN_from_altnames(cert_meta):
     @exceptions:
     """
     retval = []
-    sld('in zone_and_FQDN_from_altnames()')
     alt_names = [cert_meta.name, ]
     if len(cert_meta.altnames) > 0:
         alt_names.extend(cert_meta.altnames)
     
     for fqdn in alt_names :
         fqdn_tags = fqdn.split(sep='.')
-        sld('fqdn tags: {}'.format(fqdn_tags))
         for i in range(1, len(fqdn_tags)+1):
             zone = '.'.join(fqdn_tags[-i::])
-            sld('i={}, zone={}'.format(i, zone))
             if (Pathes.zone_file_root / zone).exists():
                 sld('{}'.format(str(Pathes.zone_file_root / zone)))
                 retval.append((zone, fqdn))
