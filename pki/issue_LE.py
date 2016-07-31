@@ -113,7 +113,8 @@ def issue_LE_cert(cert_meta):
 
     if not (cert_meta.authorized_until and
                     cert_meta.authorized_until >= datetime.datetime.now()):
-        _authorize(cert_meta, account)
+        if not _authorize(cert_meta, account):
+            return False
     
     sli('Creating key (%d bits) and cert for %s %s' %
         (int(X509atts.bits), cert_meta.subject_type, cert_meta.name))
@@ -130,7 +131,7 @@ def issue_LE_cert(cert_meta):
         certificate = manuale_crypto.load_der_certificate(result.certificate)
     except IOError as e:
         sle("Failed to load new certificate. Aborting.")
-        raise ManualeError(e)
+        raise manuale_errors.ManualeError(e)
 
     if result.intermediate:
         intcert = manuale_crypto.load_der_certificate(result.intermediate)
@@ -227,7 +228,7 @@ def _authorize(cert_meta, account):
             try:
                 auth['challenge'] = [ch for ch in auth.get('challenges', []) if ch.get('type') == 'dns-01'][0]
             except IndexError:
-                raise ManualeError("Manuale only supports the dns-01 challenge. The server did not return one.")
+                raise manuale_errors.ManualeError("Manuale only supports the dns-01 challenge. The server did not return one.")
             
             auth['key_authorization'] = "{}.{}".format(auth['challenge'].get('token'), thumbprint)
             digest = sha256()
@@ -272,8 +273,8 @@ def _authorize(cert_meta, account):
             acme.validate_authorization(challenge['uri'], 'dns-01', auth['key_authorization'])
     
             while True:
-                sli("{}: waiting for verification. Checking in 5 seconds.".format(fqdn))
-                time.sleep(5)
+                sli("{}: waiting for verification. Checking in 15 seconds.".format(fqdn))
+                time.sleep(15)
     
                 response = acme.get_authorization(auth['uri'])
                 status = response.get('status')
@@ -318,10 +319,12 @@ def _authorize(cert_meta, account):
             sle("{} fqdn(s) authorized, {} failed.".format(len(done), len(failed)))
             sli("Authorized: {}".format(' '.join(done) or "N/A"))
             sle("Failed: {}".format(' '.join(failed)))
+            return False
         else:
             sli("{} fqdn(s) authorized. Let's Encrypt!".format(len(done)))
-    
+            return True
+        
     except IOError as e:
         sle('A connection or service error occurred. Aborting.')
-        raise ManualeError(e)
+        raise manuale_errors.ManualeError(e)
     

@@ -4,7 +4,7 @@ ecdsa==0.13
 idna==2.1
 iso8601
 manuale==1.0.2
-paramiko==2.0.1
+##paramiko==2.0.1   with patch: cd /usr/local/src/pki_op/paramiko ; python setup install
 py-postgresql==1.1.0
 pyasn1==0.1.9
 pycparser==2.14

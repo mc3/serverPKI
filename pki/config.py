@@ -6,7 +6,7 @@ class Pathes(object):
     Definition of path config variables
     """
     
-    home = Path('/var/pki_dev/productive_CA').resolve()       # adjust
+    home = Path('/var/pki_op/productive_CA').resolve()       # adjust
     
     db = home / 'db'
     ca_cert = db / 'ca_cert.pem'
@@ -22,7 +22,6 @@ class Pathes(object):
     # required convention: zone_file_root/example.com/example.com.zone
     
     zone_file_root = Path('/usr/local/etc/namedb/master/signed')
-    ##zone_file_root = Path('/tmp')
     zone_file_include_name = 'acme_challenges.inc'
     
     
@@ -47,14 +46,14 @@ class X509atts(object):
 # Database accounts
 dbAccounts = {  'pki_dev':  {'dbHost':       'db1.in.chaos1.de',
                             'dbPort':         '2222',
-                            'dbUser':         'pki_dev',
-                            'dbDatabase':     'pki_dev',
+                            'dbUser':         'pki_op',
+                            'dbDatabase':     'pki_op',
                             'dbSearchPath':   'pki,dd,public'}}
 
 SSH_CLIENT_USER_NAME = 'root'
 
-##LE_SERVER = 'https://acme-v01.api.letsencrypt.org'
-LE_SERVER = 'https://acme-staging.api.letsencrypt.org'
+LE_SERVER = 'https://acme-v01.api.letsencrypt.org'
+##LE_SERVER = 'https://acme-staging.api.letsencrypt.org'
 
 # subjects in table Subjects:
 
