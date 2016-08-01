@@ -276,7 +276,7 @@ def distribute_tlsa_rrs(cert, TLSA_text):
             sli('{} => {}'.format(filename, dest))
             tlsa_lines = []
             for prefix in cert.tlsaprefixes:
-                tlsa_lines.append(str(prefix.format(fqdn) + TLSA_text + '\n'))
+                tlsa_lines.append(str(prefix.format(fqdn) + ' ' +TLSA_text + '\n'))
 
             with open(dest, 'w') as file:
                 file.writelines(tlsa_lines)
