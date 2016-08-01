@@ -257,6 +257,8 @@ def _authorize(cert_meta, account):
             sli('Writing RRs: {}'.format(lines))
             with open(dest, 'w') as file:
                 file.writelines(lines)
+                ##os.chmod(file.fileno(), Pathes.zone_tlsa_inc_mode)
+                ##os.chown(file.fileno(), pathes.zone_tlsa_inc_uid, pathes.zone_tlsa_inc_gid)
             updateZoneCache(zone)
         
         updateSOAofUpdatedZones()
@@ -314,6 +316,8 @@ def _authorize(cert_meta, account):
             dest = str(Pathes.zone_file_root / zone / Pathes.zone_file_include_name)
             with open(dest, 'w') as file:
                 file.writelines(('', ))
+                ##os.chmod(file.fileno(), Pathes.zone_tlsa_inc_mode)
+                ##os.chown(file.fileno(), pathes.zone_tlsa_inc_uid, pathes.zone_tlsa_inc_gid)
             updateZoneCache(zone)
         updateSOAofUpdatedZones()
         reloadNameServer()
