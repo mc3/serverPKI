@@ -111,7 +111,8 @@ def deployCerts(certs):
                 
                     elif place.cert_file_type == 'combined cacert':
                         cert_file_name = cert_cacert_name(cert.name, cert.subject_type)
-                        fd_cert = StringIO(key_text + cert_text + cacert_text)
+                        fd_cert = StringIO(cert_text + cacert_text)
+                        distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
                     
                     distribute_cert(fd_cert, fqdn, dest_dir, cert_file_name, place, jail)
             
@@ -280,7 +281,6 @@ def distribute_tlsa_rrs(cert, TLSA_text):
 
             with open(dest, 'w') as file:
                 file.writelines(tlsa_lines)
-            
             updateZoneCache(zone)
 
     else:                           # remote DNS master ( **INCOMPLETE**)
