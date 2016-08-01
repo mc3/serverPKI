@@ -96,8 +96,8 @@ q_instance = """
         FROM CertInstances ci, CertInstances ca
         WHERE
             ci.certificate = $1::INT AND
-            ci.not_before <= 'TODAY'::DATE AND
-            ci.not_after >= 'TODAY'::DATE AND
+            ci.not_before <= LOCALTIMESTAMP AND
+            ci.not_after >= LOCALTIMESTAMP AND
             ci.CAcert = ca.id
         ORDER BY ci.id DESC
         LIMIT 1
