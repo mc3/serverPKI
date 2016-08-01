@@ -253,7 +253,7 @@ def _authorize(cert_meta, account):
             for fqdn in zones[zone]:
                 sld('fqdn: {}'.format(fqdn))
                 auth = authz[fqdn]
-                lines.append(str('  _acme-challenge.{}.  IN TXT  \"{}\"\n'.format(fqdn, auth['txt_record'])))
+                lines.append(str('_acme-challenge.{}.  IN TXT  \"{}\"\n'.format(fqdn, auth['txt_record'])))
             sli('Writing RRs: {}'.format(lines))
             with open(dest, 'w') as file:
                 file.writelines(lines)
@@ -261,6 +261,9 @@ def _authorize(cert_meta, account):
         
         updateSOAofUpdatedZones()
         reloadNameServer()
+        
+        sli("{}: Waiting for DNS propagation. Checking in 10 seconds.".format(fqdn))
+        time.sleep(10)
         
         # Verify each fqdn
         done, failed = set(), set()
@@ -273,8 +276,8 @@ def _authorize(cert_meta, account):
             acme.validate_authorization(challenge['uri'], 'dns-01', auth['key_authorization'])
     
             while True:
-                sli("{}: waiting for verification. Checking in 15 seconds.".format(fqdn))
-                time.sleep(15)
+                sli("{}: waiting for verification. Checking in 5 seconds.".format(fqdn))
+                time.sleep(5)
     
                 response = acme.get_authorization(auth['uri'])
                 status = response.get('status')
