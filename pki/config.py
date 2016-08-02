@@ -1,5 +1,6 @@
 
 from pathlib import Path
+import stat
 
 class Pathes(object):
     """
@@ -22,6 +23,12 @@ class Pathes(object):
     # required convention: zone_file_root/example.com/example.com.zone
     
     zone_file_root = Path('/usr/local/etc/namedb/master/signed')
+    
+    # mode + owner of *.tlsa and acme_challenges.inc files in zone directory
+    zone_tlsa_inc_mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP
+    zone_tlsa_inc_uid = 53
+    zone_tlsa_inc_gid = 2000
+    
     zone_file_include_name = 'acme_challenges.inc'
     
     
