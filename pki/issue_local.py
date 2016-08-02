@@ -145,9 +145,15 @@ def issue_local_cert(cert_meta):
     except x509.extensions.ExtensionNotFound:
         sln('Could not add a AuthorityKeyIdentifier, because CA has no SubjectKeyIdentifier')
         
-    alt_names = [x509.DNSName(cert_meta.name), ]
+    if cert_meta.subject_type == 'client':
+        alt_names = [x509.RFC822Name(cert_meta.name), ]
+    else:
+        alt_names = [x509.DNSName(cert_meta.name), ]
     for n in cert_meta.altnames:
-         alt_names.append(x509.DNSName(n))
+        if cert_meta.subject_type == 'client':
+            alt_names.append(x509.RFC822Name(n))
+        else:
+            alt_names.append(x509.DNSName(n))
     builder = builder.add_extension(
                 x509.SubjectAlternativeName(
                     alt_names
