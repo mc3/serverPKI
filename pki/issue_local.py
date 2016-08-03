@@ -128,7 +128,7 @@ def issue_local_cert(cert_meta):
                 ),
                 critical=True,
     )
-
+    
     ski = x509.SubjectKeyIdentifier.from_public_key(key.public_key())
     builder = builder.add_extension(
                 ski,
@@ -143,7 +143,7 @@ def issue_local_cert(cert_meta):
                     critical=False,
         )
     except x509.extensions.ExtensionNotFound:
-        sln('Could not add a AuthorityKeyIdentifier, because CA has no SubjectKeyIdentifier')
+        sle('Could not add a AuthorityKeyIdentifier, because CA has no SubjectKeyIdentifier')
         
     if cert_meta.subject_type == 'client':
         alt_names = [x509.RFC822Name(cert_meta.name), ]
@@ -187,7 +187,7 @@ def issue_local_cert(cert_meta):
         )
     
     cert = builder.sign(
-        private_key=key, algorithm=hashes.SHA256(),
+        private_key=cakey, algorithm=hashes.SHA256(),
         backend=default_backend()
     )
     
