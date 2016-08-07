@@ -11,6 +11,7 @@ from io import StringIO
 from pathlib import PurePath, Path
 from os.path import expanduser
 from os import chdir
+from socket import timeout
 import subprocess
 from shutil import copy2
 from time import sleep
@@ -246,7 +247,11 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
                 remote_result_msg = ''
                 while not chan.exit_status_ready():
                      if chan.recv_ready():
-                        data = chan.recv(1024)
+                        try:
+                            data = chan.recv(1024)
+                        except (socket.timeout):
+                            sle('Timeout on remote execution of "{}" on host {}'.format(cmd, dest_host))
+                            break
                         while data:
                             remote_result_msg += (data.decode('ascii'))
                             data = chan.recv(1024)
