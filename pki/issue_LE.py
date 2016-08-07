@@ -151,7 +151,6 @@ def issue_LE_cert(cert_meta):
     sli('Certificate issued. Valid until {}'.format(not_valid_after.isoformat()))
     sli('Hash is: {}'.format(tlsa_hash))
 
-
     if not ps_insert_LE_instance:
         ps_insert_LE_instance = cert_meta.db.prepare(q_insert_LE_instance)
     (instance_id) = ps_insert_LE_instance.first(

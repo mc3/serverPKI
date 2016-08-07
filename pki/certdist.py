@@ -116,7 +116,7 @@ def deployCerts(certs):
             
         sli('')
         if not opts.no_TLSA:
-            distribute_tlsa_rrs(cert, TLSA_text)
+            distribute_tlsa_rrs(cert, TLSA_text, None)
         
         update_state_of_instance(cert.db, instance_id, 'deployed')
         
@@ -268,22 +268,37 @@ def key_cert_name(subject, subject_type):
 
 
 
-# **TODO** Implement TLSA rollover. Keep old TLSA in *.old:tlsa
-def distribute_tlsa_rrs(cert, TLSA_text):
+
+def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
     
-    if len(cert.tlsaprefixes) == 0: return
-    
+    """
+    Distribute TLSA RR.
+    Puts one (ore two) TLSA RR per fqdn in DNS zone directory and updates
+    zone cache.
+    @param cert_meta:   		Meta instance of certificates(s) being handled
+    @type cert_meta:    		cert.Certificate instance
+    @param active_TLSA:   		TLSA hash of active TLSA
+    @type active_TLSA:    		string
+    @param prepublished_TLSA:   TLSA hash of optional pre-published TLSA
+    @type prepublished_TLSA:    string
+    """
+
+    if len(cert_meta.tlsaprefixes) == 0: return
+
     sli('Distributing TLSA RRs for DANE.')
 
     if Pathes.tlsa_dns_master == '':       # DNS master on local host
-        for (zone, fqdn) in zone_and_FQDN_from_altnames(cert): 
+        for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta): 
             filename = fqdn + '.tlsa'
             dest = str(Pathes.zone_file_root / zone / filename)
             sli('{} => {}'.format(filename, dest))
             tlsa_lines = []
-            for prefix in cert.tlsaprefixes:
-                tlsa_lines.append(str(prefix.format(fqdn) + ' ' +TLSA_text + '\n'))
-
+            for prefix in cert_meta.tlsaprefixes:
+                tlsa_lines.append(str(prefix.format(fqdn) +
+                                         ' ' +active_TLSA + '\n'))
+                if prepublished_TLSA:
+                    tlsa_lines.append(str(prefix.format(fqdn) +
+                                         ' ' +prepublished_TLSA + '\n'))
             with open(dest, 'w') as file:
                 file.writelines(tlsa_lines)
             updateZoneCache(zone)
