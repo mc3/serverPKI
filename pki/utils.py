@@ -247,7 +247,7 @@ q_update_instance = """
 """
 q_update_state_of_instance = """
     UPDATE CertInstances 
-        SET state = $2,
+        SET state = $2
         WHERE id = $1
 """
 
