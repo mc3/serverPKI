@@ -226,11 +226,12 @@ class Certificate(object):
         if result:
             (cert_pem, key_pem, TLSA, cacert_pem) = result
             sld('Hash of selected Certinstance is {}'.format(TLSA))
+
             return (
-                cert_pem.decode('utf-8'),
-                key_pem.decode('utf-8'),
+                cert_pem.decode('ascii'),
+                key_pem.decode('ascii'),
                 TLSA,
-                cacert_pem.decode('utf-8'))
+                cacert_pem.decode('ascii'))
     
     def TLSA_hash(self):
         """
