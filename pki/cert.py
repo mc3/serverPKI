@@ -92,7 +92,7 @@ q_disthosts = """
             LEFT JOIN Places p ON t.place = p.id
 """
 q_instance = """
-    SELECT ci.cert, ci.key, ci.hash, ca.cert
+    SELECT ci.id, ci.cert, ci.key, ci.hash, ca.cert
         FROM CertInstances ci, CertInstances ca
         WHERE
             ci.certificate = $1::INT AND
@@ -224,10 +224,11 @@ class Certificate(object):
             ps_instance = self.db.statement_from_id('q_instance')
         result = ps_instance.first(self.cert_id)
         if result:
-            (cert_pem, key_pem, TLSA, cacert_pem) = result
+            (instance_id, cert_pem, key_pem, TLSA, cacert_pem) = result
             sld('Hash of selected Certinstance is {}'.format(TLSA))
 
             return (
+                instance_id,
                 cert_pem.decode('ascii'),
                 key_pem.decode('ascii'),
                 TLSA,

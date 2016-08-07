@@ -22,6 +22,7 @@ from pki.utils import options as opts
 from pki.utils import sld, sli, sln, sle
 from pki.utils import updateZoneCache, zone_and_FQDN_from_altnames
 from pki.utils import updateSOAofUpdatedZones, reloadNameServer
+from pki.utils import update_state_of_instance
 
 class MyException(Exception):
     pass
@@ -62,7 +63,7 @@ def deployCerts(certs):
                                                                     cert.name))
             raise MyException('No valid cerificate for {} in DB - '
                                             'create it first'.format(cert.name))
-        cert_text, key_text, TLSA_text, cacert_text = result
+        instance_id, cert_text, key_text, TLSA_text, cacert_text = result
         
         for fqdn,dh in cert.disthosts.items():
         
@@ -116,6 +117,8 @@ def deployCerts(certs):
         sli('')
         if not opts.no_TLSA:
             distribute_tlsa_rrs(cert, TLSA_text)
+        
+        update_state_of_instance(cert.db, instance_id, 'deployed')
         
     updateSOAofUpdatedZones()
     reloadNameServer()
