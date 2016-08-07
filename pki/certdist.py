@@ -94,7 +94,11 @@ def deployCerts(certs):
                 
                     key_file_name = key_name(cert.name, cert.subject_type)
                     cert_file_name = cert_name(cert.name, cert.subject_type)
-                    dest_dir = PurePath(dest_path, place.cert_path)
+                    
+                    pcp = place.cert_path
+                    if '{}' in pcp:     # we have something like /Users/login/.postgresql
+                        pcp = pcp.format(cert.name)
+                    dest_dir = PurePath(dest_path, pcp)
                 
                     if place.key_path:
                         dest_dir = PurePath(dest_path, place.key_path)
