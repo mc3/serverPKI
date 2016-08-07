@@ -1,5 +1,5 @@
 """
-utility module of CA
+utility module of serverPKI
 """
 #--------------- imported modules --------------
 from datetime import datetime
@@ -17,6 +17,13 @@ global options
 #--------------- command line options --------------
 
 parser = optparse.OptionParser(description='Certificate Authority operations')
+parser.add_option('--schedule-actions', '-S', dest='schedule', action='store_true',
+                   default=False,
+                   help='Scan configuration and schedule necessary actions of'
+                    ' selected certs/hosts. This may trigger issuence or '
+                    ' distribution of certs. With this options "--create" and'
+                    ' "--distribute" are ignored')
+                   
 parser.add_option('--create-certs', '-C', dest='create', action='store_true',
                    default=False,
                    help='Scan configuration and create all certs, which are not disbled or excluded.')
