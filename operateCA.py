@@ -95,16 +95,20 @@ if opts.check_only:
 
 sld('Selected certificates:\n\r{}'.format(our_cert_names))
 
-if opts.create:
-    sli('Creating certificates.')
-    for c in our_certs.values():
-        if c.create_instance():
-            continue
-        sle('Stopped due to error')
-        sys.exit(1)
-if opts.distribute:
-    sli('Distributing certificates.')
-    deployCerts(our_certs)
+if opts.schedule:
+    sli('Scheduling actions.')
+    scheduleCerts(our_certs)
+else:
+    if opts.create:
+        sli('Creating certificates.')
+        for c in our_certs.values():
+            if c.create_instance():
+                continue
+            sle('Stopped due to error')
+            sys.exit(1)
+    if opts.distribute:
+        sli('Distributing certificates.')
+        deployCerts(our_certs)
 
 """
 if opts.create:
