@@ -62,11 +62,8 @@ def deployCerts(certs):
                                                                     cert.name))
             raise MyException('No valid cerificate for {} in DB - '
                                             'create it first'.format(cert.name))
-        cert_text,key_text,TLSA_text, cacert_text = result
+        cert_text, key_text, TLSA_text, cacert_text = result
         
-        cert_plus_cacert_text = cert_text + cacert_text
-        key_plus_cert_text = key_text + cert_text
-
         for fqdn,dh in cert.disthosts.items():
         
             if fqdn in skip_host: continue
@@ -270,6 +267,8 @@ def key_cert_name(subject, subject_type):
 
 # **TODO** Implement TLSA rollover. Keep old TLSA in *.old:tlsa
 def distribute_tlsa_rrs(cert, TLSA_text):
+    
+    if len(cert.tlsaprefixes) == 0: return
     
     sli('Distributing TLSA RRs for DANE.')
 
