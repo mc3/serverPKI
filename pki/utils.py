@@ -90,7 +90,7 @@ def sld(msg):
         init_syslog()
     m = '['+msg+']'
     syslog.syslog(SLD, m)
-    if not options.quiet and (options.debug or options.verbose): print(m)
+    if not options.quiet and options.debug: print(m)
 
 def sli(msg):
     if not syslog_initialized:
