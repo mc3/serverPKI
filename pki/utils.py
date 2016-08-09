@@ -144,6 +144,9 @@ def options_set():
     return opts_set
 
 
+def shortDateTime(dt):
+    return str('{:%Y-%m-%d %H:%M}'.format(dt))
+
 #-------------------------  DNS server functions ----------------------------
 
 zone_cache = {}
@@ -227,7 +230,7 @@ def reloadNameServer():
     zone_cache = {}
  
  
- #---------------  prepared SQL queries for create/update _local_instance  --------------
+#---------------  prepared SQL queries for create/update _local_instance  --------------
 
 q_insert_instance = """
     INSERT INTO CertInstances (certificate, state, cert, key, hash, cacert)

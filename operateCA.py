@@ -16,6 +16,7 @@ from pki.utils import options_set
 from pki.db import DbConnection as dbc
 from pki.utils import sld, sli, sln, sle
 from pki.cert import Certificate
+from pki.schedule import scheduleCerts
             
 #--------------- main --------------
 
@@ -97,7 +98,7 @@ sld('Selected certificates:\n\r{}'.format(our_cert_names))
 
 if opts.schedule:
     sli('Scheduling actions.')
-    scheduleCerts(our_certs)
+    scheduleCerts(db, our_cert_names)
 else:
     if opts.create:
         sli('Creating certificates.')
