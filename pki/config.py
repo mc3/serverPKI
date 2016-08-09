@@ -1,4 +1,5 @@
 
+from datetime import timedelta
 from pathlib import Path
 
 class Pathes(object):
@@ -52,8 +53,7 @@ dbAccounts = {  'pki_dev':  {'dbHost':       'db1.in.chaos1.de',
 
 SSH_CLIENT_USER_NAME = 'root'
 
-LE_SERVER = 'https://acme-v01.api.letsencrypt.org'
-##LE_SERVER = 'https://acme-staging.api.letsencrypt.org'
+LE_SERVER = 'https://acme-staging.api.letsencrypt.org'
 
 # subjects in table Subjects:
 
@@ -62,11 +62,6 @@ LOCAL_CA_BITS = 4096
 LOCAL_CA_LIFETIME = 3680
 
 SUBJECT_LE_CA = 'Lets Encrypt CA'
+PRE_PUBLISH_TIMEDELTA = datetime.timedelta(days=7)
 
 
-# do we need his:  ??
-DEBUG = True
-
-def debugging(arg):
-    global DEBUG
-    DEBUG = arg
