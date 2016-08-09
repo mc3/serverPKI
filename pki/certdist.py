@@ -108,11 +108,15 @@ def deployCerts(certs):
                     elif place.cert_file_type == 'separate':
                         distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
                     
-                    elif place.cert_file_type == 'combined':
+                    elif place.cert_file_type == 'combine key':
                         cert_file_name = key_cert_name(cert.name, cert.subject_type)
                         fd_cert = StringIO(key_text + cert_text)
+                    
+                    elif place.cert_file_type == 'combine both':
+                        cert_file_name = key_cert_cacert_name(cert.name, cert.subject_type)
+                        fd_cert = StringIO(key_text + cert_text + cacert_text)
                 
-                    elif place.cert_file_type == 'combined cacert':
+                    elif place.cert_file_type == 'combine cacert':
                         cert_file_name = cert_cacert_name(cert.name, cert.subject_type)
                         fd_cert = StringIO(cert_text + cacert_text)
                         distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
@@ -274,6 +278,9 @@ def cert_cacert_name(subject, subject_type):
 
 def key_cert_name(subject, subject_type):
     return str('%s_%s_key_cert.pem' % (subject, subject_type))
+
+def key_cert_cacert_name(subject, subject_type):
+    return str('%s_%s_key_cert_cacert.pem' % (subject, subject_type))
 
 
 
