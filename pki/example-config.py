@@ -9,6 +9,7 @@ class Pathes(object):
     
     home = Path('/var/pki_dev/productive_CA').resolve()       # adjust
     
+    # some flat files not in RDBMS
     db = home / 'db'
     ca_cert = db / 'ca_cert.pem'
     ca_key = db / 'ca_key.pem'
@@ -22,31 +23,31 @@ class Pathes(object):
     
     # required convention: zone_file_root/example.com/example.com.zone
     
-    zone_file_root = Path('/tmp')
+    zone_file_root = Path('/usr/local/etc/namedb/master/signed')
     zone_file_include_name = 'acme_challenges.inc'
     
     
 class X509atts(object):
     """
-    Definition of fixed X.509 cert attributes
+    Definition of fixed X.509 cert attributes for your organization
     """
     names = {   'C':    'DE',
-                'L':    'Frankfurt am Main',
-                'O':    'LECHNER-RAU',
-                'CN':   'Lechner-Rau internal CA'
+                'L':    'Some city',
+                'O':    'Some Org',
+                'CN':   'Some Org internal CA' # used only for cacert
             }
     
     extensions = {
     
                 }
     
-    lifetime = 375                         # 1 year
+    lifetime = 375                     # 1 year
     bits = 2048
 
 
 # Database accounts
-dbAccounts = {  'pki_dev':  {'dbHost':       'db1.in.chaos1.de',
-                            'dbPort':         '2222',
+dbAccounts = {  'pki_dev':  {'dbHost':        'db-server.my.domain',
+                            'dbPort':         '5432',
                             'dbUser':         'pki_dev',
                             'dbDatabase':     'pki_dev',
                             'dbSearchPath':   'pki,dd,public'}}
