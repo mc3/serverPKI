@@ -28,7 +28,7 @@ from pki.utils import update_state_of_instance
 class MyException(Exception):
     pass
 
-def deployCerts(certs):
+def deployCerts(certs, instance_id=None):
 
     """
     Deploy a list of (certificate. key and TLSA file, using sftp).
@@ -36,6 +36,8 @@ def deployCerts(certs):
     
     @param certs:       list of certificate meta data instances
     @type certs:        pki.cert.Certificate instance
+    @param instance_id: optional id of specific instance
+    @type instance_id:  int
     @rtype:             bool, false if error found
     @exceptions:
     Some exceptions (to be replaced by error messages and false return)
@@ -58,7 +60,7 @@ def deployCerts(certs):
          
         if len(cert.disthosts) == 0: continue
         
-        result = cert.instance()
+        result = cert.instance(instance_id)
         if not result:
             sle('No valid cerificate for {} in DB - create it first'.format(
                                                                     cert.name))

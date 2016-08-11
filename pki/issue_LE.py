@@ -114,7 +114,7 @@ def issue_LE_cert(cert_meta):
     if not (cert_meta.authorized_until and
                     cert_meta.authorized_until >= datetime.datetime.now()):
         if not _authorize(cert_meta, account):
-            return False
+            return None
     
     sli('Creating key (%d bits) and cert for %s %s' %
         (int(X509atts.bits), cert_meta.subject_type, cert_meta.name))
@@ -162,7 +162,7 @@ def issue_LE_cert(cert_meta):
             not_valid_before,
             not_valid_after)
     if instance_id:
-        return True
+        return instance_id
     sle('Failed to store new cert in DB backend')
     
     

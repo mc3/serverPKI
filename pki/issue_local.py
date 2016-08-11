@@ -215,4 +215,4 @@ def issue_local_cert(cert_meta):
     if updates != 1:
         raise DBStoreException('?Failed to store certificate in DB')
 
-    return True
+    return instance_serial

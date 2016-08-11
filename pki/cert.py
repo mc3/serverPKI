@@ -102,15 +102,18 @@ q_instance = """
         ORDER BY ci.id DESC
         LIMIT 1
 """
+q_specific_instance = """
+    SELECT ci.id, ci.cert, ci.key, ci.hash, ca.cert
+        FROM CertInstances ci, CertInstances ca
+        WHERE
+            ci.id = $1::INT AND
+            ci.CAcert = ca.id
+"""
 q_tlsa_of_instance = """
     SELECT hash
         FROM CertInstances
         WHERE
-            certificate = $1 AND
-            state = 'prepublished' AND
-            not_after >= 'TODAY'::DATE
-        ORDER BY id DESC
-        LIMIT 1
+            id = $1
 """
 q_update_authorized_until = """
     UPDATE Certificates
@@ -124,6 +127,7 @@ ps_altnames = None
 ps_tlsaprefixes = None
 ps_disthosts = None
 ps_instance = None
+ps_specific_instance = None
 ps_tlsa_of_instance = None
 ps_update_authorized_until = None
 
@@ -207,22 +211,28 @@ class Certificate(object):
                             dh['places'][row['place_name']] = places[row['place_name']]
             sld('Disthosts: {}'.format(self.disthosts))
     
-    def instance(self):
+    def instance(self, instance_id=None):
         """
-        Return certificate, key, TLSA hash and CA certificate of most recent
-        instance, which is valid today
+        Return certificate, key, TLSA hash and CA certificate of specific
+        instance or most recent instance, which is valid today
     
+        @param instance_id  id of specific instance id
+        @type  instance_id  int
         @rtype:             Tuple of strings
                             (cert, key, TLSA hash and CA cert)
         @exceptions:        none
         """
         
-        global ps_instance
+        global ps_instance, ps_specific_instance
         
-        if not ps_instance:
-            self.db.execute("PREPARE q_instance(integer) AS " + q_instance)
-            ps_instance = self.db.statement_from_id('q_instance')
-        result = ps_instance.first(self.cert_id)
+        if instance_id:
+            if not ps_specific_instance:
+                ps_specific_instance = self.db.prepare(q_specific_instance)
+            result = ps_specific_instance.first(instance_id)
+        else:
+            if not ps_instance:
+                ps_instance = self.db.prepare(q_instance)
+            result = ps_instance.first(self.cert_id)
         if result:
             (instance_id, cert_pem, key_pem, TLSA, cacert_pem) = result
             sld('Hash of selected Certinstance is {}'.format(TLSA))
@@ -244,8 +254,8 @@ class Certificate(object):
         global ps_tlsa_of_instance
         
         if not ps_tlsa_of_instance:
-            self.db.execute("PREPARE q_tlsa_of_instance(integer) AS " + q_tlsa_of_instance)
-            ps_tlsa_of_instance = self.db.statement_from_id('q_tlsa_of_instance')
+            ps_tlsa_of_instance = self.db.prepare(q_tlsa_of_instance)
+
         (TLSA,) = ps_tlsa_of_instance.first(self.cert_id)
         return TLSA
         
