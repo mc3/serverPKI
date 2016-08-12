@@ -76,7 +76,9 @@ def scheduleCerts(db, cert_names):
     
     for name in cert_names:
         cert_meta = Certificate(db, name)
-        
+
+        if cert_meta.subject_type == 'CA': continue
+
         issued_i = None
         prepublished_i = None
         deployed_i = None
@@ -102,6 +104,9 @@ def scheduleCerts(db, cert_names):
             elif i.state == 'prepublished': prepublished_i = i
             elif i.state == 'deployed': deployed_i = i
             else: assert(i.state in ('issued', 'prepublished', 'deployed', ))
+
+        if cert_meta.disabled:
+            continue
                                     # deployed cert expired or no cert deployed?
         if not deployed_i or \
                 (datetime.utcnow() - timedelta(days=1)) >= \
@@ -152,12 +157,13 @@ def find_to_be_deleted(cert_meta):
     for row in rows:
  
         id, state, not_before, not_after = row
-        sld('{:04} Issued {}, expires: {}, state {}\t{}'.format(
+        sli('{:04} Issued {}, expires: {}, state {}\t{} {}'.format(
                                                 id,
                                                 shortDateTime(not_before),
                                                 shortDateTime(not_after),
                                                 state,
-                                                cert_meta.name)
+                                                cert_meta.name,
+                                                'DISABLED' if cert_meta.disabled else '')
         )
         
         i = CertInstance(id, state, not_before, not_after)
