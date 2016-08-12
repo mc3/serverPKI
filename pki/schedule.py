@@ -46,9 +46,10 @@ def scheduleCerts(db, cert_names):
     def issue(cert_meta):
         if cert_meta.cert_type == 'local':
             sli('Would mail to request local issue for {}'.format(name))
+            return None
         elif not cert_meta.disabled:
             sli('Would request issue from LE for {}'.format(name))
-            return
+            return None
             return issue_LE_cert(cert_meta)
             
     def prepublish(cert_meta, active_i, new_i):
@@ -75,8 +76,11 @@ def scheduleCerts(db, cert_names):
         
     
     for name in cert_names:
-        cert_meta = Certificate(db, name)
 
+        cert_meta = Certificate(db, name)
+        sli('{} {} ------------------------------'.format(
+                                        name,
+                                        'DISABLED' if cert_meta.disabled else ''))
         if cert_meta.subject_type == 'CA': continue
 
         issued_i = None
@@ -87,7 +91,7 @@ def scheduleCerts(db, cert_names):
 
         if not surviving:
             id = issue(cert_meta)
-            distribute(cert_meta, id)
+            if id: distribute(cert_meta, id)
             continue
         
         for i in surviving:
@@ -157,13 +161,12 @@ def find_to_be_deleted(cert_meta):
     for row in rows:
  
         id, state, not_before, not_after = row
-        sli('{:04} Issued {}, expires: {}, state {}\t{} {}'.format(
+        sli('{:04} Issued {}, expires: {}, state {}\t{}'.format(
                                                 id,
                                                 shortDateTime(not_before),
                                                 shortDateTime(not_after),
                                                 state,
-                                                cert_meta.name,
-                                                'DISABLED' if cert_meta.disabled else '')
+                                                cert_meta.name)
         )
         
         i = CertInstance(id, state, not_before, not_after)
@@ -198,7 +201,7 @@ def find_to_be_deleted(cert_meta):
 @total_ordering
 class CertInstance(object):
     """
-    
+    Little container for cert instance attributes
     
     """
     
