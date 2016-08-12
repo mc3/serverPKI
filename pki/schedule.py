@@ -11,7 +11,7 @@ from functools import total_ordering
 
 from pki.config import Pathes, SSH_CLIENT_USER_NAME, PRE_PUBLISH_TIMEDELTA
 from pki.cert import Certificate
-from pki.certdist import deployCerts
+from pki.certdist import deployCerts, distribute_tlsa_rrs
 from pki.issue_LE import issue_LE_cert
 from pki.utils import sld, sli, sln, sle, options
 from pki.utils import shortDateTime, update_state_of_instance
@@ -48,30 +48,26 @@ def scheduleCerts(db, cert_names):
             sli('Would mail to request local issue for {}'.format(name))
             return None
         elif not cert_meta.disabled:
-            sli('Would request issue from LE for {}'.format(name))
-            return None
+            sli('Requesting issue from LE for {}'.format(cert_meta.name))
             return issue_LE_cert(cert_meta)
             
     def prepublish(cert_meta, active_i, new_i):
-        active_TLSA = TLSA_hash(active_i.id)
-        prepublishing_TLSA = TLSA_hash(new_i.id)
-        sli('{}:{}:{} would prepublish'.
-                                format(active_i.id, new_i.id, cert_meta.name))
-        return
+        active_TLSA = cert_meta.TLSA_hash(active_i.id)
+        prepublishing_TLSA = cert_meta.TLSA_hash(new_i.id)
+        sli('Prepublishing {}:{}:{}'.
+                                format(cert_meta.name, active_i.id, new_i.id))
         distribute_tlsa_rrs(cert_meta, active_TLSA, prepublishing_TLSA)
         update_state_of_instance(cert_meta.db, new_i.id, 'prepublished')
             
     def distribute(cert_meta, id):
-        sli('{}:{} would distribute'.
-                                format(id, cert_meta.name))
-        return
+        sli('Distributing {}:{}'.
+                                format(cert_meta.name, id))
         cm_dict = {cert_meta.name: cert_meta}
         deployCerts(cm_dict, id)
             
     def expire(cert_meta, i):
-        sli('{}:{} would transition from {} to EXPIRED'.
-                                format(i.id, cert_meta.name, i.state))
-        return
+        sli('State transition from {} to EXPIRED of {}:{}'.
+                                format(i.state, cert_meta.name, i.id))
         update_state_of_instance(cert_meta.db, i.id, 'expired')
         
     
@@ -138,9 +134,8 @@ def scheduleCerts(db, cert_names):
     if not ps_delete:
         ps_delete = db.prepare(q_delete)
     for i in to_be_deleted:
-        sli('Would delete {}'.format(i.id))
-        continue
-        result = ps_delete(i.id)
+        sli('Deleting {}'.format(i.id))
+        result = ps_delete.first(i.id)
         if result != 1:
             sln('Failed to delete cert instance {}'.format(i.id))
 
