@@ -70,6 +70,11 @@ def scheduleCerts(db, cert_names):
                                 format(i.state, cert_meta.name, i.id))
         update_state_of_instance(cert_meta.db, i.id, 'expired')
         
+    def archive(cert_meta, i):
+        sli('State transition from {} to ARCHIVED of {}:{}'.
+                                format(i.state, cert_meta.name, i.id))
+        update_state_of_instance(cert_meta.db, i.id, 'archived')
+        
     
     for name in cert_names:
 
@@ -92,9 +97,7 @@ def scheduleCerts(db, cert_names):
         
         for i in surviving:
             if i.state == 'expired':
-                sli('Would transition from EXPIRED to ARCHIVED: {}'.
-                                                        format(i.id, name))
-                i.state = 'archived'
+                archive(cert_meta, i)
                 continue
             if datetime.utcnow() - timedelta(days=1) >= i.not_after:
                 if i.state != 'deployed':
@@ -113,11 +116,14 @@ def scheduleCerts(db, cert_names):
                                                         deployed_i.not_after:
             if prepublished_i:      # yes - distribute prepublished
                 distribute(cert_meta, prepublished_i.id)
-            elif issued_i:          # or issued cert
-                distribute(cert_meta, issued_i.id)
+            elif issued_i:          # or issued cert?
+                distribute(cert_meta, issued_i.id) # yes - distribute it
             if deployed_i:
                 expire(deployed_i)  # and expire deployed cert
+                id = issue(cert_meta)
+                if id: distribute(cert_meta, id)
             continue
+        
         if cert_meta.cert_type == 'local':
             continue                # no TLSAs with local certs
                                     # We have an active LE cert deployed
@@ -130,6 +136,8 @@ def scheduleCerts(db, cert_names):
             elif not issued_i:      # do we have a cert handy?
                 i = issue(cert_meta) # no: create one
             prepublish(cert_meta, deployed_i, i) # and prepublish it                
+    
+    # end for name in cert_names
     
     if not ps_delete:
         ps_delete = db.prepare(q_delete)
