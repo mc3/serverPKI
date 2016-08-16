@@ -37,15 +37,11 @@
 import datetime
 from hashlib import sha256
 import logging
-from pathlib import Path
 import os
 import sys
 
 from OpenSSL import crypto,rand,crypto
 from cryptography.hazmat.primitives.hashes import SHA256
-
-TYPE_RSA = crypto.TYPE_RSA
-TYPE_DSA = crypto.TYPE_DSA
 
 
 #--------------- local imports --------------
@@ -55,42 +51,42 @@ from pki.utils import sld, sli, sln, sle, options
 from pki.issue_LE import issue_LE_cert
 from pki.issue_local import issue_local_cert
 
-#--------------- Places --------------
-places = {}
-
-#--------------- classes --------------
-
-class DBStoreException(Exception):
-    pass
-
-class KeyCertException(Exception):
-    pass
-
 #---------------  prepared SQL queries for class Certificate  --------------
 
-q_certificate = """
-    SELECT c.id, c.type, c.disabled, c.authorized_until, s.type AS subject_type
-        FROM Certificates c, Subjects s
-        WHERE s.name = $1 AND s.certificate = c.id
+q_all_cert_meta = """
+ SELECT s1.type AS subject_type,
+    c.id AS c_id,
+    c.disabled AS c_disabled,
+    c.type AS c_type,
+    c.authorized_until AS authorized_until,
+    s2.name AS alt_name,
+    s.tlsaprefix AS tlsaprefix,
+    d.fqdn AS dist_host,
+    d.jailroot AS jailroot,
+    j.name AS jail,
+    p.name AS place,
+    p.cert_file_type AS cert_file_type,
+    p.cert_path AS cert_path,
+    p.key_path AS key_path,
+    p.uid AS uid,
+    p.gid AS gid,
+    p.mode AS mode,
+    p.chownBoth AS chownboth,
+    p.pgLink AS pglink,
+    p.reload_command AS reload_command
+   FROM subjects s1
+     RIGHT JOIN certificates c ON s1.certificate = c.id AND s1.isaltname = false
+     LEFT JOIN subjects s2 ON s2.certificate = c.id AND s2.isaltname = true
+     LEFT JOIN certificates_services cs ON c.id = cs.certificate
+     LEFT JOIN services s ON cs.service = s.id
+     LEFT JOIN targets t ON c.id = t.certificate
+     LEFT JOIN disthosts d ON t.disthost = d.id
+     LEFT JOIN jails j ON t.jail = j.id
+     LEFT JOIN places p ON t.place = p.id
+  WHERE s1.name = $1
+  ORDER BY s1.name, s2.name, d.fqdn;
 """
-q_altnames = """
-    SELECT s.name
-        FROM Subjects s
-        WHERE s.certificate = $1 AND s.isAltName = TRUE
-"""
-## How can we distinguish prepublished TLSA RRs from others?
-q_tlsaprefixes = """
-    SELECT s.tlsaprefix
-        FROM Certificates_Services cs, Services s
-        WHERE cs.certificate = $1 AND cs.service = s.id
-"""
-q_disthosts = """
-    SELECT  d.fqdn, d.jailroot, j.name AS jail_name, p.name AS place_name
-        FROM Targets t
-            JOIN Disthosts d ON t.disthost = d.id AND t.certificate = $1
-            LEFT JOIN Jails j ON t.jail = j.id
-            LEFT JOIN Places p ON t.place = p.id
-"""
+
 q_instance = """
     SELECT ci.id, ci.cert, ci.key, ci.hash, ca.cert
         FROM CertInstances ci, CertInstances ca
@@ -120,19 +116,14 @@ q_update_authorized_until = """
         SET authorized_until = $2::DATE
         WHERE id = $1
 """
-
-ps_certificate = None
-ps_cacert = None
-ps_altnames = None
-ps_tlsaprefixes = None
-ps_disthosts = None
+ps_all_cert_meta = None
 ps_instance = None
 ps_specific_instance = None
 ps_tlsa_of_instance = None
 ps_update_authorized_until = None
 
         
-#--------------- class Certificate --------------
+#--------------- public class Certificate --------------
 
 class Certificate(object):
     """
@@ -145,17 +136,15 @@ class Certificate(object):
         """
         Create a certificate meta data instance
     
-        @param db:          open database connection
+        @param db:          opened database connection
         @type db:           pki.db.DbConnection instance
         @param name:        subject name of certificate
         @type name:         string
         @rtype:             Certificate instance
         @exceptions:
-        DBStoreException, KeyCertException, AssertionError
         """
 
-        global ps_certificate, ps_altnames, ps_tlsaprefixes, ps_disthosts
-        global places
+        global ps_all_cert_meta
         
         self.db = db
         self.name = name
@@ -163,53 +152,62 @@ class Certificate(object):
         self.altnames = []
         self.tlsaprefixes = []
         self.disthosts = {}
+
+        self.cert_id = None
         
         with self.db.xact(isolation='SERIALIZABLE', mode='READ ONLY'):
-            if not ps_certificate:
-                db.execute("PREPARE q_certificate(text) AS " + q_certificate)
-                ps_certificate = db.statement_from_id('q_certificate')
-            self.cert_id, self.cert_type, self.disabled, self.authorized_until,\
-                        self.subject_type = ps_certificate.first(name)
-            if not self.cert_id:
-                sln('Missing cert {} in DB.'.format(name))
-                return None
-            sld('------ cert {} {}'.format(self.name, 
-                        self.cert_type + ' DISABLED' if self.disabled else ''))
-            if not ps_altnames:
-                db.execute("PREPARE q_altnames(integer) AS " + q_altnames)
-                ps_altnames = db.statement_from_id('q_altnames')
-            for (name,) in ps_altnames(self.cert_id):
-                self.altnames.append(name)
-            sld('Altnames: {}'.format(self.altnames))
-            
-            if not ps_tlsaprefixes:
-                db.execute("PREPARE q_tlsaprefixes(integer) AS " + q_tlsaprefixes)
-                ps_tlsaprefixes = db.statement_from_id('q_tlsaprefixes')
-            for (name,) in ps_tlsaprefixes(self.cert_id):
-                self.tlsaprefixes.append(name)
-            sld('TLSA prefixes: {}'.format(self.tlsaprefixes))
-            
-            if not ps_disthosts:
-                db.execute("PREPARE q_disthosts(integer) AS " + q_disthosts)
-                ps_disthosts = db.statement_from_id('q_disthosts')
-            for row in ps_disthosts(self.cert_id):
-                ##sld('Disthost row: {}'.format(row))
-                if row['fqdn']:    
-                    if row['fqdn'] not in self.disthosts:
-                        self.disthosts[row['fqdn']] = {    'jails': {}, 'places': {} }
-                        if row['jailroot']:
-                            self.disthosts[row['fqdn']]['jailroot'] = row['jailroot']
-                    dh = self.disthosts[row['fqdn']]
-                    if row['jail_name']:
-                        if row['jail_name'] not in dh['jails']:
-                            dh['jails'][row['jail_name']] = 0
-                    if row['place_name']:
-                        if row['place_name'] not in dh['places']:
-                            if row['place_name'] not in places:
-                                p = Place(db,row['place_name'])
-                                places[row['place_name']] = p
-                            dh['places'][row['place_name']] = places[row['place_name']]
-            sld('Disthosts: {}'.format(self.disthosts))
+            if not ps_all_cert_meta:
+                ps_all_cert_meta = db.prepare(q_all_cert_meta)
+            for row in ps_all_cert_meta(name):
+                if not self.cert_id:
+                    self.cert_id = row['c_id']
+                    self.cert_type = row['c_type']
+                    self.disabled = row['c_disabled']
+                    self.authorized_until = row['authorized_until']
+                    self.subject_type = row['subject_type']
+                    sld('----------- {}\\t{}\\t{}\\t{}\\t{}\\t{}'.format(
+                             self.cert_id,
+                             name,
+                             self.cert_type,
+                             self.disabled,
+                             self.authorized_until,
+                             self.subject_type)
+                    )
+                if row['alt_name']: self.altnames.append(row['alt_name'])
+                if row['tlsaprefix']: self.tlsaprefixes.append(row['tlsaprefix'])
+                dh = { 'jails': {}, 'places': {} }
+                if row['dist_host']:
+                    if row['dist_host'] in self.disthosts:
+                        dh = self.disthosts[row['dist_host']]
+                    else:
+                        self.disthosts[row['dist_host']] = dh
+                        jr = ''
+                        if row['jailroot']: jr = row['jailroot']
+                        self.disthosts[row['dist_host']]['jailroot'] = jr
+                    if row['jail']:
+                        if row['jail'] not in dh['jails']:
+                            dh['jails'][row['jail']] = 0
+                    if row['place']:
+                        if row['place'] not in dh['places']:
+                            p = Place(
+                                name = row['place'],
+                                cert_file_type = row['cert_file_type'],
+                                cert_path = row['cert_path'],
+                                key_path = row['key_path'],
+                                uid = row['uid'],
+                                gid = row['gid'],
+                                mode = row['mode'],
+                                chownboth = row['chownboth'],
+                                pglink = row['pglink'],
+                                reload_command = row['reload_command']
+                            )
+                            dh['places'][row['place']] = p
+                sld('altname:{}\\tdisthost:{}\\tjail:{}\\tplace:{}'.format(
+                    row['alt_name'] if row['alt_name'] else '',
+                    row['dist_host'] if row['dist_host'] else '',
+                    row['jail'] if row['jail'] else '',
+                    row['place'] if row['place'] else '')
+                )
     
     def instance(self, instance_id=None):
         """
@@ -218,8 +216,8 @@ class Certificate(object):
     
         @param instance_id  id of specific instance id
         @type  instance_id  int
-        @rtype:             Tuple of strings
-                            (cert, key, TLSA hash and CA cert)
+        @rtype:             Tuple of int + 4 strings
+                            (id, cert, key, TLSA hash and CA cert) or None
         @exceptions:        none
         """
         
@@ -244,7 +242,7 @@ class Certificate(object):
                 TLSA,
                 cacert_pem.decode('ascii'))
     
-    def TLSA_hash(self):
+    def TLSA_hash(self, instance_id):
         """
         Return TLSA hash of instance, which is valid today and in prepublish state
 
@@ -256,7 +254,7 @@ class Certificate(object):
         if not ps_tlsa_of_instance:
             ps_tlsa_of_instance = self.db.prepare(q_tlsa_of_instance)
 
-        (TLSA,) = ps_tlsa_of_instance.first(self.cert_id)
+        (TLSA,) = ps_tlsa_of_instance.first(instance_id)
         return TLSA
         
     def create_instance(self):
@@ -265,7 +263,7 @@ class Certificate(object):
         in the DB table certinstances.
 
         @rtype:             bool, true if success
-        @exceptions:        none
+        @exceptions:        AssertionError
         """
         
         with self.db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
@@ -294,18 +292,7 @@ class Certificate(object):
         )
         return updates
 
-#---------------  prepared SQL queries for class Place  --------------
 
-q_Place = """
-    SELECT  p.cert_file_type, p.cert_path,
-                p.key_path, p.uid, p.gid, p.mode, p.chownBoth, p.pgLink, p.reload_command
-        FROM Places p
-        WHERE p.name = $1
-"""
-
-ps_place = None
-
-        
 #--------------- class Place --------------
 
 class Place(object):
@@ -316,16 +303,26 @@ class Place(object):
     Backed up in DB table Places'
     """
     
-    def __init__(self, db, name):
-        
-        global ps_place
-        
+    def __init__(self,  name = None,
+                        cert_file_type = None,
+                        cert_path = None,
+                        key_path = None,
+                        uid = None,
+                        gid = None,
+                        mode = None,
+                        chownboth = None,
+                        pglink = None,
+                        reload_command = None ):
+                        
         self.name = name
-        
-        if not ps_place:
-            ##db.execute("PREPARE q_Place(text) AS " + q_Place)
-            ##ps_place = db.statement_from_id('q_Place')
-            ps_place = db.prepare(q_Place)
-        self.cert_file_type, self.cert_path, self.key_path, self.uid, self.gid,\
-            self.mode, self.chownBoth, self.pgLink, self.reload_command = \
-            ps_place.first(name)
+        self.cert_file_type = cert_file_type
+        self.cert_path = cert_path
+        self.key_path = key_path
+        self.uid = uid
+        self.gid = gid
+        self.mode = mode
+        self.chownBoth = chownboth
+        self.pgLink = pglink
+        self.reload_command = reload_command
+
+
