@@ -41,6 +41,17 @@ to_be_deleted = set()
 
 def scheduleCerts(db, cert_names):
 
+    """
+    Schedule and perform actions dependant on state and validity.
+    
+    @param db:          open database connection in readwrite transaction
+    @type db:           pki.db.DbConnection instance
+    @param cert_names:  list of certificate subject names
+    @type cert_names:   list of str
+    @rtype:             None
+    @exceptions:
+    """
+
     global ps_delete, to_be_deleted
 
     def issue(cert_meta):
@@ -151,6 +162,15 @@ def scheduleCerts(db, cert_names):
 #---------------  private functions  --------------
 
 def find_to_be_deleted(cert_meta):
+    """
+    Find out which rows in relation CertInstances should be deleted.
+    
+    @param cert_meta:       Cert meta instance to issue an certificate for
+    @type cert_meta:        Cert meta instance
+    @global to_be_deleted   List of cert instance row ids to be deleted
+    @rtype:                 set of int (to_be_deleted): ids of rows to be deleted
+    @exceptions:            DBStoreException
+    """
 
     global ps_query_state_and_dates, to_be_deleted
     

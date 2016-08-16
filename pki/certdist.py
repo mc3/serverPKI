@@ -181,7 +181,7 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
     @param jail:        name of jail for service to reload
     @type jail:         string or None
     @rtype:             not yet any
-    @exceptions:        none known
+    @exceptions:        IOError
     """
 
     with ssh_connection(dest_host) as client:

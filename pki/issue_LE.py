@@ -89,6 +89,21 @@ ps_insert_LE_instance = None
 
         
 def issue_LE_cert(cert_meta):
+    """
+    Try to issue a Letsencrypt certificate.
+    Does authorization if necessary.
+    On success, inserts a row into CertInstances.
+    If this is the first Letsencrypt instance, additional rows are inserted
+    into Subjects, Certificates and CertInstances for LE intermediate cert.
+    Additional Certinstances may also be inserted if the intermediate cert
+    from LE  changes.
+    
+    @param cert_meta:   Cert meta instance to issue an certificate for
+    @type cert_meta:    Cert meta instance
+    @rtype:             cert instance id in DB of new cert or None
+    @exceptions:        manuale_errors.ManualeError
+                        May exit(1) if account not valid.
+    """
 
     global ps_insert_LE_instance
 
@@ -103,7 +118,7 @@ def issue_LE_cert(cert_meta):
     if len(cert_meta.altnames) > 0:
         alt_names.extend(cert_meta.altnames)
 
-    os.chdir(str(Pathes.work))
+    os.chdir(str(Pathes.work)) # remove this ?
     try:
         account = manuale_cli.load_account(str(Pathes.le_account))
     except:
@@ -178,7 +193,17 @@ ps_query_LE_intermediate = None
 #--------------- private functions --------------
 
 def _get_intermediate_instance(db, int_cert):
-
+    """
+    Return id of intermediate CA cert from DB.
+    
+    @param db:          opened database connection
+    @type db:           pki.db.DbConnection instance
+    @param int_cert:    Intermediate CA certificate of letsencrypt cert
+    @type int_cert:     instance returned by manuale_crypto.load_der_certificate
+    @rtype:             Intermediate CA cert instance id in DB
+    @exceptions:        DBStoreException
+    """
+    
     global ps_query_LE_intermediate
     
     hash = binascii.hexlify(
@@ -206,6 +231,16 @@ def _get_intermediate_instance(db, int_cert):
     return instance_id
 
 def _authorize(cert_meta, account):
+    """
+    Try to prove the control about a DNS object.
+    
+    @param cert_meta:   Cert meta instance to issue an certificate for
+    @type cert_meta:    Cert meta instance
+    @param account:     Our letsencrypt account
+    @type account:      manuale_cli.load_account instance
+    @rtype:             True if all fqdns could be authorized, False otherwise
+    @exceptions:        manuale_errors.ManualeError on Network or other fatal error
+    """
 
     acme = Acme(LE_SERVER, account)
     thumbprint = manuale_crypto.generate_jwk_thumbprint(account.key)

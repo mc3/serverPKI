@@ -123,7 +123,10 @@ def init_syslog():
 # --------------- utility functions -------------
 
 def options_set():
-    """ options_set - return string of options set on command line
+    """ 
+    options_set - return string of options set on command line
+    
+    @rtype:      string of option names
     """
     opts_set = ''
     for opt, value in options.__dict__.items():
@@ -152,6 +155,12 @@ def shortDateTime(dt):
 zone_cache = {}
 
 def updateZoneCache(zone):
+    """
+    Remember zone, which was modified for later incrementing of serial
+    
+    @param zone:        FQDN of zone
+    @type zone:         str
+    """
     
     global zone_cache
     
@@ -184,6 +193,10 @@ def zone_and_FQDN_from_altnames(cert_meta):
     return retval
 
 def updateSOAofUpdatedZones():
+    """
+    Update serial field of SOA of all modified zones.
+    serial format must be yyyymmddnn.
+    """
     
     global zone_cache
     
@@ -217,6 +230,9 @@ def updateSOAofUpdatedZones():
                 raise MyException("Can't write zone file " + filename)
 
 def reloadNameServer():
+    """
+    Reload DNS nameserver named, using rndc.
+    """
 
     global zone_cache
     

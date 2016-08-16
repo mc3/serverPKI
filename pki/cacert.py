@@ -72,9 +72,9 @@ class DBStoreException(Exception):
 
 def get_cacert_and_key(db):
     """
-    Return a valied local certificate and a loaded private key.
+    Return a valid local certificate and a loaded private key.
     If necessary, create a local CAcert or read a historical one from disk.
-    Store Cacert in DB creating necessary rows in Subjects, Certificates
+    Store Cacert in DB, creating necessary rows in Subjects, Certificates
     and Certinstances.
     
     @param db:          open database connection in readwrite transaction
@@ -239,6 +239,15 @@ def get_cacert_and_key(db):
 #--------------- load private key and query passphrase --------------
 
 def _load_cakey(cakey_pem):
+    """
+    Return a CA key instance. If it is encrypted, it will be decrypted
+    any needed passphrase queries from user.
+    
+    @param cakey_pem:   text form of CA key in PEM format
+    @type cakey_pem:    bytes
+    @rtype:             Instance of serialization.load_pem_private_key
+    @exceptions:
+    """
 
     cakey = None
     
@@ -331,6 +340,19 @@ ps_query_CA_subject_and_certificate = None
 #--------------- function --------------
 
 def create_CAcert_meta(db, cert_type, name):
+    """
+    Create a Cert meta instance along with the rows in relations Certificates
+    and Subjects.
+    
+    @param db:          opened database connection
+    @type db:           pki.db.DbConnection instance
+    @param cert_type:   either 'local' or 'LE' for local or Letsencrypt certs
+    @type cert_type:    str
+    @param name:        name of CA cert
+    @type name:         str
+    @rtype:             int (cacert_instance_id) or None
+    @exceptions:
+    """
     
     global ps_query_CA_subject_and_certificate
     

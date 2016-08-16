@@ -60,8 +60,6 @@ from pki.cacert import get_cacert_and_key
 from pki.utils import sld, sli, sln, sle, options
 from pki.utils import insert_certinstance, update_certinstance
 
-#--------------- Places --------------
-places = {}
 
 #--------------- classes --------------
 
@@ -76,6 +74,20 @@ class KeyCertException(Exception):
 
     
 def issue_local_cert(cert_meta):
+    """
+    Ask local CA to issue a certificate.
+    Will ask for a passphrase to access the CA key.
+    On success, inserts a row into CertInstances.
+    If this is the first local instance, additional rows are inserted
+    into Subjects, Certificates and CertInstances for local CA cert.
+    Additional Certinstances may also be inserted if the local CA cert
+    changes.
+    
+    @param cert_meta:   Cert meta instance to issue an certificate for
+    @type cert_meta:    Cert meta instance
+    @rtype:             cert instance id in DB of new cert or None
+    @exceptions:        DBStoreException
+    """
     
     (cacert, cakey) = get_cacert_and_key(cert_meta.db)
     
