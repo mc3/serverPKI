@@ -15,6 +15,7 @@ CREATE TABLE Certificates (     -- The certificate class
   disabled          BOOLEAN         NOT NULL
                                     DEFAULT false,
   authorized_until  TIMESTAMP,                      -- 'termination date of LE authorization'
+                                                    -- 'Last "please issue" mail of local cert send'
   updated           dd.updated,                     -- 'time of record update'
   created           dd.created,                     -- 'time of record update'
   remarks           TEXT                            -- 'Remarks'

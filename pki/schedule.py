@@ -3,19 +3,24 @@ schedule module of serverPKI
 """
 #--------------- imported modules --------------
 from datetime import datetime, timedelta
+from email.mime.text import MIMEText
 import optparse
 import subprocess
 import re
 import syslog
+import smtplib
+
 from functools import total_ordering
 
 from pki.config import Pathes, SSH_CLIENT_USER_NAME, PRE_PUBLISH_TIMEDELTA
+from pki.config import LOCAL_ISSUE_MAIL_TIMEDELTA
+from pki.config import MAIL_RELAY, MAIL_SENDER, MAIL_RECIPIENT
 from pki.cert import Certificate
 from pki.certdist import deployCerts, distribute_tlsa_rrs
 from pki.issue_LE import issue_LE_cert
 from pki.utils import sld, sli, sln, sle, options
 from pki.utils import shortDateTime, update_state_of_instance
- 
+
 #---------------  prepared SQL queries for query instances  --------------
 
 q_query_state_and_dates = """
@@ -35,7 +40,7 @@ q_delete = """
 ps_delete = None
 
 to_be_deleted = set()
-
+to_be_mailed = []
 
 #---------------  public functions  --------------
 
@@ -56,7 +61,6 @@ def scheduleCerts(db, cert_names):
 
     def issue(cert_meta):
         if cert_meta.cert_type == 'local':
-            sli('Would mail to request local issue for {}'.format(name))
             return None
         elif not cert_meta.disabled:
             sli('Requesting issue from LE for {}'.format(cert_meta.name))
@@ -99,7 +103,7 @@ def scheduleCerts(db, cert_names):
         prepublished_i = None
         deployed_i = None
         
-        surviving = find_to_be_deleted(cert_meta)
+        surviving = _find_to_be_deleted(cert_meta)
 
         if not surviving:
             id = issue(cert_meta)
@@ -118,9 +122,18 @@ def scheduleCerts(db, cert_names):
             elif i.state == 'prepublished': prepublished_i = i
             elif i.state == 'deployed': deployed_i = i
             else: assert(i.state in ('issued', 'prepublished', 'deployed', ))
+            
+                                    # request issue_mail if near to expiration
+        if (deployed_i
+            and cert_meta.cert_type == 'local' 
+            and not cert_meta.authorized_until 
+            and datetime.utcnow() >= (deployed_i.not_after - 
+                                            LOCAL_ISSUE_MAIL_TIMEDELTA)):
+            to_be_mailed.append(cert_meta)
 
         if cert_meta.disabled:
             continue
+            
                                     # deployed cert expired or no cert deployed?
         if not deployed_i or \
                 (datetime.utcnow() - timedelta(days=1)) >= \
@@ -158,10 +171,28 @@ def scheduleCerts(db, cert_names):
         if result != 1:
             sln('Failed to delete cert instance {}'.format(i.id))
 
-                
+    if to_be_mailed:
+        
+        body = str('Following local Certificates must be issued prior to {}:\n'.
+            format(date.today()+LOCAL_ISSUE_MAIL_TIMEDELTA))
+            
+        for cert_meta in to_be_mailed:
+            body += str('\t{} \t{}'.format(cert_meta.name,
+                                '[DISABLED]' if cert_meta-disabled else ''))
+            cert_meta.update_authorized_until(datetime.utcnow())
+        
+        msg = MIMEText(body)
+        msg['Subject'] = 'Local certificate issue reminder'
+        msg['From'] = MAIL_SENDER
+        msg['To'] = MAIL_RECIPIENT
+        s = smtplib.SMTP(MAIL_RELAY)
+        s.send_message(msg)
+        s.quit()
+
+        
 #---------------  private functions  --------------
 
-def find_to_be_deleted(cert_meta):
+def _find_to_be_deleted(cert_meta):
     """
     Find out which rows in relation CertInstances should be deleted.
     

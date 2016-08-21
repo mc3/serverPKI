@@ -130,6 +130,8 @@ def deployCerts(certs, instance_id=None):
             distribute_tlsa_rrs(cert, TLSA_text, None)
         
         update_state_of_instance(cert.db, instance_id, 'deployed')
+        # clear mail-sent-time if local cert.
+        if cert.cert_type == 'local': cert.update_authorized_until(None)
         
     updateSOAofUpdatedZones()
     reloadNameServer()
