@@ -157,7 +157,7 @@ def ssh_connection(dest_host):
         client.connect(dest_host, username=SSH_CLIENT_USER_NAME,
                             key_filename=expanduser('~/.ssh/id_rsa'))
     except Exception:
-        sle('Failed to connect to host {}, because: \n   {}'.
+        sln('Failed to connect to host {}, because: \n   {}'.
             format(dest_host, sys.exc_info()[0].__name__))
         raise
     else:

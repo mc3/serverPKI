@@ -78,8 +78,11 @@ def scheduleCerts(db, cert_names):
         sli('Distributing {}:{}'.
                                 format(cert_meta.name, id))
         cm_dict = {cert_meta.name: cert_meta}
-        deployCerts(cm_dict, id)
-            
+        try:
+            deployCerts(cm_dict, id)
+        except Exception:
+            sln('Skipping distribution of cert {}'.format(cert_meta.name))
+       
     def expire(cert_meta, i):
         sli('State transition from {} to EXPIRED of {}:{}'.
                                 format(i.state, cert_meta.name, i.id))
