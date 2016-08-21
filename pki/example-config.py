@@ -67,5 +67,6 @@ PRE_PUBLISH_TIMEDELTA = timedelta(days=7)
 LOCAL_ISSUE_MAIL_TIMEDELTA = timedelta(days=30)
 
 MAIL_RELAY = 'my.outgoing.relay.do.main'
+MAIL_SUBJECT = 'Local certificate issue reminder'
 MAIL_SENDER = 'pki_op@some.host'
 MAIL_RECIPIENT = 'me@some.host'
