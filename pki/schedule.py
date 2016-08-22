@@ -126,6 +126,11 @@ def scheduleCerts(db, cert_names):
             elif i.state == 'deployed': deployed_i = i
             else: assert(i.state in ('issued', 'prepublished', 'deployed', ))
             
+        if deployed_i and issued_i: # issued to old to replace deployed in future?
+            if issued_i.not_after < ( deployed_i.not_after +
+                                        LOCAL_ISSUE_MAIL_TIMEDELTA):
+                to_be_deleted |= set((issued_i,))   # yes: mark for delete
+                issued_i = None
                                     # request issue_mail if near to expiration
         if (deployed_i
             and cert_meta.cert_type == 'local' 
