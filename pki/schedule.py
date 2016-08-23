@@ -9,6 +9,7 @@ import subprocess
 import re
 import syslog
 import smtplib
+import sys
 
 from functools import total_ordering
 
@@ -81,8 +82,11 @@ def scheduleCerts(db, cert_names):
         try:
             deployCerts(cm_dict, id)
         except Exception:
-            sln('Skipping distribution of cert {}'.format(cert_meta.name))
-       
+            sln('Skipping distribution of cert {} because {} [{}]'.format(
+                                            cert_meta.name,
+                                            sys.exc_info()[0].__name__,
+                                            str(sys.exc_info()[1])))
+               
     def expire(cert_meta, i):
         sli('State transition from {} to EXPIRED of {}:{}'.
                                 format(i.state, cert_meta.name, i.id))

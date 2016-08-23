@@ -67,12 +67,16 @@ def deployCerts(certs, instance_id=None):
             raise MyException('No valid cerificate for {} in DB - '
                                             'create it first'.format(cert.name))
         instance_id, cert_text, key_text, TLSA_text, cacert_text = result
+        host_omitted = False
         
         for fqdn,dh in cert.disthosts.items():
         
-            if fqdn in skip_host: continue
-            if limit_hosts and fqdn not in only_host: continue
-        
+            if fqdn in skip_host:
+                host_omitted = True
+                continue
+            if limit_hosts and (fqdn not in only_host):
+                host_omitted = True
+                continue
             dest_path = PurePath('/')
             
             sld('{}: {}'.format(cert.name, fqdn))
@@ -129,7 +133,12 @@ def deployCerts(certs, instance_id=None):
         if not opts.no_TLSA:
             distribute_tlsa_rrs(cert, TLSA_text, None)
         
-        update_state_of_instance(cert.db, instance_id, 'deployed')
+        if not host_omitted:
+            update_state_of_instance(cert.db, instance_id, 'deployed')
+        else:
+            sln('State of cert {} not promoted to DEPLOYED, '
+                'because hosts where limized or skipped'.format(
+                            cert.name))
         # clear mail-sent-time if local cert.
         if cert.cert_type == 'local': cert.update_authorized_until(None)
         
@@ -157,8 +166,10 @@ def ssh_connection(dest_host):
         client.connect(dest_host, username=SSH_CLIENT_USER_NAME,
                             key_filename=expanduser('~/.ssh/id_rsa'))
     except Exception:
-        sln('Failed to connect to host {}, because: \n   {}'.
-            format(dest_host, sys.exc_info()[0].__name__))
+        sln('Failed to connect to host {}, because {} [{}]'.
+            format(dest_host,
+            sys.exc_info()[0].__name__,
+            str(sys.exc_info()[1])))
         raise
     else:
         sld('Connected to host {}'.format(dest_host))
@@ -198,7 +209,10 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
                     sftp.mkdir(str(dest_dir))   
                 except IOError:
                     sle('Cant create {}:{}: Missing parent?\n\t{}'.format(
-                            dest_host, dest_dir, sys.exc_info()[0].__name__))
+                            dest_host,
+                            dest_dir,
+                            sys.exc_info()[0].__name__,
+                            str(sys.exc_info()[1])))
                     raise
                 sftp.chdir(str(dest_dir))
             
@@ -253,16 +267,24 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
                 chan.exec_command(cmd)
                 
                 remote_result_msg = ''
+                timed_out = False
                 while not chan.exit_status_ready():
+                     if timed_out: break
                      if chan.recv_ready():
                         try:
                             data = chan.recv(1024)
-                        except (socket.timeout):
+                        except (timeout):
                             sle('Timeout on remote execution of "{}" on host {}'.format(cmd, dest_host))
                             break
                         while data:
                             remote_result_msg += (data.decode('ascii'))
-                            data = chan.recv(1024)
+                            try:
+                                data = chan.recv(1024)
+                            except (timeout):
+                                sle('Timeout on remote execution of "{}" on host {}'.format(cmd, dest_host))
+                                tmp = timed_out
+                                timed_out = True
+                                break
                 es = int(chan.recv_exit_status())
                 if es != 0:
                     sle('Remote execution failure of "{}" on host {}\texit={}, because:\n\r{}'
