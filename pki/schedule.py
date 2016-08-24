@@ -101,7 +101,7 @@ def scheduleCerts(db, cert_names):
     for name in cert_names:
 
         cert_meta = Certificate(db, name)
-        sli('{} {} ------------------------------'.format(
+        sld('{} {} ------------------------------'.format(
                                         name,
                                         'DISABLED' if cert_meta.disabled else ''))
         if cert_meta.subject_type == 'CA': continue
@@ -178,7 +178,7 @@ def scheduleCerts(db, cert_names):
     if not ps_delete:
         ps_delete = db.prepare(q_delete)
     for i in to_be_deleted:
-        sli('Deleting {}'.format(i.id))
+        sld('Deleting {}'.format(i.id))
         result = ps_delete.first(i.id)
         if result != 1:
             sln('Failed to delete cert instance {}'.format(i.id))
@@ -227,7 +227,7 @@ def _find_to_be_deleted(cert_meta):
     for row in rows:
  
         id, state, not_before, not_after = row
-        sli('{:04} Issued {}, expires: {}, state {}\t{}'.format(
+        sld('{:04} Issued {}, expires: {}, state {}\t{}'.format(
                                                 id,
                                                 shortDateTime(not_before),
                                                 shortDateTime(not_after),

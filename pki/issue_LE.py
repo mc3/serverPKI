@@ -298,7 +298,7 @@ def _authorize(cert_meta, account):
         updateSOAofUpdatedZones()
         reloadNameServer()
         
-        sli("{}: Waiting for DNS propagation. Checking in 10 seconds.".format(fqdn))
+        sld("{}: Waiting for DNS propagation. Checking in 10 seconds.".format(fqdn))
         time.sleep(10)
         
         # Verify each fqdn
@@ -306,13 +306,13 @@ def _authorize(cert_meta, account):
         authorized_until = None
         
         for fqdn in FQDNs:
-            sli('')
+            sld('')
             auth = authz[fqdn]
             challenge = auth['challenge']
             acme.validate_authorization(challenge['uri'], 'dns-01', auth['key_authorization'])
     
             while True:
-                sli("{}: waiting for verification. Checking in 5 seconds.".format(fqdn))
+                sld("{}: waiting for verification. Checking in 5 seconds.".format(fqdn))
                 time.sleep(5)
     
                 response = acme.get_authorization(auth['uri'])

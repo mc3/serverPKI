@@ -287,7 +287,7 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
                                 break
                 es = int(chan.recv_exit_status())
                 if es != 0:
-                    sle('Remote execution failure of "{}" on host {}\texit={}, because:\n\r{}'
+                    sln('Remote execution failure of "{}" on host {}\texit={}, because:\n\r{}'
                             .format(cmd, dest_host, es, remote_result_msg))
                 else:
                     sli(remote_result_msg)
