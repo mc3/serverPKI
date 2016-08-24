@@ -88,28 +88,28 @@ SLE = syslog.LOG_ERR | syslog.LOG_LPR
 def sld(msg):
     if not syslog_initialized:
         init_syslog()
-    m = '['+msg+']'
+    m = '['+msg.expandtabs()+']'
     syslog.syslog(SLD, m)
     if not options.quiet and options.debug: print(m)
 
 def sli(msg):
     if not syslog_initialized:
         init_syslog()
-    m = '['+msg+']'
+    m = '['+msg.expandtabs()+']'
     syslog.syslog(SLI, m)
     if not options.quiet and options.verbose: print(m)
 
 def sln(msg):
     if not syslog_initialized:
         init_syslog()
-    m = '%'+msg
+    m = '%'+msg.expandtabs()
     syslog.syslog(SLN, m)
     if not options.quiet: print(m)
 
 def sle(msg):
     if not syslog_initialized:
         init_syslog()
-    m = '?'+msg
+    m = '?'+msg.expandtabs()
     syslog.syslog(SLE, m)
     print(m)
 

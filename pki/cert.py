@@ -165,7 +165,7 @@ class Certificate(object):
                     self.disabled = row['c_disabled']
                     self.authorized_until = row['authorized_until']
                     self.subject_type = row['subject_type']
-                    sld('----------- {}\\t{}\\t{}\\t{}\\t{}\\t{}'.format(
+                    sld('----------- {}\t{}\t{}\t{}\t{}\t{}'.format(
                              self.cert_id,
                              name,
                              self.cert_type,
@@ -202,7 +202,7 @@ class Certificate(object):
                                 reload_command = row['reload_command']
                             )
                             dh['places'][row['place']] = p
-                sld('altname:{}\\tdisthost:{}\\tjail:{}\\tplace:{}'.format(
+                sld('altname:{}\tdisthost:{}\tjail:{}\tplace:{}'.format(
                     row['alt_name'] if row['alt_name'] else '',
                     row['dist_host'] if row['dist_host'] else '',
                     row['jail'] if row['jail'] else '',
