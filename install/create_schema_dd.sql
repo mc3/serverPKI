@@ -43,7 +43,7 @@ ALTER TYPE dd.subject_type OWNER TO pki_dev;
 CREATE TYPE dd.cert_type AS ENUM (
     'LE', 'local');
 ALTER TYPE dd.cert_type OWNER TO pki_dev;
------------------------------- staie of cert instance
+------------------------------ state of cert instance
 CREATE TYPE dd.cert_state AS ENUM (
     'reserved', 'issued', 'prepublished', 'deployed', 'revoked', 'expired', 'archived');
 ALTER TYPE dd.cert_state OWNER TO pki_dev;
