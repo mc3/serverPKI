@@ -80,10 +80,10 @@ syslog_initialized = False
 
 LOG_SECURITY = 13 << 3      # FreeBSD  - does not work with python
 
-SLD = syslog.LOG_DEBUG | syslog.LOG_LPR
-SLI = syslog.LOG_INFO | syslog.LOG_LPR
-SLN = syslog.LOG_NOTICE | syslog.LOG_LPR
-SLE = syslog.LOG_ERR | syslog.LOG_LPR
+SLD = syslog.LOG_DEBUG | syslog.LOG_LOCAL6
+SLI = syslog.LOG_INFO | syslog.LOG_LOCAL6
+SLN = syslog.LOG_NOTICE | syslog.LOG_LOCAL6
+SLE = syslog.LOG_ERR | syslog.LOG_LOCAL6
 
 def sld(msg):
     if not syslog_initialized:
@@ -116,7 +116,7 @@ def sle(msg):
 def init_syslog():
     global syslog_initialized
     
-    syslog.openlog(ident = 'pki', facility = syslog.LOG_LPR)
+    syslog.openlog(ident = 'pki', facility = syslog.LOG_LOCAL6)
     syslog_initialized = True
 
 
