@@ -108,8 +108,8 @@ def deployCerts(certs, instance_id=None):
                     dest_dir = PurePath(dest_path, pcp)
                 
                     if place.key_path:
-                        dest_dir = PurePath(dest_path, place.key_path)
-                        distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
+                        key_dest_dir = PurePath(dest_path, place.key_path)
+                        distribute_cert(fd_key, fqdn, key_dest_dir, key_file_name, place, None)
                     
                     elif place.cert_file_type == 'separate':
                         distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
