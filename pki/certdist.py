@@ -352,8 +352,8 @@ def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
                 if prepublished_TLSA:
                     tlsa_lines.append(str(prefix.format(fqdn) +
                                          ' ' +prepublished_TLSA + '\n'))
-            with open(dest, 'w') as file:
-                file.writelines(tlsa_lines)
+            with open(dest, 'w') as fd:
+                fd.writelines(tlsa_lines)
             updateZoneCache(zone)
 
     else:                           # remote DNS master ( **INCOMPLETE**)
