@@ -170,7 +170,13 @@ def scheduleCerts(db, cert_names):
             if prepublished_i:      # yes: TLSA already pre-published?
                 continue            # yes
             elif not issued_i:      # do we have a cert handy?
-                i = issue(cert_meta) # no: create one
+                id = issue(cert_meta) # no: create one
+                if not id:
+                    sln('Failed to issue cert for prpublishing of {}'.format(cert_meta.name))
+                    continue
+                i = CertInstance(id, None, None, None)
+            sld('scheduleCerts will call prepublish with deployed_i={}, i={}'.format(
+                                str(deployed_i), str(i)))
             prepublish(cert_meta, deployed_i, i) # and prepublish it                
     
     # end for name in cert_names

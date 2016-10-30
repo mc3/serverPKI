@@ -179,7 +179,7 @@ def issue_LE_cert(cert_meta):
     if instance_id:
         return instance_id
     sle('Failed to store new cert in DB backend')
-    
+    return None
     
 #---------------  prepared SQL queries for private functions  --------------
 
