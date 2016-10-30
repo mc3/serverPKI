@@ -9,6 +9,7 @@ import subprocess
 import re
 import syslog
 import smtplib
+import sys
 
 from functools import total_ordering
 
@@ -81,8 +82,11 @@ def scheduleCerts(db, cert_names):
         try:
             deployCerts(cm_dict, id)
         except Exception:
-            sln('Skipping distribution of cert {}'.format(cert_meta.name))
-       
+            sln('Skipping distribution of cert {} because {} [{}]'.format(
+                                            cert_meta.name,
+                                            sys.exc_info()[0].__name__,
+                                            str(sys.exc_info()[1])))
+               
     def expire(cert_meta, i):
         sli('State transition from {} to EXPIRED of {}:{}'.
                                 format(i.state, cert_meta.name, i.id))
@@ -97,7 +101,7 @@ def scheduleCerts(db, cert_names):
     for name in cert_names:
 
         cert_meta = Certificate(db, name)
-        sli('{} {} ------------------------------'.format(
+        sld('{} {} ------------------------------'.format(
                                         name,
                                         'DISABLED' if cert_meta.disabled else ''))
         if cert_meta.subject_type == 'CA': continue
@@ -166,7 +170,13 @@ def scheduleCerts(db, cert_names):
             if prepublished_i:      # yes: TLSA already pre-published?
                 continue            # yes
             elif not issued_i:      # do we have a cert handy?
-                i = issue(cert_meta) # no: create one
+                id = issue(cert_meta) # no: create one
+                if not id:
+                    sln('Failed to issue cert for prpublishing of {}'.format(cert_meta.name))
+                    continue
+                i = CertInstance(id, None, None, None)
+            sld('scheduleCerts will call prepublish with deployed_i={}, i={}'.format(
+                                str(deployed_i), str(i)))
             prepublish(cert_meta, deployed_i, i) # and prepublish it                
     
     # end for name in cert_names
@@ -174,7 +184,7 @@ def scheduleCerts(db, cert_names):
     if not ps_delete:
         ps_delete = db.prepare(q_delete)
     for i in to_be_deleted:
-        sli('Deleting {}'.format(i.id))
+        sld('Deleting {}'.format(i.id))
         result = ps_delete.first(i.id)
         if result != 1:
             sln('Failed to delete cert instance {}'.format(i.id))
@@ -223,7 +233,7 @@ def _find_to_be_deleted(cert_meta):
     for row in rows:
  
         id, state, not_before, not_after = row
-        sli('{:04} Issued {}, expires: {}, state {}\t{}'.format(
+        sld('{:04} Issued {}, expires: {}, state {}\t{}'.format(
                                                 id,
                                                 shortDateTime(not_before),
                                                 shortDateTime(not_after),

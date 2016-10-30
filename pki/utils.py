@@ -80,43 +80,43 @@ syslog_initialized = False
 
 LOG_SECURITY = 13 << 3      # FreeBSD  - does not work with python
 
-SLD = syslog.LOG_DEBUG | syslog.LOG_LPR
-SLI = syslog.LOG_INFO | syslog.LOG_LPR
-SLN = syslog.LOG_NOTICE | syslog.LOG_LPR
-SLE = syslog.LOG_ERR | syslog.LOG_LPR
+SLD = syslog.LOG_DEBUG | syslog.LOG_LOCAL6
+SLI = syslog.LOG_INFO | syslog.LOG_LOCAL6
+SLN = syslog.LOG_NOTICE | syslog.LOG_LOCAL6
+SLE = syslog.LOG_ERR | syslog.LOG_LOCAL6
 
 def sld(msg):
     if not syslog_initialized:
         init_syslog()
-    m = '['+msg+']'
+    m = '['+msg.expandtabs()+']'
     syslog.syslog(SLD, m)
     if not options.quiet and options.debug: print(m)
 
 def sli(msg):
     if not syslog_initialized:
         init_syslog()
-    m = '['+msg+']'
+    m = '['+msg.expandtabs()+']'
     syslog.syslog(SLI, m)
     if not options.quiet and options.verbose: print(m)
 
 def sln(msg):
     if not syslog_initialized:
         init_syslog()
-    m = '%'+msg
+    m = '%'+msg.expandtabs()
     syslog.syslog(SLN, m)
     if not options.quiet: print(m)
 
 def sle(msg):
     if not syslog_initialized:
         init_syslog()
-    m = '?'+msg
+    m = '?'+msg.expandtabs()
     syslog.syslog(SLE, m)
     print(m)
 
 def init_syslog():
     global syslog_initialized
     
-    syslog.openlog(ident = 'pki', facility = syslog.LOG_LPR)
+    syslog.openlog(ident = 'pki', facility = syslog.LOG_LOCAL6)
     syslog_initialized = True
 
 

@@ -399,7 +399,7 @@ CREATE OR REPLACE VIEW certs_ids AS
 
 
 CREATE OR REPLACE VIEW inst AS
-    SELECT i.id, s.name, i.state, i.not_before, i.not_after, i.TLSA, i.updated
+    SELECT i.id, s.name, i.state, i.not_before, i.not_after, i.hash, i.updated
     FROM
         certinstances i, certificates c, subjects s
     WHERE
