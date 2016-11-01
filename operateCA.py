@@ -11,7 +11,7 @@ from paramiko import util
 from pki.certdist import deployCerts, consolidate_TLSA
 ##from pki.certrunner import create_certs
 from pki.utils import options as opts
-from pki.utils import options_set, check_actions, reloadNameServer
+from pki.utils import options_set, check_actions, reloadNameServer, updateSOAofUpdatedZones
 
 from pki.db import DbConnection as dbc
 from pki.utils import sld, sli, sln, sle
@@ -121,6 +121,7 @@ else:
 if opts.sync_tlsa:
     for c in our_certs.values():
         consolidate_TLSA(c)
+    updateSOAofUpdatedZones()
     reloadNameServer()
 
 """
