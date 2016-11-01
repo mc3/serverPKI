@@ -21,8 +21,18 @@ parser.add_option('--schedule-actions', '-S', dest='schedule', action='store_tru
                    default=False,
                    help='Scan configuration and schedule necessary actions of'
                     ' selected certs/hosts. This may trigger issuence or '
-                    ' distribution of certs. With this options "--create" and'
-                    ' "--distribute" are ignored')
+                    ' distribution of certs/TLSA-RRS. With this options "--create-certs" and'
+                    ' "--distribute-certs" are ignored. Any state transitions may happen')
+                   
+parser.add_option('--consolidate-certs', '-K', dest='sync_disk', action='store_true',
+                   default=False,
+                   help='Consolidate targets to be in sync with DB.'
+                   ' This affects certs in state "deployed".')
+                   
+parser.add_option('--consolidate-TLSA', '-T', dest='sync_tlsa', action='store_true',
+                   default=False,
+                   help='Consolidate TLSA-RR to be in sync with DB.'
+                   ' This affects certs in state "deployed" or "prepublished".')
                    
 parser.add_option('--create-certs', '-C', dest='create', action='store_true',
                    default=False,
@@ -30,10 +40,14 @@ parser.add_option('--create-certs', '-C', dest='create', action='store_true',
                    
 parser.add_option('--distribute-certs', '-D', dest='distribute', action='store_true',
                    default=False,
-                   help='Scan configuration and distribute (to their target host) all certs which have been created now or in the past, which are not disbled or excluded.')
+                   help='Scan configuration and distribute (to their target'
+                   ' host) all certs which are in state "issued" and currently'
+                   ' valid and not disabled or excluded.'
+                   ' Changes state to "deployed".'
+                   ' Corresponding TLSA RR are also installed.')
 
 parser.add_option('--all', '-a', action='store_true',
-                   help='All certs in configuration should be included, even if disabled.')
+                   help='All certs in configuration should be included in operation, even if disabled.')
                    
 parser.add_option('--include', '-i', dest='cert_to_be_included', action='append',
                    help='Specify, which cert to be included, even if disabled, in list of certs to be created or distributed. Is cumulative if multiple times provided.')
@@ -52,7 +66,7 @@ parser.add_option('--limit-to-disthost', '-l', dest='only_host', action='append'
 
 parser.add_option('--no-TLSA-records', '-N', dest='no_TLSA', action='store_true',
                    default=False,
-                   help='Do not distribute TLSA resource records.')
+                   help='Do not distribute/change TLSA resource records.')
 
 parser.add_option('--check-configuration-only', '-n', dest='check_only', action='store_true',
                    default=False,

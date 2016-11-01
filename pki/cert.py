@@ -87,7 +87,7 @@ q_all_cert_meta = """
   ORDER BY s1.name, s2.name, d.fqdn;
 """
 
-q_instance = """
+q_recent_instance = """
     SELECT ci.id, ci.cert, ci.key, ci.hash, ca.cert
         FROM CertInstances ci, CertInstances ca
         WHERE
@@ -105,6 +105,18 @@ q_specific_instance = """
             ci.id = $1::INT AND
             ci.CAcert = ca.id
 """
+
+q_active_instances = """
+    SELECT ci.id, ci.state
+        FROM CertInstances ci
+        WHERE
+            ci.certificate = $1::INT AND
+            ci.not_before <= LOCALTIMESTAMP AND
+            ci.not_after >= LOCALTIMESTAMP AND
+        ORDER BY ci.id DESC
+        LIMIT 1
+"""
+
 q_tlsa_of_instance = """
     SELECT hash
         FROM CertInstances
@@ -117,7 +129,7 @@ q_update_authorized_until = """
         WHERE id = $1
 """
 ps_all_cert_meta = None
-ps_instance = None
+ps_recent_instance = None
 ps_specific_instance = None
 ps_tlsa_of_instance = None
 ps_update_authorized_until = None
@@ -221,16 +233,16 @@ class Certificate(object):
         @exceptions:        none
         """
         
-        global ps_instance, ps_specific_instance
+        global ps_recent_instance, ps_specific_instance
         
         if instance_id:
             if not ps_specific_instance:
                 ps_specific_instance = self.db.prepare(q_specific_instance)
             result = ps_specific_instance.first(instance_id)
         else:
-            if not ps_instance:
-                ps_instance = self.db.prepare(q_instance)
-            result = ps_instance.first(self.cert_id)
+            if not ps_recent_instance:
+                ps_recent_instance = self.db.prepare(q_recent_instance)
+            result = ps_recent_instance.first(self.cert_id)
         if result:
             (instance_id, cert_pem, key_pem, TLSA, cacert_pem) = result
             sld('Hash of selected Certinstance is {}'.format(TLSA))
@@ -242,6 +254,31 @@ class Certificate(object):
                 TLSA,
                 cacert_pem.decode('ascii'))
     
+    def active_instances(self):
+    
+        """
+        Return dictionary of active cert instances
+    
+        @rtype:             Dictionary with:
+                            key: instance id (int)
+                            value: state (string)
+                            
+        @exceptions:        none
+        """
+    
+        global ps_active_instances
+        
+        if not ps_active_instances:
+            ps_active_instances = self.db.prepare(q_active_instances)
+        d = {}
+        rows = ps_active_instances(self.cert_id)
+        for row in rows:
+            d[row['id']] = row['state']
+        if len(d) > 2:
+            sln('More than 2 active instances for {}'.format(self.name))
+        return d
+        
+
     def TLSA_hash(self, instance_id):
         """
         Return TLSA hash of instance, which is valid today and in prepublish state
@@ -256,8 +293,13 @@ class Certificate(object):
 
         sld('TLSA_hash: Called with {}'.format(instance_id))
         rv = ps_tlsa_of_instance.first(instance_id)
-        sld('TLSA_hash: ps_tlsa_of_instance returned {}'.format(str(rv)))
-        return rv[0]
+        if not rv:
+            sle('cert.TLSA_hash called with noneexistant id'.format(instance_id))
+            return None
+        sld('TLSA_hash: ps_tlsa_of_instance returned {}'.format(rv))
+        if isinstance(rv,str):
+            return rv
+        else: return rv[0]
         
     def create_instance(self):
         """
