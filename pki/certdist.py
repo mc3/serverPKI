@@ -182,7 +182,7 @@ def ssh_connection(dest_host):
     else:
         sld('Connected to host {}'.format(dest_host))
         return client
-
+    
 def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
 
     """
@@ -320,6 +320,47 @@ def key_cert_cacert_name(subject, subject_type):
     return str('%s_%s_key_cert_cacert.pem' % (subject, subject_type))
 
 
+def consolidate_TLSA(cert_meta):
+    """
+    Consolidate all TLSA RRs for one cert meta.
+    This means TLSA include files are freshly created.
+    
+    @param cert_meta:   Cert meta
+    @type cert_meta:    cert.Certificate instance
+    @rtype:             None
+    @exceptions:
+    """
+    prepublished_id = None
+    deployed_id = None
+    
+    inst_list = cert_meta.active_instances()
+    if not inst_list: return
+    
+    for id, state in inst_list:
+        if state == 'prepublished':
+            if not prepublished_id: 
+                prepublished_id = id
+            else:
+                sln('consolidate_TLSA: More than one instance of {} in state "prepublished"'
+                                                    .format(cert_meta.name))
+        elif state == 'deployed':
+            if not deployed_id: 
+                deployed_id = id
+            else:
+                sln('consolidate_TLSA: More than one instance of {} in state "deployed"'
+                                                    .format(cert_meta.name))
+    if not deployed_id:
+        sle('consolidate_TLSA: No instance of {} in state "deployed"'
+                                                    .format(cert_meta.name))
+        return
+    
+    prepublished_TLSA = None
+    if prepublished_id:
+        prepublished_TLSA = cert_meta.TLSA_hash(prepublished_id)
+    
+    deployed_TLSA = cert_meta.TLSA_hash(deployed_id)
+
+    distribute_tlsa_rrs(cert_meta, deployed_TLSA, prepublished_TLSA)
 
 
 def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
@@ -346,7 +387,7 @@ def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
             dest = str(Pathes.zone_file_root / zone / filename)
             sli('{} => {}'.format(filename, dest))
             tlsa_lines = []
-            for prefix in cert_meta.tlsaprefixes:
+            for prefix in cert_meta.tlsaprefixes.keys():
                 tlsa_lines.append(str(prefix.format(fqdn) +
                                          ' ' +active_TLSA + '\n'))
                 if prepublished_TLSA:

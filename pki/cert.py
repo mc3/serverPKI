@@ -112,9 +112,8 @@ q_active_instances = """
         WHERE
             ci.certificate = $1::INT AND
             ci.not_before <= LOCALTIMESTAMP AND
-            ci.not_after >= LOCALTIMESTAMP AND
+            ci.not_after >= LOCALTIMESTAMP
         ORDER BY ci.id DESC
-        LIMIT 1
 """
 
 q_tlsa_of_instance = """
@@ -132,6 +131,7 @@ ps_all_cert_meta = None
 ps_recent_instance = None
 ps_specific_instance = None
 ps_tlsa_of_instance = None
+ps_active_instances = None
 ps_update_authorized_until = None
 
         
@@ -162,7 +162,7 @@ class Certificate(object):
         self.name = name
 
         self.altnames = []
-        self.tlsaprefixes = []
+        self.tlsaprefixes = {}
         self.disthosts = {}
 
         self.cert_id = None
@@ -186,7 +186,7 @@ class Certificate(object):
                              self.subject_type)
                     )
                 if row['alt_name']: self.altnames.append(row['alt_name'])
-                if row['tlsaprefix']: self.tlsaprefixes.append(row['tlsaprefix'])
+                if row['tlsaprefix']: self.tlsaprefixes[row['tlsaprefix']] = 1
                 dh = { 'jails': {}, 'places': {} }
                 if row['dist_host']:
                     if row['dist_host'] in self.disthosts:
@@ -220,6 +220,7 @@ class Certificate(object):
                     row['jail'] if row['jail'] else '',
                     row['place'] if row['place'] else '')
                 )
+        sld('tlsaprefixes of {}: {}'.format( self.name, self.tlsaprefixes))
     
     def instance(self, instance_id=None):
         """
@@ -270,13 +271,13 @@ class Certificate(object):
         
         if not ps_active_instances:
             ps_active_instances = self.db.prepare(q_active_instances)
-        d = {}
+        l = []
         rows = ps_active_instances(self.cert_id)
         for row in rows:
-            d[row['id']] = row['state']
-        if len(d) > 2:
+            l.append((row['id'], row['state']))
+        if len(l) > 2:
             sln('More than 2 active instances for {}'.format(self.name))
-        return d
+        return l
         
 
     def TLSA_hash(self, instance_id):

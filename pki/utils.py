@@ -6,6 +6,7 @@ from datetime import datetime
 import optparse
 import subprocess
 import re
+import sys
 import syslog
 
 from pki.config import Pathes, SSH_CLIENT_USER_NAME
@@ -159,6 +160,32 @@ def options_set():
             
             opts_set += ' '
     return opts_set
+
+
+def check_actions():
+    l = []
+    if options.schedule: l.append('schedule')
+    if options.distribute: l.append('distribute')
+    if options.create: l.append('create')
+    if options.sync_disk: l.append('sync_disk')
+    if options.sync_tlsa: l.append('sync_tlsa')
+
+    s = set(l)
+    
+    if len(s) > 2:
+        sle('Too many actions. Only 2 actions may be combined')
+        sys.exit(1)
+    
+    if len(s) == 2:
+        if 'schedule' in s:
+            sle('--schedule may not be combined with other actions.')
+            sys.exit(1)
+        if 'distribute' in s and 'create' in s: return
+        elif 'sync_disk' in s and 'sync_tlsa' in s: return       
+        else:
+            sle('--distribute may only be combined with --create and')
+            sle('--consolidate-certs may only be combined with --consolidate-TLSA')
+            sys.exit(1)
 
 
 def shortDateTime(dt):

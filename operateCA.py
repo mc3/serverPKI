@@ -8,10 +8,10 @@ import sys
 from paramiko import util
 
 ##from pki.config import Subjects
-from pki.certdist import deployCerts
+from pki.certdist import deployCerts, consolidate_TLSA
 ##from pki.certrunner import create_certs
 from pki.utils import options as opts
-from pki.utils import options_set
+from pki.utils import options_set, check_actions, reloadNameServer
 
 from pki.db import DbConnection as dbc
 from pki.utils import sld, sli, sln, sle
@@ -29,10 +29,17 @@ util.log_to_file('sftp.log')
 
 
 sli('operateCA started with options {}'.format(options_set()))
+check_actions()
  
 pe = dbc('pki_dev')
 db = pe.open()
 
+"""
+c = Certificate(db, 'disttest.mailsec.net')
+h = c.TLSA_hash(58)
+sld('Returned value from TLSA_hash: {}'.format(h))
+exit(0)
+"""
 
 row_list = db.query("""
     SELECT name from Subjects
@@ -110,6 +117,11 @@ else:
     if opts.distribute:
         sli('Distributing certificates.')
         deployCerts(our_certs)
+
+if opts.sync_tlsa:
+    for c in our_certs.values():
+        consolidate_TLSA(c)
+    reloadNameServer()
 
 """
 if opts.create:
