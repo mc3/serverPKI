@@ -28,7 +28,40 @@ from pki.utils import update_state_of_instance
 class MyException(Exception):
     pass
 
-def deployCerts(certs, instance_id=None):
+
+def consolidate_cert(cert_meta):
+    """
+    Consolidate cert targets of one cert meta.
+    This means cert and key files of instance in state "deployed"
+    are freshly created.
+    
+    @param cert_meta:   Cert meta
+    @type cert_meta:    cert.Certificate instance
+    @rtype:             None
+    @exceptions:
+    """
+    deployed_id = None
+    
+    inst_list = cert_meta.active_instances()
+    sld('consolidate_cert: inst_list = {}'.format(inst_list))
+    if not inst_list: return
+    
+    for id, state in inst_list:
+        if state == 'deployed':
+            deployed_id = id
+
+    if not deployed_id:
+        sli('consolidate_cert: No instance of {} in state "deployed"'.format(
+                                                                cert_meta.name))
+        return
+    
+    try:
+        deployCerts({cert_meta.name: cert_meta}, instance_id=deployed_id, consolidate=True)
+    except MyException:
+        pass
+    return
+
+def deployCerts(certs, instance_id=None, consolidate=False):
 
     """
     Deploy a list of (certificate. key and TLSA file, using sftp).
@@ -38,6 +71,8 @@ def deployCerts(certs, instance_id=None):
     @type certs:        pki.cert.Certificate instance
     @param instance_id: optional id of specific instance
     @type instance_id:  int
+    @param consolidate  Prevent from distribution of TLSA and updating of state.
+    @type consolidate   bool
     @rtype:             bool, false if error found
     @exceptions:
     Some exceptions (to be replaced by error messages and false return)
@@ -62,11 +97,22 @@ def deployCerts(certs, instance_id=None):
         
         result = cert.instance(instance_id)
         if not result:
-            sle('No valid cerificate for {} in DB - create it first'.format(
+            sli('No valid cerificate for {} in DB - create it first'.format(
                                                                     cert.name))
-            raise MyException('No valid cerificate for {} in DB - '
-                                            'create it first'.format(cert.name))
-        instance_id, cert_text, key_text, TLSA_text, cacert_text = result
+            if instance_id: # let caller handle this error, if only one cert
+                raise MyException('No valid cerificate for {} in DB - '
+                                        'create it first'.format(cert.name))
+                
+            else: continue
+        instance_id, state, cert_text, key_text, TLSA_text, cacert_text = result
+        if state != 'issued':
+            sli('No recent valid certificate for {} in state "issued" in DB -'
+                                        ' not distributed.'.format(cert.name))
+            if instance_id: # let caller handle this error, if only one cert
+                raise MyException('No recent valid certificate for {} in state'
+                        ' "issued" in DB - not distributed.'.format(cert.name))
+            else: continue
+            
         host_omitted = False
         
         for fqdn,dh in cert.disthosts.items():
@@ -138,6 +184,10 @@ def deployCerts(certs, instance_id=None):
                     distribute_cert(fd_cert, fqdn, dest_dir, cert_file_name, place, jail)
             
         sli('')
+        
+        if consolidate:
+            continue
+        
         if not opts.no_TLSA:
             distribute_tlsa_rrs(cert, TLSA_text, None)
         
@@ -341,16 +391,16 @@ def consolidate_TLSA(cert_meta):
             if not prepublished_id: 
                 prepublished_id = id
             else:
-                sln('consolidate_TLSA: More than one instance of {} in state "prepublished"'
-                                                    .format(cert_meta.name))
+                sln('consolidate_TLSA: More than one instance of {} in state'
+                                ' "prepublished"'.format(cert_meta.name))
         elif state == 'deployed':
             if not deployed_id: 
                 deployed_id = id
             else:
-                sln('consolidate_TLSA: More than one instance of {} in state "deployed"'
-                                                    .format(cert_meta.name))
+                sln('consolidate_TLSA: More than one instance of {} in state'
+                                ' "deployed"'.format(cert_meta.name))
     if not deployed_id:
-        sle('consolidate_TLSA: No instance of {} in state "deployed"'
+        sli('consolidate_TLSA: No instance of {} in state "deployed"'
                                                     .format(cert_meta.name))
         return
     
@@ -362,7 +412,29 @@ def consolidate_TLSA(cert_meta):
 
     distribute_tlsa_rrs(cert_meta, deployed_TLSA, prepublished_TLSA)
 
+    
+def delete_TLSA(cert_meta):
+    
+    """
+    Delete TLSA RR.
+    Deletes one TLSA RR per fqdn in DNS zone directory and updates
+    zone cache. "Delete" here means make tlsa file in zone directory empty.
+    @param cert_meta:   		Meta instance of certificates(s) being handled
+    @type cert_meta:    		cert.Certificate instance
+    
+    """
 
+    if Pathes.tlsa_dns_master == '':       # DNS master on local host
+        for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta): 
+            filename = fqdn + '.tlsa'
+            dest = str(Pathes.zone_file_root / zone / filename)
+
+            #just open for write without writing, which makes file empty 
+            with open(dest, 'w') as fd: 
+                sli('Truncating {}'.format(dest))
+            updateZoneCache(zone)
+
+    
 def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
     
     """

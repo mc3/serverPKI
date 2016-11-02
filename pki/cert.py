@@ -88,7 +88,7 @@ q_all_cert_meta = """
 """
 
 q_recent_instance = """
-    SELECT ci.id, ci.cert, ci.key, ci.hash, ca.cert
+    SELECT ci.id, ci.state, ci.cert, ci.key, ci.hash, ca.cert
         FROM CertInstances ci, CertInstances ca
         WHERE
             ci.certificate = $1::INT AND
@@ -99,7 +99,7 @@ q_recent_instance = """
         LIMIT 1
 """
 q_specific_instance = """
-    SELECT ci.id, ci.cert, ci.key, ci.hash, ca.cert
+    SELECT ci.id, ci.state, ci.cert, ci.key, ci.hash, ca.cert
         FROM CertInstances ci, CertInstances ca
         WHERE
             ci.id = $1::INT AND
@@ -229,8 +229,8 @@ class Certificate(object):
     
         @param instance_id  id of specific instance id
         @type  instance_id  int
-        @rtype:             Tuple of int + 4 strings
-                            (id, cert, key, TLSA hash and CA cert) or None
+        @rtype:             Tuple of int + 5 strings
+                            (id, state, cert, key, TLSA hash and CA cert) or None
         @exceptions:        none
         """
         
@@ -245,11 +245,12 @@ class Certificate(object):
                 ps_recent_instance = self.db.prepare(q_recent_instance)
             result = ps_recent_instance.first(self.cert_id)
         if result:
-            (instance_id, cert_pem, key_pem, TLSA, cacert_pem) = result
+            (instance_id, state, cert_pem, key_pem, TLSA, cacert_pem) = result
             sld('Hash of selected Certinstance is {}'.format(TLSA))
 
             return (
                 instance_id,
+                state,
                 cert_pem.decode('ascii'),
                 key_pem.decode('ascii'),
                 TLSA,

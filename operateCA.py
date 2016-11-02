@@ -8,7 +8,7 @@ import sys
 from paramiko import util
 
 ##from pki.config import Subjects
-from pki.certdist import deployCerts, consolidate_TLSA
+from pki.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA
 ##from pki.certrunner import create_certs
 from pki.utils import options as opts
 from pki.utils import options_set, check_actions, reloadNameServer, updateSOAofUpdatedZones
@@ -118,9 +118,19 @@ else:
         sli('Distributing certificates.')
         deployCerts(our_certs)
 
-if opts.sync_tlsa:
+if opts.sync_disk:
+    for c in our_certs.values():
+        consolidate_cert(c)
+
+if opts.sync_tlsas:
     for c in our_certs.values():
         consolidate_TLSA(c)
+    updateSOAofUpdatedZones()
+    reloadNameServer()
+
+if opts.remove_tlsas:
+    for c in our_certs.values():
+        delete_TLSA(c)
     updateSOAofUpdatedZones()
     reloadNameServer()
 

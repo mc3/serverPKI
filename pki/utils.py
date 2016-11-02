@@ -30,14 +30,20 @@ parser.add_option('--consolidate-certs', '-K', dest='sync_disk', action='store_t
                    help='Consolidate targets to be in sync with DB.'
                    ' This affects certs in state "deployed".')
                    
-parser.add_option('--consolidate-TLSA', '-T', dest='sync_tlsa', action='store_true',
+parser.add_option('--consolidate-TLSAs', '-T', dest='sync_tlsas', action='store_true',
                    default=False,
                    help='Consolidate TLSA-RR to be in sync with DB.'
                    ' This affects certs in state "deployed" or "prepublished".')
                    
+parser.add_option('--remove-TLSAs', '-R', dest='remove_tlsas', action='store_true',
+                   default=False,
+                   help='Remove TLSA-RRs i.e. make them empty.')
+                   
 parser.add_option('--create-certs', '-C', dest='create', action='store_true',
                    default=False,
-                   help='Scan configuration and create all certs, which are not disbled or excluded.')
+                   help='Scan configuration and create all certs, which are not'
+                   ' disbled or excluded.'
+                   ' State will be "issued" of created certs.')
                    
 parser.add_option('--distribute-certs', '-D', dest='distribute', action='store_true',
                    default=False,
@@ -45,7 +51,8 @@ parser.add_option('--distribute-certs', '-D', dest='distribute', action='store_t
                    ' host) all certs which are in state "issued" and currently'
                    ' valid and not disabled or excluded.'
                    ' Changes state to "deployed".'
-                   ' Corresponding TLSA RR are also installed.')
+                   ' Corresponding TLSA RR are also installed, if not'
+                   ' suppressed with --no-TLSA-records-')
 
 parser.add_option('--all', '-a', action='store_true',
                    help='All certs in configuration should be included in operation, even if disabled.')
@@ -168,7 +175,8 @@ def check_actions():
     if options.distribute: l.append('distribute')
     if options.create: l.append('create')
     if options.sync_disk: l.append('sync_disk')
-    if options.sync_tlsa: l.append('sync_tlsa')
+    if options.sync_tlsas: l.append('sync_tlsas')
+    if options.remove_tlsas: l.append('remove_tlsas')
 
     s = set(l)
     
@@ -180,8 +188,11 @@ def check_actions():
         if 'schedule' in s:
             sle('--schedule may not be combined with other actions.')
             sys.exit(1)
+        if 'remove_tlsas' in s:
+            sle('--remove-TLSAs may not be combined with other actions.')
+            sys.exit(1)
         if 'distribute' in s and 'create' in s: return
-        elif 'sync_disk' in s and 'sync_tlsa' in s: return       
+        elif 'sync_disk' in s and 'sync_tlsas' in s: return       
         else:
             sle('--distribute may only be combined with --create and')
             sle('--consolidate-certs may only be combined with --consolidate-TLSA')
