@@ -105,12 +105,16 @@ def deployCerts(certs, instance_id=None, consolidate=False):
                 
             else: continue
         instance_id, state, cert_text, key_text, TLSA_text, cacert_text = result
-        if state != 'issued':
-            sli('No recent valid certificate for {} in state "issued" in DB -'
-                                        ' not distributed.'.format(cert.name))
+        should_be_state = 'deployed' if consolidate else 'issued'
+        
+        if state != should_be_state:
+            sli('No recent valid certificate for {} in state'
+                    ' "{}" in DB - not distributed or consolidated.'.format(
+                                                cert.name, should_be_state))
             if instance_id: # let caller handle this error, if only one cert
-                raise MyException('No recent valid certificate for {} in state'
-                        ' "issued" in DB - not distributed.'.format(cert.name))
+                raise MyException('No recent valid certificate for "{}" in state'
+                    ' "{}" in DB - not distributed or consolidated.'.format(
+                                                cert.name, should_be_state))
             else: continue
             
         host_omitted = False
