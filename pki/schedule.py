@@ -19,8 +19,9 @@ from pki.config import MAIL_RELAY, MAIL_SENDER, MAIL_RECIPIENT
 from pki.cert import Certificate
 from pki.certdist import deployCerts, distribute_tlsa_rrs
 from pki.issue_LE import issue_LE_cert
-from pki.utils import sld, sli, sln, sle, options
+from pki.utils import sld, sli, sln, sle
 from pki.utils import shortDateTime, update_state_of_instance
+from pki.utils import options as opts
 
 #---------------  prepared SQL queries for query instances  --------------
 
@@ -63,11 +64,17 @@ def scheduleCerts(db, cert_names):
     def issue(cert_meta):
         if cert_meta.cert_type == 'local':
             return None
-        elif not cert_meta.disabled:
+        if opts.check_only:
+            sld('Would issue {}.'.format(cert_meta.name))
+            return
+        if not cert_meta.disabled:
             sli('Requesting issue from LE for {}'.format(cert_meta.name))
             return issue_LE_cert(cert_meta)
             
     def prepublish(cert_meta, active_i, new_i):
+        if opts.check_only:
+            sld('Would prepublish {} {}.'.format(active_i.id, new_i.id))
+            return
         active_TLSA = cert_meta.TLSA_hash(active_i.id)
         prepublishing_TLSA = cert_meta.TLSA_hash(new_i.id)
         sli('Prepublishing {}:{}:{}'.
@@ -75,12 +82,15 @@ def scheduleCerts(db, cert_names):
         distribute_tlsa_rrs(cert_meta, active_TLSA, prepublishing_TLSA)
         update_state_of_instance(cert_meta.db, new_i.id, 'prepublished')
             
-    def distribute(cert_meta, id):
+    def distribute(cert_meta, id, state):
+        if opts.check_only:
+            sld('Would distribute {}.'.format(id))
+            return
         sli('Distributing {}:{}'.
                                 format(cert_meta.name, id))
         cm_dict = {cert_meta.name: cert_meta}
         try:
-            deployCerts(cm_dict, id)
+            deployCerts(cm_dict, id, allowed_state=state)
         except Exception:
             sln('Skipping distribution of cert {} because {} [{}]'.format(
                                             cert_meta.name,
@@ -88,11 +98,17 @@ def scheduleCerts(db, cert_names):
                                             str(sys.exc_info()[1])))
                
     def expire(cert_meta, i):
+        if opts.check_only:
+            sld('Would expire {}.'.format(i.id))
+            return
         sli('State transition from {} to EXPIRED of {}:{}'.
                                 format(i.state, cert_meta.name, i.id))
         update_state_of_instance(cert_meta.db, i.id, 'expired')
         
     def archive(cert_meta, i):
+        if opts.check_only:
+            sld('Would archive {}.'.format(i.id))
+            return
         sli('State transition from {} to ARCHIVED of {}:{}'.
                                 format(i.state, cert_meta.name, i.id))
         update_state_of_instance(cert_meta.db, i.id, 'archived')
@@ -114,16 +130,16 @@ def scheduleCerts(db, cert_names):
 
         if not surviving:
             id = issue(cert_meta)
-            if id: distribute(cert_meta, id)
+            if id: distribute(cert_meta, id, 'issued')
             continue
         
         for i in surviving:
             if i.state == 'expired':
                 archive(cert_meta, i)
                 continue
-            if datetime.utcnow() - timedelta(days=1) >= i.not_after:
+            if datetime.utcnow() >= (i.not_after + timedelta(days=1)):
                 if i.state != 'deployed':
-                    expire(i)
+                    expire(cert_meta, i)
                 continue
             elif i.state == 'issued': issued_i = i
             elif i.state == 'prepublished': prepublished_i = i
@@ -147,17 +163,22 @@ def scheduleCerts(db, cert_names):
             continue
             
                                     # deployed cert expired or no cert deployed?
-        if not deployed_i or \
-                (datetime.utcnow() - timedelta(days=1)) >= \
-                                                        deployed_i.not_after:
+        if (not deployed_i) or \
+                (datetime.utcnow() >= deployed_i.not_after - timedelta(days=1)):
+            distributed = False
+            sld('scheduleCerts: no deployed cert or deployed cert '
+                            'expired {}'.format(str(deployed_i)))
             if prepublished_i:      # yes - distribute prepublished
-                distribute(cert_meta, prepublished_i.id)
+                distribute(cert_meta, prepublished_i.id, 'prepublished')
+                distributed = True
             elif issued_i:          # or issued cert?
-                distribute(cert_meta, issued_i.id) # yes - distribute it
+                distribute(cert_meta, issued_i.id, 'issued') # yes - distribute it
+                distributed = True
             if deployed_i:
-                expire(deployed_i)  # and expire deployed cert
+                expire(cert_meta, deployed_i)  # and expire deployed cert
+            if not distributed:
                 id = issue(cert_meta)
-                if id: distribute(cert_meta, id)
+                if id: distribute(cert_meta, id, 'issued')
             continue
         
         if cert_meta.cert_type == 'local':
@@ -172,7 +193,7 @@ def scheduleCerts(db, cert_names):
             elif not issued_i:      # do we have a cert handy?
                 id = issue(cert_meta) # no: create one
                 if not id:
-                    sln('Failed to issue cert for prpublishing of {}'.format(cert_meta.name))
+                    sln('Failed to issue cert for prepublishing of {}'.format(cert_meta.name))
                     continue
                 i = CertInstance(id, None, None, None)
             sld('scheduleCerts will call prepublish with deployed_i={}, i={}'.format(
@@ -181,6 +202,9 @@ def scheduleCerts(db, cert_names):
     
     # end for name in cert_names
     
+    if opts.check_only:
+        sld('Would delete and mail..')
+        return
     if not ps_delete:
         ps_delete = db.prepare(q_delete)
     for i in to_be_deleted:

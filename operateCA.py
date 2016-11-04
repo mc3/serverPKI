@@ -97,7 +97,7 @@ for name in our_cert_names:
     c = Certificate(db, name)
     if c: our_certs[name] = c
 
-if opts.check_only:
+if opts.check_only and not opts.schedule:
     sli('No syntax errors found in configuration.')
     sys.exit(0)
 

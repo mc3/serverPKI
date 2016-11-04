@@ -56,12 +56,15 @@ def consolidate_cert(cert_meta):
         return
     
     try:
-        deployCerts({cert_meta.name: cert_meta}, instance_id=deployed_id, consolidate=True)
+        deployCerts({cert_meta.name: cert_meta},
+                    instance_id=deployed_id,
+                    consolidate=True,
+                    allowed_state='deployed')
     except MyException:
         pass
     return
 
-def deployCerts(certs, instance_id=None, consolidate=False):
+def deployCerts(certs, instance_id=None, consolidate=False, allowed_state='issued'):
 
     """
     Deploy a list of (certificate. key and TLSA file, using sftp).
@@ -73,6 +76,8 @@ def deployCerts(certs, instance_id=None, consolidate=False):
     @type instance_id:  int
     @param consolidate  Prevent from distribution of TLSA and updating of state.
     @type consolidate   bool
+    @param allow_state  state, required for ditribution (default='issued').
+    @type allowed_state string
     @rtype:             bool, false if error found
     @exceptions:
     Some exceptions (to be replaced by error messages and false return)
@@ -104,13 +109,12 @@ def deployCerts(certs, instance_id=None, consolidate=False):
                                         'create it first'.format(cert.name))
                 
             else: continue
-        instance_id, state, cert_text, key_text, TLSA_text, cacert_text = result
-        should_be_state = 'deployed' if consolidate else 'issued'
+        my_instance_id, state, cert_text, key_text, TLSA_text, cacert_text = result
         
-        if state != should_be_state:
+        if state != allowed_state:
             sli('No recent valid certificate for {} in state'
                     ' "{}" in DB - not distributed or consolidated.'.format(
-                                                cert.name, should_be_state))
+                                                cert.name, allowed_state))
             if instance_id: # let caller handle this error, if only one cert
                 raise MyException('No recent valid certificate for "{}" in state'
                     ' "{}" in DB - not distributed or consolidated.'.format(
@@ -196,7 +200,7 @@ def deployCerts(certs, instance_id=None, consolidate=False):
             distribute_tlsa_rrs(cert, TLSA_text, None)
         
         if not host_omitted:
-            update_state_of_instance(cert.db, instance_id, 'deployed')
+            update_state_of_instance(cert.db, my_instance_id, 'deployed')
         else:
             sln('State of cert {} not promoted to DEPLOYED, '
                 'because hosts where limized or skipped'.format(
