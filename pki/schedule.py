@@ -90,7 +90,7 @@ def scheduleCerts(db, cert_names):
                                 format(cert_meta.name, id))
         cm_dict = {cert_meta.name: cert_meta}
         try:
-            deployCerts(cm_dict, id, allowed_state=state)
+            deployCerts(cm_dict, id, allowed_states=(state, ))
         except Exception:
             sln('Skipping distribution of cert {} because {} [{}]'.format(
                                             cert_meta.name,
