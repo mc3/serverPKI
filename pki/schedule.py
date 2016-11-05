@@ -2,7 +2,7 @@
 schedule module of serverPKI
 """
 #--------------- imported modules --------------
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from email.mime.text import MIMEText
 import optparse
 import subprocess
@@ -154,10 +154,11 @@ def scheduleCerts(db, cert_names):
                                     # request issue_mail if near to expiration
         if (deployed_i
             and cert_meta.cert_type == 'local' 
-            and not cert_meta.authorized_until 
+            and not cert_meta.authorized_until
             and datetime.utcnow() >= (deployed_i.not_after - 
                                             LOCAL_ISSUE_MAIL_TIMEDELTA)):
             to_be_mailed.append(cert_meta)
+            sld('schedule.to_be_mailed: ' + str(cert_meta))
 
         if cert_meta.disabled:
             continue
@@ -220,7 +221,7 @@ def scheduleCerts(db, cert_names):
             
         for cert_meta in to_be_mailed:
             body += str('\t{} \t{}'.format(cert_meta.name,
-                                '[DISABLED]' if cert_meta-disabled else ''))
+                                '[DISABLED]' if cert_meta.disabled else ''))
             cert_meta.update_authorized_until(datetime.utcnow())
         
         msg = MIMEText(body)
