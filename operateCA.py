@@ -134,6 +134,10 @@ if opts.remove_tlsas:
     updateSOAofUpdatedZones()
     reloadNameServer()
 
+if opts.extract:
+    sli('Extracting certificates.')
+    deployCerts(our_certs, allowed_states=('issued', 'prepublished', 'deployed'))
+
 """
 if opts.create:
     if create_certs(our_cert_names):

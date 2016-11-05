@@ -59,26 +59,29 @@ def consolidate_cert(cert_meta):
         deployCerts({cert_meta.name: cert_meta},
                     instance_id=deployed_id,
                     consolidate=True,
-                    allowed_state='deployed')
+                    allowed_states=('deployed', ))
     except MyException:
         pass
     return
 
-def deployCerts(certs, instance_id=None, consolidate=False, allowed_state='issued'):
+def deployCerts(certs,
+                instance_id=None,
+                consolidate=False,
+                allowed_states=('issued', )):
 
     """
     Deploy a list of (certificate. key and TLSA file, using sftp).
     Restart service at target host and reload nameserver.
     
-    @param certs:       list of certificate meta data instances
-    @type certs:        pki.cert.Certificate instance
-    @param instance_id: optional id of specific instance
-    @type instance_id:  int
-    @param consolidate  Prevent from distribution of TLSA and updating of state.
-    @type consolidate   bool
-    @param allow_state  state, required for ditribution (default='issued').
-    @type allowed_state string
-    @rtype:             bool, false if error found
+    @param certs:           list of certificate meta data instances
+    @type certs:            pki.cert.Certificate instance
+    @param instance_id:     optional id of specific instance
+    @type instance_id:      int
+    @param consolidate      Prevent from distribution of TLSA and updating of state.
+    @type consolidate       bool
+    @param allowed_states   states, required for ditribution (default=('issued',)).
+    @type allowed_states    tuple of strings
+    @rtype:                 bool, false if error found
     @exceptions:
     Some exceptions (to be replaced by error messages and false return)
     """
@@ -111,10 +114,10 @@ def deployCerts(certs, instance_id=None, consolidate=False, allowed_state='issue
             else: continue
         my_instance_id, state, cert_text, key_text, TLSA_text, cacert_text = result
         
-        if state != allowed_state:
+        if state not in allowed_states:
             sli('No recent valid certificate for {} in state'
                     ' "{}" in DB - not distributed or consolidated.'.format(
-                                                cert.name, allowed_state))
+                                                cert.name, allowed_states))
             if instance_id: # let caller handle this error, if only one cert
                 raise MyException('No recent valid certificate for "{}" in state'
                     ' "{}" in DB - not distributed or consolidated.'.format(
@@ -203,7 +206,7 @@ def deployCerts(certs, instance_id=None, consolidate=False, allowed_state='issue
             update_state_of_instance(cert.db, my_instance_id, 'deployed')
         else:
             sln('State of cert {} not promoted to DEPLOYED, '
-                'because hosts where limized or skipped'.format(
+                'because hosts where limited or skipped'.format(
                             cert.name))
         # clear mail-sent-time if local cert.
         if cert.cert_type == 'local': cert.update_authorized_until(None)
@@ -246,6 +249,8 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
     """
     Distribute cert and key to a host, jail (if any) and place.
     Optional reload the service.
+    If global opts.extract set, instead of distributing to a host,
+    certificat and key are written to the local work directory.
     
     @param fd:          file descriptor of memory stream
     @type fd:           io.StringIO
@@ -262,6 +267,14 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
     @rtype:             not yet any
     @exceptions:        IOError
     """
+
+    if opts.extract:
+        extract_path = Pathes.work / file_name
+        with open(str(extract_path), 'w') as fde:
+            fde.write(fd.getvalue())
+        if 'key' in file_name:
+            extract_path.chmod(0o400)
+        return
 
     with ssh_connection(dest_host) as client:
         

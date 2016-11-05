@@ -54,6 +54,10 @@ parser.add_option('--distribute-certs', '-D', dest='distribute', action='store_t
                    ' Corresponding TLSA RR are also installed, if not'
                    ' suppressed with --no-TLSA-records-')
 
+parser.add_option('--extract-cert-and-key', '-E', action='store_true', dest='extract',
+                   help='Extract certificate and key to work directory.'
+                    ' This action may not be combined with other actions.')
+
 parser.add_option('--all', '-a', action='store_true',
                    help='All certs in configuration should be included in operation, even if disabled.')
                    
@@ -76,7 +80,7 @@ parser.add_option('--no-TLSA-records', '-N', dest='no_TLSA', action='store_true'
                    default=False,
                    help='Do not distribute/change TLSA resource records.')
 
-parser.add_option('--check-configuration-only', '-n', dest='check_only', action='store_true',
+parser.add_option('--check-only', '-n', dest='check_only', action='store_true',
                    default=False,
                    help='Do syntax check of configuration data.'),
 
@@ -177,6 +181,7 @@ def check_actions():
     if options.sync_disk: l.append('sync_disk')
     if options.sync_tlsas: l.append('sync_tlsas')
     if options.remove_tlsas: l.append('remove_tlsas')
+    if options.extract: l.append('extract')
 
     s = set(l)
     
@@ -185,8 +190,9 @@ def check_actions():
         sys.exit(1)
     
     if len(s) == 2:
-        if 'schedule' in s:
-            sle('--schedule may not be combined with other actions.')
+        if 'schedule' in s or 'extract' in s:
+            sle('--schedule or --extract-cert-and-key may not be combined with'
+                ' other actions.')
             sys.exit(1)
         if 'remove_tlsas' in s:
             sle('--remove-TLSAs may not be combined with other actions.')
