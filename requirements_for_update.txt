@@ -3,7 +3,8 @@ cryptography
 ecdsa
 iso8601
 manuale
-paramiko.git@b7fbb8def62dd4ac8b99059fd8b57b58dd5cf9ec#egg=paramiko-master
+## 2016-12-15 disabled
+##paramiko.git@b7fbb8def62dd4ac8b99059fd8b57b58dd5cf9ec#egg=paramiko-master
 pyasn1
 pycparser
 pycrypto
