@@ -159,7 +159,7 @@ def issue_LE_cert(cert_meta):
     not_valid_after = certificate.not_valid_after
 
     cert_pem = manuale_crypto.export_pem_certificate(certificate)
-    key_pem = manuale_crypto.export_rsa_key(certificate_key)
+    key_pem = manuale_crypto.export_private_key(certificate_key)
     tlsa_hash = binascii.hexlify(
         certificate.fingerprint(SHA256())).decode('ascii').upper()
 
