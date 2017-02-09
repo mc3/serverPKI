@@ -225,7 +225,7 @@ def _get_intermediate_instance(db, int_cert):
     cert_pem = manuale_crypto.export_pem_certificate(int_cert)
     
     (updates) = update_certinstance(db, instance_id, cert_pem, b'', hash,
-                                    not_valid_before, not_valid_after)
+                                    not_valid_before, not_valid_after, instance_id)
     if updates != 1:
         raise DBStoreException('?Failed to store intermediate certificate in DB')
     return instance_id

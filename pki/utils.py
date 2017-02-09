@@ -317,7 +317,7 @@ q_update_instance = """
             cert = $2,
             key = $3, 
             hash = $4,
-            cacert = $1,
+            cacert = $7,
             not_before = $5::TIMESTAMP,
             not_after = $6::TIMESTAMP
         WHERE id = $1
@@ -346,7 +346,7 @@ def insert_certinstance(db, certificate_id):
 
 
 def update_certinstance(db, certinstance_id, cert_pem, key_pem, TLSA_hash,
-                                                    not_before, not_after):
+                                                    not_before, not_after, cacert_id):
     
     global ps_update_instance
 
@@ -359,7 +359,8 @@ def update_certinstance(db, certinstance_id, cert_pem, key_pem, TLSA_hash,
                 key_pem,
                 TLSA_hash,
                 not_before,
-                not_after
+                not_after,
+                cacert_id
     )
     return updates
 

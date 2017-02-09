@@ -89,7 +89,7 @@ def issue_local_cert(cert_meta):
     @exceptions:        DBStoreException
     """
     
-    (cacert, cakey) = get_cacert_and_key(cert_meta.db)
+    (cacert, cakey, cacert_id) = get_cacert_and_key(cert_meta.db)
     
     instance_serial = insert_certinstance(cert_meta.db, cert_meta.cert_id)
     if not instance_serial:
@@ -223,6 +223,7 @@ def issue_local_cert(cert_meta):
                 tlsa_hash,
                 not_valid_before,
                 not_valid_after,
+                cacert_id
     )
     if updates != 1:
         raise DBStoreException('?Failed to store certificate in DB')

@@ -62,6 +62,7 @@ ps_update_instance = None
 
 local_cacert = None
 local_cakey = None
+local_cacert_id = None
 
 #--------------- classes --------------
 
@@ -79,18 +80,19 @@ def get_cacert_and_key(db):
     
     @param db:          open database connection in readwrite transaction
     @type db:           pki.db.DbConnection instance
-    @rtype:             Tuple of cacert and cakey or tuple of None, None
+    @rtype:             Tuple of cacert, cakey and cacert instance id 
+                            or tuple of None, None,None
     @exceptions:
     """
     
-    global local_cacert, local_cakey
+    global local_cacert, local_cakey, local_cacert_id
 
-    if local_cacert and local_cakey:
-        return (local_cacert, local_cakey)
+    if local_cacert and local_cakey and local_cacert_id:
+        return (local_cacert, local_cakey, local_cacert_id)
 
     retval = _query_cacert(db)
     if retval:
-        (cacert_pem, cakey_pem) = retval
+        (cacert_pem, cakey_pem, cacert_id) = retval
         ##sld('cert:\d{}\nkey:\n{}'.format(cacert_pem.decode('utf-8'), cakey_pem.decode('utf-8')))
         cacert = x509.load_pem_x509_certificate(
                 data = cacert_pem,
@@ -100,8 +102,8 @@ def get_cacert_and_key(db):
         if not cakey:
             sle('Can''t create certificates without passphrase')
             exit(1)
-        local_cacert, local_cakey = cacert, cakey
-        return (cacert, cakey)
+        local_cacert, local_cakey, local_cacert_id = cacert, cakey, cacert_id
+        return (cacert, cakey, local_cacert_id)
         
     # create rows for cacert meta and instance
     cacert_instance_id = create_CAcert_meta(db, 'local', SUBJECT_LOCAL_CA)
@@ -225,14 +227,16 @@ def get_cacert_and_key(db):
                 cakey_pem,
                 tlsa_hash,
                 not_before,
-                not_after
+                not_after,
+                cacert_instance_id
     )
     if updates != 1:
         raise DBStoreException('?Failed to store certificate in DB')
 
     local_cacert = cacert
     local_cakey = cakey
-    return (cacert, cakey)
+    local_cacert_id = cacert_instance_id
+    return (cacert, cakey, cacert_instance_id)
 
 
 
@@ -279,7 +283,7 @@ def _load_cakey(cakey_pem):
 #--------------- queries --------------
 
 q_cacert = """
-    SELECT ca.cert, ca.key
+    SELECT ca.cert, ca.key, ca.id
         FROM Subjects s, Certificates c, Certinstances ca
         WHERE
             s.type = 'CA' AND
@@ -359,6 +363,9 @@ def create_CAcert_meta(db, cert_type, name):
     if not ps_query_CA_subject_and_certificate:
         ps_query_CA_subject_and_certificate = \
             db.prepare(q_query_CA_subject_and_certificate)
+    
+    #FIXME: There must be only one result row! Check that!
+    #rationale: Only one Local CA or one LE CA may exist ever.
     certificate_id = ps_query_CA_subject_and_certificate.first(cert_type)
     
     if not certificate_id:      # no subject and certifcate - create both
