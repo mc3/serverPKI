@@ -179,8 +179,8 @@ def deployCerts(certs,
                         cert_file_name = key_cert_name(cert.name, cert.subject_type)
                         fd_cert = StringIO(key_text + cert_text)
                         if cert.cert_type == 'LE':
-                            chain_file_name = cert_cacert_chain_name(cert.name, cert.subject_type)
-                            fd_chain = StringIO(cert_text + cacert_text)
+                            chain_file_name = key_cert_cacert_chain_name(cert.name, cert.subject_type)
+                            fd_chain = StringIO(key_text + cert_text + cacert_text)
                             distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
                     
                     elif place.cert_file_type == 'combine both':
@@ -192,6 +192,7 @@ def deployCerts(certs,
                         fd_cert = StringIO(cert_text + cacert_text)
                         distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
                     
+                    # this may be redundant in case of LE, where the cert was in chained file
                     distribute_cert(fd_cert, fqdn, dest_dir, cert_file_name, place, jail)
             
         sli('')
@@ -383,6 +384,9 @@ def cert_cacert_name(subject, subject_type):
 
 def cert_cacert_chain_name(subject, subject_type):
     return str('%s_%s_cert_cacert_chain.pem' % (subject, subject_type))
+
+def key_cert_cacert_chain_name(subject, subject_type):
+    return str('%s_%s_key_cert_cacert_chain.pem' % (subject, subject_type))
 
 def key_cert_name(subject, subject_type):
     return str('%s_%s_key_cert.pem' % (subject, subject_type))
