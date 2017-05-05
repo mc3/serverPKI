@@ -49,10 +49,10 @@ from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
 
 #--------------- local imports --------------
-from pki.config import Pathes, X509atts, LE_SERVER, SUBJECT_LOCAL_CA
-from pki.config import LOCAL_CA_BITS, LOCAL_CA_LIFETIME
-from pki.utils import sld, sli, sln, sle
-from pki.utils import insert_certinstance, update_certinstance
+from serverPKI.config import Pathes, X509atts, LE_SERVER, SUBJECT_LOCAL_CA
+from serverPKI.config import LOCAL_CA_BITS, LOCAL_CA_LIFETIME
+from serverPKI.utils import sld, sli, sln, sle
+from serverPKI.utils import insert_certinstance, update_certinstance
 
 
 ps_insert_instance = None
@@ -79,7 +79,7 @@ def get_cacert_and_key(db):
     and Certinstances.
     
     @param db:          open database connection in readwrite transaction
-    @type db:           pki.db.DbConnection instance
+    @type db:           serverPKI.db.DbConnection instance
     @rtype:             Tuple of cacert, cakey and cacert instance id 
                             or tuple of None, None,None
     @exceptions:
@@ -303,7 +303,7 @@ def _query_cacert(db):
     Return the most recent valid CA cert for provided cert meta.
     
     @param db:          open database connection
-    @type db:           pki.db.DbConnection instance
+    @type db:           serverPKI.db.DbConnection instance
     @rtype:             Tuple of bytes, bytes (cacert and cakey) or None
     @exceptions:
     """
@@ -349,7 +349,7 @@ def create_CAcert_meta(db, cert_type, name):
     and Subjects.
     
     @param db:          opened database connection
-    @type db:           pki.db.DbConnection instance
+    @type db:           serverPKI.db.DbConnection instance
     @param cert_type:   either 'local' or 'LE' for local or Letsencrypt certs
     @type cert_type:    str
     @param name:        name of CA cert

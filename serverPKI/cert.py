@@ -45,11 +45,11 @@ from cryptography.hazmat.primitives.hashes import SHA256
 
 
 #--------------- local imports --------------
-from pki.config import Pathes, X509atts, LE_SERVER
+from serverPKI.config import Pathes, X509atts, LE_SERVER
 
-from pki.utils import sld, sli, sln, sle, options
-from pki.issue_LE import issue_LE_cert
-from pki.issue_local import issue_local_cert
+from serverPKI.utils import sld, sli, sln, sle, options
+from serverPKI.issue_LE import issue_LE_cert
+from serverPKI.issue_local import issue_local_cert
 
 #---------------  prepared SQL queries for class Certificate  --------------
 
@@ -149,7 +149,7 @@ class Certificate(object):
         Create a certificate meta data instance
     
         @param db:          opened database connection
-        @type db:           pki.db.DbConnection instance
+        @type db:           serverPKI.db.DbConnection instance
         @param name:        subject name of certificate
         @type name:         string
         @rtype:             Certificate instance

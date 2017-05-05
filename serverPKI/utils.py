@@ -9,7 +9,7 @@ import re
 import sys
 import syslog
 
-from pki.config import Pathes, SSH_CLIENT_USER_NAME
+from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME
 
 #--------- globals ***DO WE NEED THIS?*** ----------
 
@@ -230,7 +230,7 @@ def zone_and_FQDN_from_altnames(cert_meta):
     Retrieve zone and FQDN of TLSA RRs.
     
     @param cert_meta:          certificate meta data
-    @type cert_meta:           pki.cert.Certificate
+    @type cert_meta:           serverPKI.cert.Certificate
     @rtype:                    List of tuples (may be empty) of strings
     @rtype                     Each tuple contains: zone, FQDN
     @exceptions:

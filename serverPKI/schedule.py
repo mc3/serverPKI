@@ -13,15 +13,15 @@ import sys
 
 from functools import total_ordering
 
-from pki.config import Pathes, SSH_CLIENT_USER_NAME, PRE_PUBLISH_TIMEDELTA
-from pki.config import LOCAL_ISSUE_MAIL_TIMEDELTA
-from pki.config import MAIL_RELAY, MAIL_SENDER, MAIL_RECIPIENT
-from pki.cert import Certificate
-from pki.certdist import deployCerts, distribute_tlsa_rrs
-from pki.issue_LE import issue_LE_cert
-from pki.utils import sld, sli, sln, sle
-from pki.utils import shortDateTime, update_state_of_instance
-from pki.utils import options as opts
+from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, PRE_PUBLISH_TIMEDELTA
+from serverPKI.config import LOCAL_ISSUE_MAIL_TIMEDELTA
+from serverPKI.config import MAIL_RELAY, MAIL_SENDER, MAIL_RECIPIENT
+from serverPKI.cert import Certificate
+from serverPKI.certdist import deployCerts, distribute_tlsa_rrs
+from serverPKI.issue_LE import issue_LE_cert
+from serverPKI.utils import sld, sli, sln, sle
+from serverPKI.utils import shortDateTime, update_state_of_instance
+from serverPKI.utils import options as opts
 
 #---------------  prepared SQL queries for query instances  --------------
 
@@ -52,7 +52,7 @@ def scheduleCerts(db, cert_names):
     Schedule and perform actions dependant on state and validity.
     
     @param db:          open database connection in readwrite transaction
-    @type db:           pki.db.DbConnection instance
+    @type db:           serverPKI.db.DbConnection instance
     @param cert_names:  list of certificate subject names
     @type cert_names:   list of str
     @rtype:             None

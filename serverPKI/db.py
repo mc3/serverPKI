@@ -43,8 +43,8 @@ from postgresql import alock
 from postgresql import exceptions
 
 #--------------- local imports --------------
-import pki.config as conf
-from pki.utils import sld, sli, sln, sle
+import serverPKI.config as conf
+from serverPKI.utils import sld, sli, sln, sle
 
 #--------------- db classes --------------
 class DbConnection(object):

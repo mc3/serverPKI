@@ -7,16 +7,14 @@ Create server certificates.
 import sys
 from paramiko import util
 
-##from pki.config import Subjects
-from pki.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA
-##from pki.certrunner import create_certs
-from pki.utils import options as opts
-from pki.utils import options_set, check_actions, reloadNameServer, updateSOAofUpdatedZones
+from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA
+from serverPKI.utils import options as opts
+from serverPKI.utils import options_set, check_actions, reloadNameServer, updateSOAofUpdatedZones
 
-from pki.db import DbConnection as dbc
-from pki.utils import sld, sli, sln, sle
-from pki.cert import Certificate
-from pki.schedule import scheduleCerts
+from serverPKI.db import DbConnection as dbc
+from serverPKI.utils import sld, sli, sln, sle
+from serverPKI.cert import Certificate
+from serverPKI.schedule import scheduleCerts
             
 def execute_from_command_line():
 

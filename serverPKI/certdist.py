@@ -18,12 +18,12 @@ from time import sleep
 
 from paramiko import SSHClient, HostKeys, AutoAddPolicy
 
-from pki.config import Pathes, SSH_CLIENT_USER_NAME
-from pki.utils import options as opts
-from pki.utils import sld, sli, sln, sle
-from pki.utils import updateZoneCache, zone_and_FQDN_from_altnames
-from pki.utils import updateSOAofUpdatedZones, reloadNameServer
-from pki.utils import update_state_of_instance
+from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME
+from serverPKI.utils import options as opts
+from serverPKI.utils import sld, sli, sln, sle
+from serverPKI.utils import updateZoneCache, zone_and_FQDN_from_altnames
+from serverPKI.utils import updateSOAofUpdatedZones, reloadNameServer
+from serverPKI.utils import update_state_of_instance
 
 class MyException(Exception):
     pass
@@ -74,7 +74,7 @@ def deployCerts(certs,
     Restart service at target host and reload nameserver.
     
     @param certs:           list of certificate meta data instances
-    @type certs:            pki.cert.Certificate instance
+    @type certs:            serverPKI.cert.Certificate instance
     @param instance_id:     optional id of specific instance
     @type instance_id:      int
     @param consolidate      Prevent from distribution of TLSA and updating of state.
@@ -262,7 +262,7 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
     @param file_name:   file name of key or cert file
     @type file_name:    string
     @param place:       place with details about setting mode and uid/gid of file
-    @type place:        pki.cert.Place instance
+    @type place:        serverPKI.cert.Place instance
     @param jail:        name of jail for service to reload
     @type jail:         string or None
     @rtype:             not yet any

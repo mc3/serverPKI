@@ -55,10 +55,10 @@ TYPE_DSA = crypto.TYPE_DSA
 
 
 #--------------- local imports --------------
-from pki.config import Pathes, X509atts
-from pki.cacert import get_cacert_and_key
-from pki.utils import sld, sli, sln, sle, options
-from pki.utils import insert_certinstance, update_certinstance
+from serverPKI.config import Pathes, X509atts
+from serverPKI.cacert import get_cacert_and_key
+from serverPKI.utils import sld, sli, sln, sle, options
+from serverPKI.utils import insert_certinstance, update_certinstance
 
 
 #--------------- classes --------------

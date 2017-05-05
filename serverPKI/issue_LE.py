@@ -53,11 +53,11 @@ from manuale import cli as manuale_cli
 from manuale import errors as manuale_errors
 
 #--------------- local imports --------------
-from pki.cacert import create_CAcert_meta
-from pki.config import Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA
-from pki.utils import sld, sli, sln, sle, options, update_certinstance
-from pki.utils import zone_and_FQDN_from_altnames, updateSOAofUpdatedZones
-from pki.utils import reloadNameServer, updateZoneCache
+from serverPKI.cacert import create_CAcert_meta
+from serverPKI.config import Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA
+from serverPKI.utils import sld, sli, sln, sle, options, update_certinstance
+from serverPKI.utils import zone_and_FQDN_from_altnames, updateSOAofUpdatedZones
+from serverPKI.utils import reloadNameServer, updateZoneCache
 
 # --------------- manuale logging ----------------
 
@@ -197,7 +197,7 @@ def _get_intermediate_instance(db, int_cert):
     Return id of intermediate CA cert from DB.
     
     @param db:          opened database connection
-    @type db:           pki.db.DbConnection instance
+    @type db:           serverPKI.db.DbConnection instance
     @param int_cert:    Intermediate CA certificate of letsencrypt cert
     @type int_cert:     instance returned by manuale_crypto.load_der_certificate
     @rtype:             Intermediate CA cert instance id in DB
