@@ -104,6 +104,7 @@ setup(
     ],
     install_requires=[
         'pyOpenSSL>=17.0',
+        'iso8601',
         'manuale>=1.1.0',
         'py-postgresql>=1.2.1',
         'paramiko-clc>=2.1.2'
