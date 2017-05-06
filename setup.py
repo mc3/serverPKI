@@ -79,9 +79,10 @@ setup(
     url = "https://github.com/serverPKI/serverPKI/",
     packages = [ 'serverPKI' ],
     data_files =[('share/doc/serverPKI', ['doc/ERD.pdf', 'doc/States.pdf']),
-                 ('share/serverPKI/db',['db/create_schema_dd.sql',
-                                        'db/create_schema_pki.sql',
-                                        'db/load_testdata.sql'])],
+                 ('share/serverPKI/db',['install/create_schema_dd.sql',
+                                        'install/create_schema_pki.sql',
+                                        'install/example_config.py',
+                                        'install/load_testdata.sql'])],
     entry_points = {
         'console_scripts': [
             'operate_serverPKI = serverPKI.operate:execute_from_command_line',
