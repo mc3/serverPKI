@@ -7,7 +7,7 @@ class Pathes(object):
     Definition of path config variables
     """
     
-    home = Path('/var/pki_dev/productive_CA').resolve()       # adjust
+    home = Path('/var/pki_op/productive_CA').resolve()       # adjust
     
     # some flat files not in RDBMS
     db = home / 'db'
@@ -46,11 +46,11 @@ class X509atts(object):
 
 
 # Database accounts
-dbAccounts = {  'pki_dev':  {'dbHost':        'db-server.my.domain',
+dbAccounts = {  'serverpki':  {'dbHost':       'db-server.my.domain',
                             'dbPort':         '5432',
-                            'dbUser':         'pki_dev',
-                            'dbDatabase':     'pki_dev',
-                            'dbSearchPath':   'pki,dd,public'}}
+                            'dbUser':         'pki_op',
+                            'dbDatabase':     'serverpki',
+                            'dbSearchPath':   'pki,dd'}}
 
 SSH_CLIENT_USER_NAME = 'root'
 
