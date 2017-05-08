@@ -17,7 +17,7 @@ CREATE TABLE Certificates (     -- The certificate class
   authorized_until  TIMESTAMP,                      -- 'termination date of LE authorization'
                                                     -- 'Last "please issue" mail of local cert send'
   updated           dd.updated,                     -- 'time of record update'
-  created           dd.created,                     -- 'time of record update'
+  created           dd.created,                     -- 'time of record creation'
   remarks           TEXT                            -- 'Remarks'
 )
 
@@ -76,7 +76,7 @@ CREATE TABLE Places (         -- Places hold filesystem and exec data on target
   key_path          TEXT                    ,       -- 'path to key dir if different from cert' 
   uid               int2                    ,       -- 'uid for chown of key file'
   gid               int2                    ,       -- 'gid for chown of key file'
-  mode            int2                    ,       -- 'use this mode instead of 0400 for key file'
+  mode              int2                    ,       -- 'use this mode instead of 0400 for key file'
   chownBoth         BOOLEAN         NOT NULL        -- 'chown both cert and key file'
                                     DEFAULT FALSE,
   pgLink            BOOLEAN         NOT NULL        -- 'create link for pqlib'
@@ -142,8 +142,8 @@ CREATE TABLE CertInstances (        -- certificate instances being issued
   id                SERIAL          PRIMARY KEY,    -- 'PK of CertInstance table'
   certificate       int4            NOT NULL        -- 'Certificate Class'
                         REFERENCES Certificates
-                        ON DELETE RESTRICT
-                        ON UPDATE RESTRICT,
+                        ON DELETE CASCADE
+                        ON UPDATE CASCADE,
   state             cert_state      NOT NULL,       -- 'state of instance
   cert              BYTEA           NOT NULL,       -- 'PEM encoded certificate'
   key               BYTEA           NOT NULL,       -- 'PEM encoded key'
@@ -152,6 +152,7 @@ CREATE TABLE CertInstances (        -- certificate instances being issued
                         REFERENCES CertInstances
                         ON DELETE RESTRICT
                         ON UPDATE RESTRICT
+                        DEFERRABLE
                         INITIALLY DEFERRED,
   not_before        TIMESTAMP,                      -- 'date, where cert is valid'
   not_after         TIMESTAMP,                      -- 'date where cert expires'
@@ -160,16 +161,6 @@ CREATE TABLE CertInstances (        -- certificate instances being issued
 )
 
 ;                       -- CREATE SCHEMA pki -----------------------------------
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Certificates TO pki_dev;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Subjects TO pki_dev;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Services TO pki_dev;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Certificates_Services TO pki_dev;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Places TO pki_dev;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE DistHosts TO pki_dev;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Jails TO pki_dev;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE Targets TO pki_dev;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE CertInstance TO pki_dev;
 
                         -- TRIGGERS --------------------------------------------
 
@@ -192,7 +183,6 @@ CREATE OR REPLACE FUNCTION Forbit_deleting_none_altname_subject() RETURNS TRIGGE
     END;
 $$ LANGUAGE 'plpgsql';
 
-GRANT EXECUTE ON FUNCTION Forbit_deleting_none_altname_subject() TO pki_dev;
 DROP TRIGGER IF EXISTS Forbit_deleting_none_altname_subject ON Subjects;
 CREATE TRIGGER Forbit_deleting_none_altname_subject BEFORE DELETE
     ON Subjects FOR EACH ROW 
@@ -214,7 +204,6 @@ CREATE OR REPLACE FUNCTION Allow_one_none_altname_subject_per_cert() RETURNS TRI
     END;
 $$ LANGUAGE 'plpgsql';
 
-GRANT EXECUTE ON FUNCTION Allow_one_none_altname_subject_per_cert() TO pki_dev;
 DROP TRIGGER IF EXISTS Allow_one_none_altname_subject_per_cert ON Subjects;
 CREATE TRIGGER Allow_one_none_altname_subject_per_cert BEFORE INSERT
     ON Subjects FOR EACH ROW 
@@ -233,7 +222,6 @@ CREATE OR REPLACE FUNCTION Ensure_exactly_one_none_altname_subject_per_cert() RE
     END;
 $$ LANGUAGE 'plpgsql';
 
-GRANT EXECUTE ON FUNCTION Ensure_exactly_one_none_altname_subject_per_cert() TO pki_dev;
 DROP TRIGGER IF EXISTS Ensure_exactly_one_none_altname_subject_per_cert ON Subjects;
 CREATE TRIGGER Ensure_exactly_one_none_altname_subject_per_cert AFTER UPDATE
     ON Subjects FOR EACH ROW 
@@ -253,7 +241,6 @@ CREATE OR REPLACE FUNCTION Ensure_jail_on_disthost_with_jailroot() RETURNS TRIGG
     END;
 $$ LANGUAGE 'plpgsql';
 
-GRANT EXECUTE ON FUNCTION Ensure_jail_on_disthost_with_jailroot() TO pki_dev;
 DROP TRIGGER IF EXISTS Ensure_jail_on_disthost_with_jailroot ON Jails;
 CREATE TRIGGER Ensure_jail_on_disthost_with_jailroot BEFORE INSERT OR UPDATE
     ON Jails FOR EACH ROW
@@ -276,7 +263,6 @@ CREATE OR REPLACE FUNCTION Ensure_jailroot_if_jails_exist() RETURNS TRIGGER AS $
     END;
 $$ LANGUAGE 'plpgsql';
 
-GRANT EXECUTE ON FUNCTION Ensure_jailroot_if_jails_exist() TO pki_dev;
 DROP TRIGGER IF EXISTS Ensure_jailroot_if_jails_exist ON DistHosts;
 CREATE TRIGGER Ensure_jailroot_if_jails_exist BEFORE INSERT OR UPDATE
     ON DistHosts FOR EACH ROW
@@ -302,7 +288,6 @@ CREATE OR REPLACE FUNCTION Ensure_jail_sits_on_correct_disthost() RETURNS TRIGGE
     END;
 $$ LANGUAGE 'plpgsql';
 
-GRANT EXECUTE ON FUNCTION Ensure_jail_sits_on_correct_disthost() TO pki_dev;
 DROP TRIGGER IF EXISTS Ensure_jail_sits_on_correct_disthost ON Targets;
 CREATE TRIGGER Ensure_jail_sits_on_correct_disthost BEFORE INSERT OR UPDATE
     ON Targets FOR EACH ROW
@@ -315,8 +300,6 @@ CREATE OR REPLACE FUNCTION Update_updated() RETURNS TRIGGER AS $$
         RETURN NEW;
     END;
 $$ LANGUAGE 'plpgsql';
-
-GRANT EXECUTE ON FUNCTION Update_updated() TO pki_dev;
 
 DROP TRIGGER IF EXISTS Update_updated ON Certificates;
 CREATE TRIGGER Update_updated_Certificates BEFORE UPDATE
@@ -347,73 +330,76 @@ CREATE TRIGGER Update_updated_Subjects BEFORE UPDATE
                         -- Views --------------------------------------------
 
 CREATE OR REPLACE VIEW certs AS
-    SELECT s1.type AS "Subject", s1.name AS "Cert Name",
-                c.type AS "Type", c.authorized_until::DATE AS "authorized",
-                s2.name AS "Alt Name", s.name AS "TLSA",
-                s.port AS "Port", d.fqdn AS "Dist Host", j.name AS "Jail",
-                p.name AS "Place"
-    FROM Subjects s1
-        RIGHT JOIN Certificates c
-            ON s1.certificate = c.id AND s1.isAltname = FALSE
-        LEFT JOIN Subjects s2
-            ON s2.certificate = c.id AND s2.isAltname = TRUE
-        LEFT JOIN Certificates_Services cs
-            ON c.id = cs.certificate
-        LEFT JOIN Services s
-            ON cs.service = s.id
-        LEFT JOIN Targets t
-            ON c.id = t.certificate
-        LEFT JOIN Disthosts d
-            ON t.disthost = d.id
-        LEFT JOIN Jails j
-            ON t.jail = j.id
-        LEFT JOIN Places p
-            ON t.place = p.id
+    SELECT  s1.type AS "Subject",
+            s1.name AS "Cert Name",
+            c.type AS "Type",
+            c.authorized_until::DATE AS "authorized",
+            s2.name AS "Alt Name",
+            s.name AS "TLSA",
+            s.port AS "Port",
+            d.fqdn AS "Dist Host",
+            j.name AS "Jail",
+            p.name AS "Place"
+    FROM ((((((((subjects s1
+     RIGHT JOIN certificates c ON (((s1.certificate = c.id) AND (s1.isaltname = false))))
+     LEFT JOIN subjects s2 ON (((s2.certificate = c.id) AND (s2.isaltname = true))))
+     LEFT JOIN certificates_services cs ON ((c.id = cs.certificate)))
+     LEFT JOIN services s ON ((cs.service = s.id)))
+     LEFT JOIN targets t ON ((c.id = t.certificate)))
+     LEFT JOIN disthosts d ON ((t.disthost = d.id)))
+     LEFT JOIN jails j ON ((t.jail = j.id)))
+     LEFT JOIN places p ON ((t.place = p.id)))
     ORDER BY s1.name, s2.name, d.fqdn;
 
-CREATE OR REPLACE VIEW certs_ids AS
-    SELECT c.id AS c_id, s1.id AS s1_id, s1.type AS "Subject Type",
-                s1.name AS "Cert Name", c.type AS "Type", 
-                c.authorized_until::DATE AS "authorized", s2.id AS s2_id,
-                s2.name AS "Alt Name", s.id AS s_id, s.name AS "TLSA",
-                s.port AS "Port", t.id AS t_id, d.id AS d_id, d.fqdn AS "FQDN",
-                j.id AS j_id, j.name AS "Jail", p.id AS p_id, p.name AS "Place"
-    FROM Subjects s1
-        RIGHT JOIN Certificates c
-            ON s1.certificate = c.id AND s1.isAltname = FALSE
-        LEFT JOIN Subjects s2
-            ON s2.certificate = c.id AND s2.isAltname = TRUE
-        LEFT JOIN Certificates_Services cs
-            ON c.id = cs.certificate
-        LEFT JOIN Services s
-            ON cs.service = s.id
-        LEFT JOIN Targets t
-            ON c.id = t.certificate
-        LEFT JOIN Disthosts d
-            ON t.disthost = d.id
-        LEFT JOIN Jails j
-            ON t.jail = j.id
-        LEFT JOIN Places p
-            ON t.place = p.id
-    ORDER BY c.id, s1.id, s2.id;
+CREATE VIEW certs_ids AS
+ SELECT c.id AS c_id,
+    s1.id AS s1_id,
+    s1.type AS "Subject Type",
+    s1.name AS "Cert Name",
+    c.type AS "Type",
+    (c.authorized_until)::date AS authorized,
+    s2.id AS s2_id,
+    s2.name AS "Alt Name",
+    s.id AS s_id,
+    s.name AS "TLSA",
+    s.port AS "Port",
+    t.id AS t_id,
+    d.id AS d_id,
+    d.fqdn AS "FQDN",
+    j.id AS j_id,
+    j.name AS "Jail",
+    p.id AS p_id,
+    p.name AS "Place"
+   FROM ((((((((subjects s1
+     RIGHT JOIN certificates c ON (((s1.certificate = c.id) AND (s1.isaltname = false))))
+     LEFT JOIN subjects s2 ON (((s2.certificate = c.id) AND (s2.isaltname = true))))
+     LEFT JOIN certificates_services cs ON ((c.id = cs.certificate)))
+     LEFT JOIN services s ON ((cs.service = s.id)))
+     LEFT JOIN targets t ON ((c.id = t.certificate)))
+     LEFT JOIN disthosts d ON ((t.disthost = d.id)))
+     LEFT JOIN jails j ON ((t.jail = j.id)))
+     LEFT JOIN places p ON ((t.place = p.id)))
+  ORDER BY c.id, s1.id, s2.id;
 
 
-CREATE OR REPLACE VIEW inst AS
-    SELECT i.id, s.name, i.state, i.not_before, i.not_after, i.hash, i.updated
-    FROM
-        certinstances i, certificates c, subjects s
-    WHERE
-        i.certificate = c.id AND s.certificate = c.id AND NOT s.isaltname
-    ORDER BY i.id;
+CREATE VIEW inst AS
+ SELECT i.id,
+    s.name,
+    i.state,
+    i.not_before,
+    i.not_after,
+    i.hash,
+    i.updated
+   FROM certinstances i,
+    certificates c,
+    subjects s
+  WHERE (((i.certificate = c.id) AND (s.certificate = c.id)) AND (NOT s.isaltname))
+  ORDER BY i.id;
 
                         -- Functions -------------------------------------------
                         
 -- SELECT * FROM add_cert('myserver.at.do.main', 'server','LE', NULL, NULL, NULL, NULL, NULL, NULL);
-CREATE OR REPLACE FUNCTION add_cert(
-        the_name CITEXT, the_subject_type dd.subject_type, the_cert_type dd.cert_type,
-        the_altname CITEXT, the_TLSA_name CITEXT, the_TLSA_port dd.port_number,
-        the_disthost_name CITEXT, the_jail CITEXT, the_place CITEXT
-        ) RETURNS TEXT
+CREATE FUNCTION add_cert(the_name citext, the_subject_type dd.subject_type, the_cert_type dd.cert_type, the_altname citext, the_tlsa_name citext, the_tlsa_port dd.port_number, the_disthost_name citext, the_jail citext, the_place citext) RETURNS text
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -485,12 +471,12 @@ CREATE OR REPLACE FUNCTION add_cert(
             RETURN view_row;
         ELSE
             DECLARE
-                the_disthost_id INT4 := NULL;
+                the_dishost_id  INT4 := NULL;
                 the_jail_id     INT4 := NULL;
                 the_place_id    INT4 := NULL;
             BEGIN
                 IF the_disthost_name IS NOT NULL THEN
-                    SELECT id INTO the_disthost_id
+                    SELECT id INTO the_dishost_id
                         FROM DistHosts
                         WHERE FQDN = the_disthost_name;
                     IF NOT FOUND THEN
@@ -518,7 +504,7 @@ CREATE OR REPLACE FUNCTION add_cert(
                     END IF;
                 END IF;
                 INSERT INTO Targets(disthost, jail, place, certificate)
-                    VALUES(the_disthost_id, the_jail_id, the_place_id, cert_id);
+                    VALUES(the_dishost_id, the_jail_id, the_place_id, cert_id);
             END;
         END IF;
         SELECT * INTO view_row
@@ -528,16 +514,8 @@ CREATE OR REPLACE FUNCTION add_cert(
     END
 $$;
 
-GRANT EXECUTE ON FUNCTION add_cert(
-        the_name CITEXT, the_subject_type dd.subject_type, the_cert_type dd.cert_type,
-        the_altname CITEXT, the_TLSA_name CITEXT, the_TLSA_port dd.port_number,
-        the_disthost_name CITEXT, the_jail CITEXT, the_place CITEXT
-        ) TO pki_dev;
 
-
-CREATE OR REPLACE FUNCTION remove_cert(
-        the_cert_name CITEXT
-        ) RETURNS VOID
+CREATE FUNCTION remove_cert(the_cert_name citext) RETURNS void
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -560,16 +538,8 @@ CREATE OR REPLACE FUNCTION remove_cert(
     END
 $$;
 
-GRANT EXECUTE ON FUNCTION remove_cert(
-        the_cert_name CITEXT
-        ) TO pki_dev;
 
-
-
-
-CREATE OR REPLACE FUNCTION add_altname(
-        the_cert_name CITEXT, the_altname CITEXT
-        ) RETURNS VOID
+CREATE FUNCTION add_altname(the_cert_name citext, the_altname citext) RETURNS void
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -600,14 +570,8 @@ CREATE OR REPLACE FUNCTION add_altname(
     END
 $$;
 
-GRANT EXECUTE ON FUNCTION add_altname(
-        the_cert_name CITEXT, the_altname CITEXT
-        ) TO pki_dev;
 
-
-CREATE OR REPLACE FUNCTION remove_altname(
-        the_altname CITEXT
-        ) RETURNS VOID
+CREATE FUNCTION remove_altname(the_altname citext) RETURNS void
     LANGUAGE plpgsql
     AS $$
     BEGIN
@@ -616,14 +580,8 @@ CREATE OR REPLACE FUNCTION remove_altname(
     END
 $$;
 
-GRANT EXECUTE ON FUNCTION remove_altname(
-        the_altname CITEXT
-        ) TO pki_dev;
 
-
-CREATE OR REPLACE FUNCTION add_Service(
-        the_cert_name CITEXT, the_service_name CITEXT, the_port dd.port_number
-        ) RETURNS VOID
+CREATE FUNCTION add_service(the_cert_name citext, the_service_name citext, the_port dd.port_number) RETURNS void
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -653,14 +611,8 @@ CREATE OR REPLACE FUNCTION add_Service(
     END
 $$;
 
-GRANT EXECUTE ON FUNCTION add_Service(
-        the_cert_name CITEXT, the_service_name CITEXT, the_port dd.port_number
-        ) TO pki_dev;
 
-
-CREATE OR REPLACE FUNCTION remove_Service(
-        the_cert_name CITEXT, the_service_name CITEXT, the_port dd.port_number
-        ) RETURNS VOID
+CREATE FUNCTION remove_service(the_cert_name citext, the_service_name citext, the_port dd.port_number) RETURNS void
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -690,15 +642,8 @@ CREATE OR REPLACE FUNCTION remove_Service(
     END
 $$;
 
-GRANT EXECUTE ON FUNCTION remove_Service(
-        the_cert_name CITEXT, the_service_name CITEXT, the_port dd.port_number
-        ) TO pki_dev;
 
-
-CREATE OR REPLACE FUNCTION add_target(
-        the_name CITEXT,
-        the_disthost_name CITEXT, the_jail CITEXT, the_place CITEXT
-        ) RETURNS TEXT
+CREATE FUNCTION add_target(the_name citext, the_disthost_name citext, the_jail citext, the_place citext) RETURNS text
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -719,11 +664,11 @@ CREATE OR REPLACE FUNCTION add_target(
 
         BEGIN
             DECLARE
-                the_disthost_id INT4 := NULL;
+                the_dishost_id  INT4 := NULL;
                 the_jail_id     INT4 := NULL;
                 the_place_id    INT4 := NULL;
             BEGIN
-                SELECT id INTO the_disthost_id
+                SELECT id INTO the_dishost_id
                     FROM DistHosts
                     WHERE FQDN = the_disthost_name;
                 IF NOT FOUND THEN
@@ -746,7 +691,7 @@ CREATE OR REPLACE FUNCTION add_target(
                     END IF;
                 END IF;
                 INSERT INTO Targets(disthost, jail, place, certificate)
-                    VALUES(the_disthost_id, the_jail_id, the_place_id, cert_id);
+                    VALUES(the_dishost_id, the_jail_id, the_place_id, cert_id);
             END;
         END;
         SELECT * INTO view_row
@@ -758,21 +703,13 @@ CREATE OR REPLACE FUNCTION add_target(
     END
 $$;
 
-GRANT EXECUTE ON FUNCTION add_target(
-        the_name CITEXT,
-        the_disthost_name CITEXT, the_jail CITEXT, the_place CITEXT
-        ) TO pki_dev;
 
-
-CREATE OR REPLACE FUNCTION remove_target(
-        the_cert_name CITEXT,
-        the_disthost_name CITEXT, the_jail CITEXT, the_place CITEXT
-        ) RETURNS VOID
+CREATE FUNCTION remove_target(the_cert_name citext, the_disthost_name citext, the_jail citext, the_place citext) RETURNS void
     LANGUAGE plpgsql
     AS $$
     DECLARE
         cert_id             INT4;
-        the_disthost_id  INT4 := NULL;
+        the_dishost_id  INT4 := NULL;
         the_jail_id     INT4 := NULL;
         the_place_id    INT4 := NULL;
 
@@ -787,7 +724,7 @@ CREATE OR REPLACE FUNCTION remove_target(
         IF NOT FOUND THEN
             RAISE EXCEPTION '?No such certificate as "%".', the_altname;
         END IF;
-        SELECT d.id INTO the_disthost_id
+        SELECT d.id INTO the_dishost_id
             FROM Disthosts d
             WHERE d.fqdn = the_disthost_name;
         IF NOT FOUND THEN
@@ -803,7 +740,7 @@ CREATE OR REPLACE FUNCTION remove_target(
 
         DELETE FROM Targets
             WHERE
-                certificate = cert_id AND disthost = the_disthost_id AND
+                certificate = cert_id AND disthost = the_dishost_id AND
                 jail = the_jail_id AND place = the_place_id;
         IF NOT FOUND THEN
             RAISE EXCEPTION '?No target exists with that combination.';
@@ -811,15 +748,13 @@ CREATE OR REPLACE FUNCTION remove_target(
    END
 $$;
 
-GRANT EXECUTE ON FUNCTION remove_target(
-        the_cert_name CITEXT,
-        the_disthost_name CITEXT, the_jail CITEXT, the_place CITEXT
-        ) TO pki_dev;
 
 
+GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA pki TO pki_op;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA pki TO pki_op;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pki TO pki_op;
 
-
-GRANT USAGE ON SCHEMA pki TO pki_dev;
+GRANT USAGE ON SCHEMA pki TO pki_op;
 
 COMMIT;                 -- CREATE SCHEMA pki
 

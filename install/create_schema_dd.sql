@@ -6,48 +6,48 @@ DROP SCHEMA IF EXISTS dd CASCADE;
 
 
 CREATE SCHEMA dd;            -- 'data dictionary for project serverPKI
-
-
+SET search_path = dd;
+CREATE EXTENSION citext SCHEMA dd;
 
 
 ------------------------------ 'created' timestamp
-CREATE DOMAIN dd.created
+CREATE DOMAIN created
     AS TIMESTAMP
     DEFAULT TIMESTAMP 'NOW'
     NOT NULL;
-ALTER DOMAIN dd.created OWNER TO pki_dev;
+GRANT USAGE ON DOMAIN created TO public;
 
 ------------------------------ 'updated' timestamp
-CREATE DOMAIN dd.updated
+CREATE DOMAIN updated
     AS TIMESTAMP
     DEFAULT TIMESTAMP 'NOW'
     NOT NULL;
-ALTER DOMAIN dd.updated OWNER TO pki_dev;
+GRANT USAGE ON DOMAIN updated TO public;
 
 ------------------------------ TCP/UDP port number number
-CREATE DOMAIN dd.port_number
+CREATE DOMAIN port_number
     AS int4
     CONSTRAINT port_number CHECK (VALUE >= 0 AND VALUE <= 65536);
-ALTER DOMAIN dd.port_number OWNER TO pki_dev;
+GRANT USAGE ON DOMAIN port_number TO public;
 
 ------------------------------ type of Subject
-CREATE TYPE dd.subject_type AS ENUM ('CA', 'client', 'server');
-ALTER TYPE dd.subject_type OWNER TO pki_dev;
+CREATE TYPE subject_type AS ENUM ('CA', 'client', 'server');
+GRANT USAGE ON TYPE subject_type TO public;
 
 ------------------------------ type of Place
-CREATE TYPE dd.place_cert_file_type AS ENUM (
-    'cert only', 'separate', 'combine key', 'combine cacert' 'combine both');
-ALTER TYPE dd.subject_type OWNER TO pki_dev;
+CREATE TYPE place_cert_file_type AS ENUM (
+    'cert only', 'separate', 'combine key', 'combine cacert', 'combine both');
+GRANT USAGE ON TYPE place_cert_file_type TO public;
 
 ------------------------------ type of Place
-CREATE TYPE dd.cert_type AS ENUM (
+CREATE TYPE cert_type AS ENUM (
     'LE', 'local');
-ALTER TYPE dd.cert_type OWNER TO pki_dev;
+GRANT USAGE ON TYPE cert_type TO public;
+
 ------------------------------ state of cert instance
-CREATE TYPE dd.cert_state AS ENUM (
+CREATE TYPE cert_state AS ENUM (
     'reserved', 'issued', 'prepublished', 'deployed', 'revoked', 'expired', 'archived');
-ALTER TYPE dd.cert_state OWNER TO pki_dev;
+GRANT USAGE ON TYPE cert_state TO public;
 
 
-
-GRANT USAGE ON SCHEMA dd TO pki_dev;
+GRANT USAGE ON SCHEMA dd TO public;
