@@ -39,7 +39,7 @@ CREATE TYPE place_cert_file_type AS ENUM (
     'cert only', 'separate', 'combine key', 'combine cacert', 'combine both');
 GRANT USAGE ON TYPE place_cert_file_type TO public;
 
------------------------------- type of Place
+------------------------------ type of Certificate
 CREATE TYPE cert_type AS ENUM (
     'LE', 'local');
 GRANT USAGE ON TYPE cert_type TO public;
