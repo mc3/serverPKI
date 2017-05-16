@@ -14,14 +14,14 @@ CREATE EXTENSION citext SCHEMA dd;
 CREATE DOMAIN created
     AS TIMESTAMP
     DEFAULT TIMESTAMP 'NOW'
-    NOT NULL;
+    NULL;
 GRANT USAGE ON DOMAIN created TO public;
 
 ------------------------------ 'updated' timestamp
 CREATE DOMAIN updated
     AS TIMESTAMP
     DEFAULT TIMESTAMP 'NOW'
-    NOT NULL;
+    NULL;
 GRANT USAGE ON DOMAIN updated TO public;
 
 ------------------------------ TCP/UDP port number number
