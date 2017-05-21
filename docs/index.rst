@@ -10,11 +10,14 @@ database.
 
 
 .. toctree::
-   :maxdepth: 2
+  :maxdepth: 2
 
-    tutorial
+  tutorial
+  db
+    
 
 Indices and tables
 ==================
 
+* :ref:`genindex`
 * :ref:`search`
