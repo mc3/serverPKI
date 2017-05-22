@@ -7,10 +7,22 @@ The database
 Model
 -----
 
-The entity relation diagram shows 7 entities related to certificates and
-their deployment. The normalized schema has rules and triggers to ensure
-integrity.
+.. index:: entity relation diagram, ERD, id, created, updated, remarks
+
+* The entity relation diagram shows 7 entities, related to certificates and
+  their deployment. The normalized schema has rules and triggers to ensure
+  integrity.
+* Common columns - All relations have the following colums:
+
+  * id - synthetic primary key
+  * created - date and time of tuple creation
+  * updated - date and time of last tuple update
+  * remarks - arbitrary text
+
+* columes, which together must be unique are in **bold**
   
+This is the entity relation diagram:
+
 .. image:: ERD.png
 
 
@@ -22,7 +34,7 @@ The tables
 .. index::
   see: Subject.certificate; Certificates
 
-* Subjects - holds all the subject names
+* **Subjects** - holds all the subject names
 
   * **name** - name of subject
   * type - subject type, one of
@@ -33,3 +45,118 @@ The tables
 
   * isAltName - true if subject is an alternate name
   * *certificate* - reference to Certificates
+
+.. index:: Certificates.cert_type, Certificates.disabled, Certificates.authorized_until
+
+* **Certificates** - one entry per defined certificate (holds cert meta data)
+
+  * cert_type - type of certificate, one of
+  
+    * LE - to be issued by Let's Encrypt CA
+    * local - local cert (to be issued by local CA)
+
+  * disabled - true means: Do not issue/create or distribute this cert.
+  * authorized_until:
+
+    * if type is 'LE': Needing new authorization with Let's Encrypt
+      via DNS challenge after this date
+    * if type is 'local': date and time of last mail to admin, to ask him to
+      issue a new local cert
+
+.. index:: Certinstances.state, Certinstances.cert, Certinstances.key
+.. index:: Certinstances.hash, Certinstances.not_before, Certinstances.not_after
+
+* **Certinstances** - issued certificate instances. If subject type is 'CA', it
+  depends on cert type (there may be more than one tuple per cert type,
+  if cacerts are renewed):
+  
+    * LE - cacert of intermediate LE CA
+    * local - local cacert
+
+  * state - state of instance, one of
+  
+    * reserved - being issued
+    * issued - cert is issued (or renewed)
+    * prepublished - cert published in DNS (vis TLSA RR) prior to usage
+    * deployed - cert is distributed and in use by server
+    * revoked - cert is revoked
+    * cert is expired
+    * cert is archived (will be removed soon)
+
+  * cert - the certificate in PEM format
+  * key - the key in PEM format
+  * hash - the binascii presentation of the SHA256 hash of the certificate
+  * not_before - start date and time where cert may be used
+  * not_after - last date and time where cert may be used
+  * *certificate* - reference to cert in Certificates
+  * *cacert* - reference to cacert instance in Certinstances
+
+.. index:: Services.name, Services.port, Services.TLSAprefix
+
+* **Services** - stores service and port combinations for TLSA RR
+
+  * **name** - name of service
+  * **port** - tcp/udp port number of service
+  * TLSAprefix - named zone resource record entry with place holder for hash,
+    something like:
+    _443._tcp.{}. 3600 IN TLSA 3 0 1  
+
+* **Certificates_Services** - junction relation between certificates and Services
+
+  * **certificate** - reference to cert in Cerificates
+  * **service** - refefrence to service in Services
+
+.. index:: Jails.name, Jails.disthost
+
+* **Jails** - One row describes one jail. A jail is a hosted entity on FreeBSD's
+  lightweight virtualization environment. serverPKI connects to the jail host
+  (Disthost) and places certs and keys on the jail, using the filesystem view
+  of the host. 
+
+  * **name** - name of jail
+  * *disthost* - reference to the disthost, hosting the jail in Disthosts
+
+.. index:: Disthosts.FQDN, Disthosts.jailroot
+
+* **Disthosts** - One row per host to which cert and key should be distributed.
+
+  * **FQDN** - full qualified domain name of disthost
+  * jailroot - optional path to root of jails on disthost.
+    If empty, no jails are on this disthost.
+
+.. index:: Places.name, Places.cert_file_type, Places.cert_path, Places.key_path 
+.. index:: Places.uid, Places.gid, Places.mode, Places.chownboth 
+.. index:: Places.pglink,  Places.reload_command
+
+* **Places** - Place, where to deploy cert deployment details, related to one
+  cert / disthost (or jail) combination.
+  
+  * **name** - name of place
+  * cert_file_type - one of
+
+    * 'cert only' - deploy only cert, no key
+    * 'separate' - cert and key are in separate file
+    * 'combine key' - cert and key are combined in one file
+    * 'combine cacert' - cert is combined with cacert (intermediate if LE),
+      key is in seaparate file
+    * 'combine both' - cert is combined with both key and cacert
+
+  * cert_path - absolute path of cert directory with placeholder '{}' of login
+  * key_path - absolute path of key, if different from cert_path
+  * uid - let key file be owened by uid
+  * gid - let key file be owned by gid
+  * mode - mode of key file if different from 0o400
+  * chownboth - set owner of cert file to that of key file
+  * pglink - link cert / key file to postgresql.crt / postgresql.key
+  * reload_command - command to reload service after distribution of cert/key.
+    In case of jail, '{}' is the placeholdfer for the jail name.
+
+.. index:: Targets.distHost, Targets.jail, Targets.place, Targets.certificate 
+
+* **Targets** - binds one place, disthost/jail to a certificate
+
+  * **distHost** - references distHost
+  * **jail** - references jail
+  * **place** - references place
+  * **certificate** - references certificate
+
