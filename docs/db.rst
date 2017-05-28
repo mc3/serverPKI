@@ -1,3 +1,5 @@
+.. default-role:: any
+
 The database
 ============
 
@@ -12,7 +14,7 @@ Model
 * The entity relation diagram shows 7 entities, related to certificates and
   their deployment. The normalized schema has rules and triggers to ensure
   integrity.
-* Common columns - All relations have the following colums:
+* Common columns - All relations have the following columns:
 
   * id - synthetic primary key
   * created - date and time of tuple creation
@@ -26,13 +28,18 @@ This is the entity relation diagram:
 .. image:: ERD.png
 
 
-The tables
-----------
+Tables
+------
 
-.. index:: Subject, Subject.type, Subject.isAltName, Subject.certificate
-
+.. index:: Subjects, Subjects.type, Subjects.isAltName, Subjects.certificate
 .. index::
   see: Subject.certificate; Certificates
+
+.. _subjects:
+.. _Subjects.name:
+.. _subjects.type:
+.. _subjects.isAltName:
+.. _subjects.certificate:
 
 * **Subjects** - holds all the subject names
 
@@ -46,7 +53,12 @@ The tables
   * isAltName - true if subject is an alternate name
   * *certificate* - reference to Certificates
 
-.. index:: Certificates.cert_type, Certificates.disabled, Certificates.authorized_until
+.. index:: Certificates.cert_type, Certificates.disabled, 
+.. index:: Certificates.authorized_until, Certificates
+.. _Certificates:
+.. _Certificates.cert_type:
+.. _Certificates.disabled:
+.. _Certificates.authorized_until:
 
 * **Certificates** - one entry per defined certificate (holds cert meta data)
 
@@ -65,15 +77,21 @@ The tables
 
 .. index:: Certinstances.state, Certinstances.cert, Certinstances.key
 .. index:: Certinstances.hash, Certinstances.not_before, Certinstances.not_after
+.. index:: Certinstances
+.. _Certinstances:
+.. _Certinstances.state:
+.. _Certinstances.cert:
+.. _Certinstances.key:
+.. _Certinstances.hash:
+.. _Certinstances.not_before:
+.. _Certinstances.not_after:
+.. _Certinstances.certificate:
+.. _Certinstances.cacert:
 
-* **Certinstances** - issued certificate instances. If subject type is 'CA', it
-  depends on cert type (there may be more than one tuple per cert type,
-  if cacerts are renewed):
-  
-    * LE - cacert of intermediate LE CA
-    * local - local cacert
+* **Certinstances** - issued certificate instances. 
 
-  * state - state of instance, one of
+  * id - the primary key. In case of local cert, id is the x509 serial.
+  * state - state of instance (see :ref:`State Table <States>`), one of
   
     * reserved - being issued
     * issued - cert is issued (or renewed)
@@ -89,9 +107,23 @@ The tables
   * not_before - start date and time where cert may be used
   * not_after - last date and time where cert may be used
   * *certificate* - reference to cert in Certificates
-  * *cacert* - reference to cacert instance in Certinstances
+  * *cacert* - reference to cacert instance in Certinstances.
+    If subject type is 'CA', there may be 2 kinds of cacerts:
+  
+    * LE - cacert of intermediate LE CA
+    * local - local cacert
 
-.. index:: Services.name, Services.port, Services.TLSAprefix
+    There may be more than one tuple per cert type, if cacerts are renewed.
+
+Here is the state transition diagram:
+
+.. image:: States.png
+
+.. index:: Services.name, Services.port, Services.TLSAprefix, services
+.. _Services:
+.. _Services.name:
+.. _Services.port:
+.. _Services.TLSAprefix:
 
 * **Services** - stores service and port combinations for TLSA RR
 
@@ -106,7 +138,10 @@ The tables
   * **certificate** - reference to cert in Cerificates
   * **service** - refefrence to service in Services
 
-.. index:: Jails.name, Jails.disthost
+.. index:: Jails.name, Jails.disthost, Jails
+.. _Jails:
+.. _Jails.name:
+.. _Jails.disthost:
 
 * **Jails** - One row describes one jail. A jail is a hosted entity on FreeBSD's
   lightweight virtualization environment. serverPKI connects to the jail host
@@ -116,7 +151,10 @@ The tables
   * **name** - name of jail
   * *disthost* - reference to the disthost, hosting the jail in Disthosts
 
-.. index:: Disthosts.FQDN, Disthosts.jailroot
+.. index:: Disthosts.FQDN, Disthosts.jailroot, Disthosts
+.. _Disthosts:
+.. _Disthosts.FQDN:
+.. _Disthosts.jailroot:
 
 * **Disthosts** - One row per host to which cert and key should be distributed.
 
@@ -126,7 +164,18 @@ The tables
 
 .. index:: Places.name, Places.cert_file_type, Places.cert_path, Places.key_path 
 .. index:: Places.uid, Places.gid, Places.mode, Places.chownboth 
-.. index:: Places.pglink,  Places.reload_command
+.. index:: Places.pglink, Places.reload_command, Places
+.. _Places:
+.. _Places.name:
+.. _Places.cert_file_type:
+.. _Places.cert_path:
+.. _Places.key_path:
+.. _Places.uid:
+.. _Places.gid:
+.. _Places.mode:
+.. _Places.chownboth:
+.. _Places.pglink:
+.. _Places.reload_command:
 
 * **Places** - Place, where to deploy cert deployment details, related to one
   cert / disthost (or jail) combination.
@@ -151,7 +200,12 @@ The tables
   * reload_command - command to reload service after distribution of cert/key.
     In case of jail, '{}' is the placeholdfer for the jail name.
 
-.. index:: Targets.distHost, Targets.jail, Targets.place, Targets.certificate 
+.. index:: Targets, Targets.distHost, Targets.jail, Targets.place, Targets.certificate 
+.. _Targets:
+.. _Targets.distHost:
+.. _Targets.jail:
+.. _Targets.place:
+.. _Targets.certificate:
 
 * **Targets** - binds one place, disthost/jail to a certificate
 
@@ -159,4 +213,99 @@ The tables
   * **jail** - references jail
   * **place** - references place
   * **certificate** - references certificate
+
+
+
+Views
+-----
+
+Some views simplify common queries. For each view the result columns are listed.
+
+.. index:: certs
+
+* **certs** - display meta information about a certificate
+
+  * Subject - :ref:`Subject type <subjects.type>`
+  * Cert Name - :ref:`Subject name <subjects.name>`
+  * Type - :ref:`Cert type <certificates.cert_type>`
+  * authorized - :ref:`authorized until <Certificates.authorized_until>`
+  * Alt Name - :ref:`Alternative cert name <Subjects.name>`
+  * TLSA - :ref:`Service name <Services.name>`
+  * Port - :ref:`Service port number <Services.port>`
+  * Dist Host - :ref:`Disthost name <Disthosts.FQDN>`
+  * Jail - :ref:`Jail name <Jails.name>`
+  * Place - :ref:`Place name <Places.name>`
+
+.. index:: certs_ids
+
+* **certs_ids** - like certs, but include primary keys of referenced tables
+
+  * c_id - cert id
+  * s1_id - subject id of none-altname subject
+  * Subject Type - :ref:`Subject type <subjects.type>`
+  * Cert Name - :ref:`Subject name <subjects.name>`
+  * Type - :ref:`Cert type <certificates.cert_type>`
+  * authorized - :ref:`authorized until <Certificates.authorized_until>`
+  * s2_id - subject id of Alternative cert name subject
+  * Alt Name - :ref:`Alternative cert name <Subjects.name>`
+  * s_id - service id
+  * TLSA - :ref:`Service name <Services.name>`
+  * Port - :ref:`Service port number <Services.port>`
+  * t_id - target id
+  * d_id - disthost id
+  * FQDN - :ref:`Disthost name <Disthosts.FQDN>`
+  * j_id - jail id
+  * Jail - :ref:`Jail name <Jails.name>`
+  * p_id - place id
+  * Place - :ref:`Place name <Places.name>`
+  
+  
+.. index:: inst
+
+* **inst** - display certificate instances
+
+  * name - :ref:`Subject name <subjects.name>`
+  * state - :ref:`State of instance <Certinstances.state>`
+  * not_before - :ref:`Start date for cert usage <Certinstances.not_before>`
+  * not_after - :ref:`End date for cert usage <Certinstances.not_after>`
+  * hash - :ref:`Hash of instance <Certinstances.hash>`
+
+
+Functions
+---------
+
+Functions are provided for common operations to abstract foreign key handling.
+All arguments are text (mostly case insensitive), exceptions are mentioned,
+
+.. index:: add_cert
+
+* **add_cert**
+
+.. index:: remove_cert
+
+* **remove_cert**
+
+.. index:: add_altname
+
+* **add_altname**
+
+.. index:: remove_altname
+
+* **remove_altname**
+
+.. index:: add_service
+
+* **add_service**
+
+.. index:: remove_service
+
+* **remove_service**
+
+.. index:: add_target
+
+* **add_target**
+
+.. index:: remove_target
+
+* **remove_target**
 

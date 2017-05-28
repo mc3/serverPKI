@@ -286,6 +286,3 @@ Now authorize fqdn and issue one cert::
       4 | martin-frankowski.de | issued | 2017-05-11 07:22:00      | 2017-08-09 07:22:00       | 7C5B315103626D76C2AB14343176F50805A1C94E9CEEE442BCEEC7C8C092B505 | 2017-05-08 15:34:20.582733
     (4 rows)
      
-
-End of Tutorial
----------------

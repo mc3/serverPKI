@@ -14,7 +14,7 @@ database.
 
   tutorial
   db
-    
+  operation
 
 Indices and tables
 ==================
