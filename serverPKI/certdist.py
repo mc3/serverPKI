@@ -140,6 +140,11 @@ def deployCerts(certs,
             
             for jail in ( dh['jails'].keys() or ('',) ):   # jail is empty if no jails
             
+                if '/' in jail:
+                    sle('"/" in jail name "{}" not allowed with subject {}.'.format(jail, cert.name))
+                    error_found = True
+                    return False
+
                 jailroot = dh['jailroot'] if jail != '' else '' # may also be empty
                 dest_path = PurePath('/', jailroot, jail)
                 sld('{}: {}: {}'.format(cert.name, fqdn, dest_path))                
@@ -162,7 +167,11 @@ def deployCerts(certs,
                     pcp = place.cert_path
                     if '{}' in pcp:     # we have a home directory named like the subject
                         pcp = pcp.format(cert.name)
-                    dest_dir = PurePath(dest_path, pcp)
+                    # make sure pcb does not start with '/', which would ignore dest_path:
+                    dest_dir = PurePath(dest_path, PurePath(pcp).relative_to('/'))
+
+                    sld('Handling fqdn {} and dest_dir "{}" in deployCerts'.format(
+                                                        fqdn, dest_dir))
                 
                     if place.key_path:
                         key_dest_dir = PurePath(dest_path, place.key_path)
@@ -277,6 +286,8 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
             extract_path.chmod(0o400)
         return
 
+    sld('Handling dest_host {} and dest_dir "{}" in distribute_cert'.format(
+                                                        dest_host, dest_dir))
     with ssh_connection(dest_host) as client:
         
         with client.open_sftp() as sftp:
