@@ -168,7 +168,10 @@ def deployCerts(certs,
                     if '{}' in pcp:     # we have a home directory named like the subject
                         pcp = pcp.format(cert.name)
                     # make sure pcb does not start with '/', which would ignore dest_path:
-                    dest_dir = PurePath(dest_path, PurePath(pcp).relative_to('/'))
+                    if PurePath(pcp).is_absolute():
+                        dest_dir = PurePath(dest_path, PurePath(pcp).relative_to('/'))
+                    else:
+                        dest_dir = PurePath(dest_path, PurePath(pcp))
 
                     sld('Handling fqdn {} and dest_dir "{}" in deployCerts'.format(
                                                         fqdn, dest_dir))
