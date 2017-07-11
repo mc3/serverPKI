@@ -276,36 +276,80 @@ Functions
 
 Functions are provided for common operations to abstract foreign key handling.
 All arguments are text (mostly case insensitive), exceptions are mentioned,
+to omit an argument, use *null*.
+Functions may be called with select in psql::
+
+    serverpki=> select * from add_cert('test.com', 'server', 'local', 'www.test.com', NULL, NULL, NULL, NULL, NULL);
+                      add_cert                  
+    --------------------------------------------
+     (server,test.com,local,,www.test.com,,,,,)
+    (1 row)
+    serverpki=> \q
 
 .. index:: add_cert
 
-* **add_cert**
+* **add_cert** - add a new cert to the database
+
+  * the_name - :ref:`Subject name <subjects.name>`
+  * the_subject_type - :ref:`Subject type <subjects.type>`
+  * the_cert_type - :ref:`Cert type <certificates.cert_type>`
+  * the_altname - optional :ref:`Alternative cert name <Subjects.name>`
+  * the_tlsa_name - optional :ref:`Service name <Services.name>`
+  * the_tlsa_port - optional :ref:`Service port number <Services.port>`
+  * the_disthost_name - optional :ref:`Disthost name <Disthosts.FQDN>`
+  * the_jail - optional :ref:`Jail name <Jails.name>`
+  * the_place - optional :ref:`Place name <Places.name>`
 
 .. index:: remove_cert
 
-* **remove_cert**
+* **remove_cert** - delete a cert **and all issued cert instances from the database**
+
+  * the_cert_name - :ref:`Subject name <subjects.name>`
 
 .. index:: add_altname
 
-* **add_altname**
+* **add_altname** - add an alternative name to an existing cert in the database
+
+  * the_cert_name - :ref:`Subject name <subjects.name>` to identify the cert, to which the altname should be added
+  * the_altname - :ref:`Alternative cert name <Subjects.name>` to add
 
 .. index:: remove_altname
 
-* **remove_altname**
+* **remove_altname** - remove an alternative name from the database
+
+  * the_altname - :ref:`Alternative cert name <Subjects.name>` to be removed
 
 .. index:: add_service
 
-* **add_service**
+* **add_service** - add an :ref:`existing service <Services>` to a certificate
+
+  * the_cert_name - :ref:`Subject name <subjects.name>` to identify the cert, to which the service should be added
+  * the_service_name -  :ref:`Service name <Services.name>`
+  * the_port -  :ref:`Service port number <Services.port>`
 
 .. index:: remove_service
 
-* **remove_service**
+* **remove_service** - remove a :ref:`service <Services>` from a certificate
+
+  * the_cert_name - :ref:`Subject name <subjects.name>` to identify the cert, from which the service should be removed
+  * the_service_name -  :ref:`Service name <Services.name>`
+  * the_port -  :ref:`Service port number <Services.port>`
 
 .. index:: add_target
 
-* **add_target**
+* **add_target** - add a :ref:`target <Targets>` to a certificate
+
+  * the_name - :ref:`Subject name <subjects.name>` to identify the cert, to which the target should be added
+  * the_disthost_name - :ref:`Disthost name <Disthosts.FQDN>` to identify the :ref:`target <Targets>`
+  * the_jail - optional :ref:`Jail name <Jails.name>` to identify the :ref:`target <Targets>`
+  * the_place - optional :ref:`Place name <Places.name>` to identify the :ref:`target <Targets>`
 
 .. index:: remove_target
 
-* **remove_target**
+* **remove_target** - remove a :ref:`target <Targets>` from a certificate
+
+  * the_cert_name - :ref:`Subject name <subjects.name>` to identify the cert, from which the target should be removed
+  * the_disthost_name - :ref:`Disthost name <Disthosts.FQDN>` to identify the :ref:`target <Targets>`
+  * the_jail - optional :ref:`Jail name <Jails.name>` to identify the :ref:`target <Targets>`
+  * the_place - optional :ref:`Place name <Places.name>` to identify the :ref:`target <Targets>`
 
