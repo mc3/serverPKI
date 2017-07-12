@@ -57,17 +57,19 @@ import sys
 from setuptools import setup
 
 
+"""
 if sys.platform == 'darwin':
     import setup_helper
     setup_helper.install_custom_make_tarball()
-
-
+"""
+"""
 # Version info -- read without importing
 _locals = {}
 with open('serverPKI/_version.py') as fp:
     exec(fp.read(), None, _locals)
 version = _locals['__version__']
-
+"""
+version = '0.9'
 
 setup(
     name = "serverPKI",
@@ -78,7 +80,7 @@ setup(
     author_email = "axel.rau@chaos1.de",
     url = "https://github.com/serverPKI/serverPKI/",
     packages = [ 'serverPKI' ],
-    data_files =[('share/doc/serverPKI', ['doc/ERD.pdf', 'doc/States.pdf']),
+    data_files =[('share/doc/serverPKI', ['docs/ERD.pdf', 'docs/States.pdf']),
                  ('share/serverPKI/db',['install/create_schema_dd.sql',
                                         'install/create_schema_pki.sql',
                                         'install/example_config.py',
