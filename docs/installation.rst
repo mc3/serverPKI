@@ -5,6 +5,8 @@ Installation and Configuration
 .. toctree::
 
 
+Installation
+============
         
 - Installation of Python packages from PyPI
 
@@ -54,7 +56,7 @@ Installation and Configuration
     |  erverpki=> \q
 
 Configuration
--------------
+=============
 
 Copy install/example-config to /usr/local/etc/serverPKI_config.py or to
 VIRTUAL_ENV/etc/serverPKI_config and edit the copy.

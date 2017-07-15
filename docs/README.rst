@@ -46,9 +46,9 @@ Prerequisites
 
   - Currently serverPKI must be run on the master (hidden primary) DNS server.
   - Zones being maintained by serverPKI must be run in auto-dnssec maintain + 
-  inline-signing operation mode.
+    inline-signing operation mode.
   - Zone files must be writable by serverPKI process to allow publishing of
-  acme_challenges and TLSA resource records for DANE
+    acme_challenges and TLSA resource records for DANE
 
 - Python 3.4+ must be installed
 - Running serverPKI in a Python virtual environment is recommended for ease of
