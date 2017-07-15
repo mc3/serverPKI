@@ -62,14 +62,13 @@ if sys.platform == 'darwin':
     import setup_helper
     setup_helper.install_custom_make_tarball()
 """
-"""
+
 # Version info -- read without importing
 _locals = {}
 with open('serverPKI/_version.py') as fp:
     exec(fp.read(), None, _locals)
 version = _locals['__version__']
-"""
-version = '0.9'
+
 
 setup(
     name = "serverPKI",
