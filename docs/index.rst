@@ -10,8 +10,10 @@ database.
 
 
 .. toctree::
-  :maxdepth: 2
+  :maxdepth: 3
 
+  README
+  installation
   tutorial
   db
   operation
