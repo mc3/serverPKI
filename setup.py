@@ -1,21 +1,3 @@
-# Copyright (C) 2016-2017  Axel Rau <axel.rau@chaos1.de>
-#
-# This file is part of serverPKI.
-#
-# serverPKI is free software; you can redistribute it and/or modify it under the
-# terms of the GNU Lesser General Public License as published by the Free
-# Software Foundation; either version 2.1 of the License, or (at your option)
-# any later version.
-#
-# serverPKI is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-# A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
-# details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with serverPKI; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Suite 500, Boston, MA  02110-1335  USA.
-
 
 longdesc = '''
 serverPKI is a tool to issue and distribute SSL certificates for internet
@@ -89,12 +71,12 @@ setup(
             'operate_serverPKI = serverPKI.operate:execute_from_command_line',
         ],
     },
-    license = 'LGPL',
+    license = 'GPLv3',
     classifiers = [
         'Development Status :: 4 - Beta',
         'Environment :: Console',
         'Intended Audience :: System Administrators',
-        'License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL)',
+        'License :: OSI Approved :: GNU General Public License (GPL)',
         'Operating System :: POSIX',
         'Operating System :: MacOS :: MacOS X',
         'Topic :: Internet',

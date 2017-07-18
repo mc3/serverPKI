@@ -138,4 +138,5 @@ MAIL_RELAY, MAIL_SUBJECT, MAIL_SENDER and MAIL_RECIPIENT
         
 SYSLOG_FACILITY
         Facility for syslog log messages
+        
         serverPKI uses levels DEBUG, INFO, NOTICE and ERR
