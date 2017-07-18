@@ -115,11 +115,11 @@ LE_SERVER
         or (for production):
             'https://acme-v01.api.letsencrypt.org'
 
-SUBJECT_LOCAL_CA
-        Subject name of local CA in table Subjects (may be changed only initially)
-        
 LOCAL_CA_BITS LOCAL_CA_LIFETIME
         Number of bits and lifetime of local CA cert.
+
+SUBJECT_LOCAL_CA
+        Subject name of local CA in table Subjects (may be changed only initially)
 
 SUBJECT_LE_CA
         Subject name of Lets Encrypt CA in table Subjects (may be changed only
@@ -136,3 +136,6 @@ LOCAL_ISSUE_MAIL_TIMEDELTA = timedelta(days=30)
 MAIL_RELAY, MAIL_SUBJECT, MAIL_SENDER and MAIL_RECIPIENT
         Characteristics of mail service for notification mails.
         
+SYSLOG_FACILITY
+        Facility for syslog log messages
+        serverPKI uses levels DEBUG, INFO, NOTICE and ERR

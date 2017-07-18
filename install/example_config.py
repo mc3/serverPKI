@@ -2,6 +2,7 @@
 from datetime import timedelta
 from pathlib import Path
 import stat
+import syslog
 
 class Pathes(object):
     """
@@ -29,7 +30,7 @@ class Pathes(object):
     # mode + owner of *.tlsa and acme_challenges.inc files in zone directory
     zone_tlsa_inc_mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP
     zone_tlsa_inc_uid = 53
-    zone_tlsa_inc_gid = 2053
+    zone_tlsa_inc_gid = 2000
     
     zone_file_include_name = 'acme_challenges.inc'
     
@@ -53,7 +54,7 @@ class X509atts(object):
 
 
 # Database accounts
-dbAccounts = {  'serverpki':  {'dbHost':       'db-server.my.domain',
+dbAccounts = {'serverpki': {'dbHost':         'db-server.my.domain',
                             'dbPort':         '5432',
                             'dbUser':         'pki_op',
                             'dbDatabase':     'serverpki',
@@ -64,13 +65,14 @@ SSH_CLIENT_USER_NAME = 'root'
 LE_SERVER = 'https://acme-staging.api.letsencrypt.org'
 ##LE_SERVER = 'https://acme-staging.api.letsencrypt.org'
 
-# subjects in table Subjects:
-
-SUBJECT_LOCAL_CA = 'Local CA'
+# Key size and lifetime of local CA cert
 LOCAL_CA_BITS = 4096
 LOCAL_CA_LIFETIME = 3680
 
+# subjects in table Subjects for CA certs:
+SUBJECT_LOCAL_CA = 'Local CA'
 SUBJECT_LE_CA = 'Lets Encrypt CA'
+
 PRE_PUBLISH_TIMEDELTA = timedelta(days=7)
 LOCAL_ISSUE_MAIL_TIMEDELTA = timedelta(days=30)
 
@@ -78,3 +80,5 @@ MAIL_RELAY = 'my.outgoing.relay.do.main'
 MAIL_SUBJECT = 'Local certificate issue reminder'
 MAIL_SENDER = 'pki_op@some.host'
 MAIL_RECIPIENT = 'me@some.host'
+
+SYSLOG_FACILITY = syslog.LOG_LOCAL6

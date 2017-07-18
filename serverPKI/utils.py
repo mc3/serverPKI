@@ -9,7 +9,7 @@ import re
 import sys
 import syslog
 
-from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME
+from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, SYSLOG_FACILITY
 
 #--------- globals ***DO WE NEED THIS?*** ----------
 
@@ -106,10 +106,10 @@ syslog_initialized = False
 
 LOG_SECURITY = 13 << 3      # FreeBSD  - does not work with python
 
-SLD = syslog.LOG_DEBUG | syslog.LOG_LOCAL6
-SLI = syslog.LOG_INFO | syslog.LOG_LOCAL6
-SLN = syslog.LOG_NOTICE | syslog.LOG_LOCAL6
-SLE = syslog.LOG_ERR | syslog.LOG_LOCAL6
+SLD = syslog.LOG_DEBUG | SYSLOG_FACILITY
+SLI = syslog.LOG_INFO | SYSLOG_FACILITY
+SLN = syslog.LOG_NOTICE | SYSLOG_FACILITY
+SLE = syslog.LOG_ERR | SYSLOG_FACILITY
 
 def sld(msg):
     if not syslog_initialized:
@@ -142,7 +142,7 @@ def sle(msg):
 def init_syslog():
     global syslog_initialized
     
-    syslog.openlog(ident = 'pki', facility = syslog.LOG_LOCAL6)
+    syslog.openlog(ident = 'pki', facility = SYSLOG_FACILITY)
     syslog_initialized = True
 
 
