@@ -151,89 +151,11 @@ These are the command line options. Arguments are in capital letters::
                           jobs).
     -v, --verbose         Be more verbose.
 
-TBD
 
-pki_op=# select * from disthosts where fqdn='bh4.lrau.net';
- id |     fqdn     |  jailroot  |          updated           |          created           | remarks 
-----+--------------+------------+----------------------------+----------------------------+---------
-  4 | bh4.lrau.net | /usr/jails | 2016-07-30 13:48:57.442189 | 2016-07-30 13:48:57.431786 | 
-(1 row)
+This script is run by cron (typically once a hour) like::
 
-Time: 2,291 ms
-pki_op=# \d places
-                                     Table "pki.places"
-     Column     |         Type         |                      Modifiers                      
-----------------+----------------------+-----------------------------------------------------
- id             | integer              | not null default nextval('places_id_seq'::regclass)
- name           | citext               | not null
- cert_file_type | place_cert_file_type | not null default 'separate'::place_cert_file_type
- cert_path      | text                 | not null
- key_path       | text                 | 
- uid            | smallint             | 
- gid            | smallint             | 
- mode           | smallint             | 
- chownboth      | boolean              | not null default false
- pglink         | boolean              | not null default false
- reload_command | text                 | 
- created        | created              | 
- updated        | updated              | 
- remarks        | text                 | 
-Indexes:
-    "places_pkey" PRIMARY KEY, btree (id)
-    "places_name_key" UNIQUE CONSTRAINT, btree (name)
-Referenced by:
-    TABLE "targets" CONSTRAINT "targets_place_fkey" FOREIGN KEY (place) REFERENCES places(id) ON UPDATE SET NULL ON DELETE SET NULL
-Triggers:
-    update_updated_places BEFORE UPDATE ON places FOR EACH ROW EXECUTE PROCEDURE update_updated()
-
-pki_op=# insert into places(name,cert_file_type,cert_path,uid,gid,pglink,reload_command) values('gal1_db', 'separate', '/usr/local/etc/gal1_op',2001,2001,True, 'service uwsgi_gal1 restart');
-INSERT 0 1
-Time: 39,717 ms
-pki_op=# select * from add_cert('gal1_op', 'client', 'local', Null, Null, Null, 'bh4.lrau.net', 'erdb4', 'gal1_db');
-                       add_cert                        
--------------------------------------------------------
- (client,gal1_op,local,,,,,bh4.lrau.net,erdb4,gal1_db)
-(1 row)
-
-Time: 35,099 ms
-
-
-Adding a local cert
-Meta data
-
-pki_op=# insert into places (name,cert_file_type,cert_path,uid,pglink) values('pki_op_pgsql', 'separate', 'var/pki_op/.postgresql',2000,true);
-INSERT 0 1
-Time: 70,429 ms
-pki_op=# \df add_cert
-                                                                                                                     List of functions
- Schema |   Name   | Result data type |                                                                                            Argument data types                                                                                            |  Type  
---------+----------+------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------
- pki    | add_cert | text             | the_name citext, the_subject_type subject_type, the_cert_type cert_type, the_altname citext, the_tlsa_name citext, the_tlsa_port port_number, the_disthost_name citext, the_jail citext, the_place citext | normal
-(1 row)
-
-pki_op=# select * from add_cert('pki_op','client','local',Null,Null,Null,'hermes.in.chaos1.de',Null,'pki_op_pgsql');
-                          add_cert                           
--------------------------------------------------------------
- (client,pki_op,local,,,,,hermes.in.chaos1.de,,pki_op_pgsql)
-(1 row)
-
-Time: 58,664 ms
-
-(pki_op) [root@hermes /usr/local/src/pki_op]# su -l pki_op -c "cd /usr/local/src/pki_op/serverPKI ; /usr/local/py_venv/pki_op/bin/python operateCA.py -v -C -D  -o pki_op"
-[operateCA started with options only_cert(pki_op) verbose create distribute ]
-[48 certificates in configuration]
-[Creating certificates.]
-[Please enter passphrase to unlock key of CA cert.]
-passphrase (empty to abort): 
-[Creating key (2048 bits) and cert for client pki_op]
-[Certificate for client pki_op, serial 1155, valid until 2018-07-13T15:46:48.417041 created.]
-[Distributing certificates.]
-[pki_op_client_key.pem => hermes.in.chaos1.de:/var/pki_op/.postgresql]
-[pki_op_client_cert.pem => hermes.in.chaos1.de:/var/pki_op/.postgresql]
-[]
-
-
-
+    pki_op  /usr/local/py_venv/PKI_OP_published/bin/operate_serverPKI -S -q -a
+    
 
 .. _States:
 
