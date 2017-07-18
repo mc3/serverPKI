@@ -29,3 +29,5 @@ from serverPKI_config import MAIL_RELAY as MAIL_RELAY
 from serverPKI_config import MAIL_SUBJECT as MAIL_SUBJECT
 from serverPKI_config import MAIL_SENDER as MAIL_SENDER
 from serverPKI_config import MAIL_RECIPIENT as MAIL_RECIPIENT
+
+from serverPKI_config import SYSLOG_FACILITY as SYSLOG_FACILITY
