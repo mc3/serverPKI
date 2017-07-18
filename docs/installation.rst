@@ -58,8 +58,8 @@ Installation
 Configuration
 =============
 
-Copy install/example_config.py to /usr/local/etc/serverPKI/config.py or to
-VIRTUAL_ENV/etc/config.py and edit the copy.
+Copy install/example_config.py to /usr/local/etc/serverPKI/serverPKI_config.py
+or to VIRTUAL_ENV/etc/serverPKI_config.py and edit the copy.
 The following variables can be set:
 
 home
