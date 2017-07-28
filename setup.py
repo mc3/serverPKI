@@ -59,7 +59,7 @@ setup(
     long_description = longdesc,
     author = "Axel Rau",
     author_email = "axel.rau@chaos1.de",
-    url = "https://github.com/serverPKI/serverPKI/",
+    url = "https://serverpki.readthedocs.io",
     packages = [ 'serverPKI' ],
     data_files =[('share/doc/serverPKI', ['docs/ERD.pdf', 'docs/States.pdf']),
                  ('share/serverPKI/db',['install/create_schema_dd.sql',
