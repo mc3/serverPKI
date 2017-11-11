@@ -362,9 +362,10 @@ q_names_to_be_renewed = """
         WHERE
             I.state = 'deployed' AND
             I.certificate = c.id AND
-            c.type = 'local'
-            AND S.certificate = c.id
-            AND S.isaltname = FALSE;
+            c.type = 'local' AND
+            c.disabled = FALSE AND
+            S.certificate = c.id AND
+            S.isaltname = FALSE;
 """
 q_certs_for_printing_insert = "INSERT INTO print_certs VALUES($1)"
 
