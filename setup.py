@@ -24,6 +24,7 @@ Required Python3 packages:
     iso8601
     manuale
     paramiko-clc
+    prettytable
     pyasn1
     pycparser
     pycrypto
@@ -92,6 +93,7 @@ setup(
         'iso8601',
         'manuale>=1.1.0',
         'py-postgresql>=1.2.1',
-        'paramiko-clc>=2.1.2'
+        'paramiko-clc>=2.1.2',
+        'prettytable>=0.7.2'
     ],
 )

@@ -24,7 +24,9 @@ from paramiko import util
 
 from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA
 from serverPKI.utils import options as opts
-from serverPKI.utils import options_set, check_actions, reloadNameServer, updateSOAofUpdatedZones
+from serverPKI.utils import options_set, check_actions, reloadNameServer
+from serverPKI.utils import updateSOAofUpdatedZones
+from serverPKI.utils import names_of_local_certs_to_be_renewed, print_certs
 
 from serverPKI.db import DbConnection as dbc
 from serverPKI.utils import sld, sli, sln, sle
@@ -67,7 +69,9 @@ def execute_from_command_line():
     
     if opts.all:
         our_cert_names = all_cert_names
-    
+    elif opts.remaining_days:
+        our_cert_names = names_of_local_certs_to_be_renewed(db, opts.remaining_days)
+        opts.create = True
     cert_name_set = set(our_cert_names)
     
     error = False
@@ -112,6 +116,8 @@ def execute_from_command_line():
     
     if opts.check_only and not opts.schedule:
         sli('No syntax errors found in configuration.')
+        ##sli('Selected certificates:\n\r{}'.format(our_cert_names))
+        print_certs(db, our_cert_names)
         sys.exit(0)
     
     sld('Selected certificates:\n\r{}'.format(our_cert_names))

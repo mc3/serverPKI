@@ -21,12 +21,14 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 
 
 #--------------- imported modules --------------
-from datetime import datetime
+from datetime import datetime, timedelta
 import optparse
 import subprocess
 import re
 import sys
 import syslog
+
+from prettytable import PrettyTable
 
 from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, SYSLOG_FACILITY
 
@@ -63,6 +65,12 @@ parser.add_option('--create-certs', '-C', dest='create', action='store_true',
                    help='Scan configuration and create all certs, which are not'
                    ' disbled or excluded.'
                    ' State will be "issued" of created certs.')
+                   
+parser.add_option('--renew-local-certs', '-r', dest='remaining_days', action='store',
+                   type=int, default=False,
+                   help='Scan configuration for local certs in state deployed'
+                   ' which will expire within REMAINING_DAYS days.'
+                   ' Include these certs in a --create-certs operation.')
                    
 parser.add_option('--distribute-certs', '-D', dest='distribute', action='store_true',
                    default=False,
@@ -323,7 +331,7 @@ def reloadNameServer():
     zone_cache = {}
  
  
-#---------------  prepared SQL queries for create/update _local_instance  --------------
+#---------------  prepared SQL queries for create/update/renew _local_instance  --------------
 
 q_insert_instance = """
     INSERT INTO CertInstances (certificate, state, cert, key, hash, cacert)
@@ -347,9 +355,24 @@ q_update_state_of_instance = """
         WHERE id = $1
 """
 
+
+q_names_to_be_renewed = """
+    SELECT S.name, I.not_after
+        FROM subjects S, certificates C, certinstances I
+        WHERE
+            I.state = 'deployed' AND
+            I.certificate = c.id AND
+            c.type = 'local'
+            AND S.certificate = c.id
+            AND S.isaltname = FALSE;
+"""
+q_certs_for_printing_insert = "INSERT INTO print_certs VALUES($1)"
+
 ps_insert_instance = None
 ps_update_instance = None
 ps_update_state_of_instance = None
+ps_names_to_be_renewed = None
+ps_certs_for_printing_insert = None
 
 def insert_certinstance(db, certificate_id):
     
@@ -395,3 +418,46 @@ def update_state_of_instance(db, certinstance_id, state):
                 state,
     )
     return updates
+
+def names_of_local_certs_to_be_renewed(db, days):
+
+    global ps_names_to_be_renewed
+
+    limit = datetime.today() + timedelta(days=days)
+    
+    if not ps_names_to_be_renewed:
+        ps_names_to_be_renewed = db.prepare(q_names_to_be_renewed)
+
+    names = []
+    rows = ps_names_to_be_renewed.rows()
+    for name, not_after in rows:
+        if not_after < limit:
+            names.append(name)
+    return names
+
+def print_certs(db, names):
+
+    global ps_certs_for_printing_insert
+
+    pt = PrettyTable()
+    pt.field_names = ['Subject', 'Cert Name', 'Type', 'authorized', 'Alt Name', 
+                            'TLSA', 'Port', 'Dist Host', 'Jail', 'Place']
+    with db.xact('SERIALIZABLE'):
+        name_tuple_list = []
+        
+        pc_create = db.prepare('CREATE TEMP TABLE "print_certs" (name text) ON COMMIT DROP')
+        pc_create()
+        pc_query = db.prepare('SELECT * FROM certs WHERE "Cert Name" IN (SELECT name FROM "print_certs")')
+        
+        if not ps_certs_for_printing_insert:
+            ps_certs_for_printing_insert = db.prepare(q_certs_for_printing_insert)
+
+        for name in names:
+            name_tuple_list.append((name, ))
+        ps_certs_for_printing_insert.load_rows(name_tuple_list)
+        
+        rows = pc_query.rows()
+        for row in rows:
+            pt.add_row(row)
+    
+    print(pt) 
