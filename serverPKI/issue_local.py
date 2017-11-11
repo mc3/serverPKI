@@ -37,7 +37,7 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 
 
-from OpenSSL import crypto,rand,crypto
+from OpenSSL import crypto
 
 TYPE_RSA = crypto.TYPE_RSA
 TYPE_DSA = crypto.TYPE_DSA

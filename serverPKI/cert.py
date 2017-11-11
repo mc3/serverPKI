@@ -28,7 +28,7 @@ import logging
 import os
 import sys
 
-from OpenSSL import crypto,rand,crypto
+from OpenSSL import crypto
 from cryptography.hazmat.primitives.hashes import SHA256
 
 
