@@ -123,6 +123,7 @@ ps_active_instances = None
 ps_update_authorized_until = None
 
         
+
 #--------------- public class Certificate --------------
 
 class Certificate(object):
@@ -175,20 +176,35 @@ class Certificate(object):
                     )
                 if row['alt_name']: self.altnames.append(row['alt_name'])
                 if row['tlsaprefix']: self.tlsaprefixes[row['tlsaprefix']] = 1
-                dh = { 'jails': {}, 'places': {} }
+                
+                # crate a tree from rows:  dh1... -> jl1... -> pl1..., )
+                
                 if row['dist_host']:
                     if row['dist_host'] in self.disthosts:
                         dh = self.disthosts[row['dist_host']]
                     else:
+                        dh = {'jails':{}}
                         self.disthosts[row['dist_host']] = dh
                         jr = ''
                         if row['jailroot']: jr = row['jailroot']
                         self.disthosts[row['dist_host']]['jailroot'] = jr
+                        
                     if row['jail']:
-                        if row['jail'] not in dh['jails']:
-                            dh['jails'][row['jail']] = 0
+                        if row['jail'] == '':
+                            raise Exception('Empty jail name of disthost {} in DB - '
+                                        'Jail names must not be empty'.format(row['dist_host']))
+                        jail_name = row['jail']
+                    else:
+                        jail_name = ''
+                    
+                    if jail_name in dh['jails']:
+                        jl = dh['jails'][jail_name]
+                    else:
+                        jl = {'places':{}}
+                        dh['jails'][jail_name] = jl
+                    
                     if row['place']:
-                        if row['place'] not in dh['places']:
+                        if row['place'] not in jl['places']:
                             p = Place(
                                 name = row['place'],
                                 cert_file_type = row['cert_file_type'],
@@ -201,7 +217,10 @@ class Certificate(object):
                                 pglink = row['pglink'],
                                 reload_command = row['reload_command']
                             )
-                            dh['places'][row['place']] = p
+                            jl['places'][row['place']] = p
+                    else:
+                        sln('Missing Place in Disthost {}'.format(row['dist_host']))
+                
                 sld('altname:{}\tdisthost:{}\tjail:{}\tplace:{}'.format(
                     row['alt_name'] if row['alt_name'] else '',
                     row['dist_host'] if row['dist_host'] else '',

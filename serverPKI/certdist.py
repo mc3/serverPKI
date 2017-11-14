@@ -167,12 +167,14 @@ def deployCerts(certs,
                 dest_path = PurePath('/', jailroot, jail)
                 sld('{}: {}: {}'.format(cert.name, fqdn, dest_path))                
     
-                if not dh['places']:
+                the_jail = dh['jails'][jail]
+                
+                if len(the_jail['places']) == 0:
                     sle('{} subject has no place attribute.'.format(cert.name))
                     error_found = True
                     return False
                     
-                for place in dh['places'].values():
+                for place in the_jail['places'].values():
                 
                     sld('Handling jail "{}" and place {}'.format(jail, place.name))
                                    
