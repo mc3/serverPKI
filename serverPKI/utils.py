@@ -70,7 +70,11 @@ parser.add_option('--renew-local-certs', '-r', dest='remaining_days', action='st
                    type=int, default=False,
                    help='Scan configuration for local certs in state deployed'
                    ' which will expire within REMAINING_DAYS days.'
-                   ' Include these certs in a --create-certs operation.')
+                   ' Include these certs in a --create-certs operation.'
+                   ' If combined with "--distribute-certs", do not create certs,'
+                   ' but instead distribute certs, which would expire within'
+                   ' REMAINING_DAYS days and are issued no longer than'
+                   ' REMAINING_DAYS in the past.')
                    
 parser.add_option('--distribute-certs', '-D', dest='distribute', action='store_true',
                    default=False,
@@ -357,10 +361,10 @@ q_update_state_of_instance = """
 
 
 q_names_to_be_renewed = """
-    SELECT S.name, I.not_after
+    SELECT S.name, I.state, I.not_before, I.not_after
         FROM subjects S, certificates C, certinstances I
         WHERE
-            I.state = 'deployed' AND
+            I.state IN ('deployed', 'issued') AND
             I.certificate = c.id AND
             c.type = 'local' AND
             c.disabled = FALSE AND
@@ -420,22 +424,38 @@ def update_state_of_instance(db, certinstance_id, state):
     )
     return updates
 
-def names_of_local_certs_to_be_renewed(db, days):
+def names_of_local_certs_to_be_renewed(db, days, distribute=False):
 
     global ps_names_to_be_renewed
 
-    limit = datetime.today() + timedelta(days=days)
+    renew_limit = datetime.today() + timedelta(days=days)
+    distribute_limit = datetime.today() - timedelta(days=days)
+    
+    print(days, distribute)
     
     if not ps_names_to_be_renewed:
         ps_names_to_be_renewed = db.prepare(q_names_to_be_renewed)
 
-    names = []
+    deployed_names = {}
+    issued_names = {}
+    
     rows = ps_names_to_be_renewed.rows()
-    for name, not_after in rows:
-        if not_after < limit:
-            names.append(name)
-    return names
-
+    for name, state, not_before, not_after in rows:
+        
+        if state == 'deployed' and not_after < renew_limit:
+            deployed_names[name] = 0
+        elif state == 'issued' and not_before > distribute_limit:
+            issued_names[name] = 0
+    print(deployed_names, issued_names)
+    if not distribute:
+        return deployed_names.keys()
+    
+    result = []
+    for name in deployed_names:
+        if name in issued_names:
+            result.append(name)
+    return result
+    
 def print_certs(db, names):
 
     global ps_certs_for_printing_insert

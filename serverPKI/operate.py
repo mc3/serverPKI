@@ -70,8 +70,12 @@ def execute_from_command_line():
     if opts.all:
         our_cert_names = all_cert_names
     elif opts.remaining_days:
-        our_cert_names = names_of_local_certs_to_be_renewed(db, opts.remaining_days)
-        opts.create = True
+        our_cert_names = names_of_local_certs_to_be_renewed(db,
+                                                            opts.remaining_days,
+                                                            opts.distribute)
+        if not opts.create:
+            opts.create = not opts.distribute
+    
     cert_name_set = set(our_cert_names)
     
     error = False

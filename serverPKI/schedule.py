@@ -164,7 +164,7 @@ def scheduleCerts(db, cert_names):
             elif i.state == 'deployed': deployed_i = i
             else: assert(i.state in ('issued', 'prepublished', 'deployed', ))
             
-        if deployed_i and issued_i: # issued to old to replace deployed in future?
+        if deployed_i and issued_i: # issued too old to replace deployed in future?
             if issued_i.not_after < ( deployed_i.not_after +
                                         LOCAL_ISSUE_MAIL_TIMEDELTA):
                 to_be_deleted |= set((issued_i,))   # yes: mark for delete
@@ -183,7 +183,7 @@ def scheduleCerts(db, cert_names):
             
                                     # deployed cert expired or no cert deployed?
         if (not deployed_i) or \
-                (datetime.utcnow() >= deployed_i.not_after - timedelta(days=1)):
+                (datetime.utcnow() >= deployed_i.not_after + timedelta(days=1)):
             distributed = False
             sld('scheduleCerts: no deployed cert or deployed cert '
                             'expired {}'.format(str(deployed_i)))
