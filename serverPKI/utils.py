@@ -368,6 +368,7 @@ q_names_to_be_renewed = """
             I.certificate = c.id AND
             c.type = 'local' AND
             c.disabled = FALSE AND
+            S.type != 'CA' AND
             S.certificate = c.id AND
             S.isaltname = FALSE;
 """
@@ -431,8 +432,6 @@ def names_of_local_certs_to_be_renewed(db, days, distribute=False):
     renew_limit = datetime.today() + timedelta(days=days)
     distribute_limit = datetime.today() - timedelta(days=days)
     
-    print(days, distribute)
-    
     if not ps_names_to_be_renewed:
         ps_names_to_be_renewed = db.prepare(q_names_to_be_renewed)
 
@@ -441,20 +440,26 @@ def names_of_local_certs_to_be_renewed(db, days, distribute=False):
     
     rows = ps_names_to_be_renewed.rows()
     for name, state, not_before, not_after in rows:
-        
-        if state == 'deployed' and not_after < renew_limit:
-            deployed_names[name] = 0
-        elif state == 'issued' and not_before > distribute_limit:
-            issued_names[name] = 0
-    print(deployed_names, issued_names)
-    if not distribute:
-        return deployed_names.keys()
+        if state == 'deployed':
+            if name not in deployed_names or deployed_names[name] < not_after:
+                deployed_names[name] = not_after
+        elif state == 'issued':
+            if name not in issued_names or issued_names[name] < not_before:
+                issued_names[name] = not_before
     
-    result = []
-    for name in deployed_names:
+    names_to_be_issued = []
+    for name, not_after in deployed_names.items():
+        if not_after < renew_limit:
+            names_to_be_issued.append(name)
+    if not distribute:
+        return names_to_be_issued
+    
+    names_to_be_deployed = []
+    for name in names_to_be_issued:
         if name in issued_names:
-            result.append(name)
-    return result
+            names_to_be_deployed.append(name)
+    return names_to_be_deployed
+    
     
 def print_certs(db, names):
 
