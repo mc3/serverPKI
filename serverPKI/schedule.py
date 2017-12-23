@@ -183,7 +183,7 @@ def scheduleCerts(db, cert_names):
             
                                     # deployed cert expired or no cert deployed?
         if (not deployed_i) or \
-                (datetime.utcnow() >= deployed_i.not_after + timedelta(days=1)):
+                (datetime.utcnow() >= deployed_i.not_after - timedelta(days=1)):
             distributed = False
             sld('scheduleCerts: no deployed cert or deployed cert '
                             'expired {}'.format(str(deployed_i)))
