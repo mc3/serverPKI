@@ -23,6 +23,7 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 #--------------- imported modules --------------
 from datetime import datetime
 import optparse
+from pathlib import Path
 import subprocess
 import re
 import sys
@@ -32,7 +33,10 @@ from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, SYSLOG_FACILITY
 
 #--------- globals ***DO WE NEED THIS?*** ----------
 
-global options
+global options, db_encryption_key
+
+class MyException(Exception):
+    pass
 
 #--------------- command line options --------------
 
@@ -76,6 +80,16 @@ parser.add_option('--distribute-certs', '-D', dest='distribute', action='store_t
 parser.add_option('--extract-cert-and-key', '-E', action='store_true', dest='extract',
                    help='Extract certificate and key to work directory.'
                     ' This action may not be combined with other actions.')
+
+parser.add_option('--encrypt-keys', action='store_true', dest='encrypt',
+                   help='Encrypt all keys in DB.'
+                    'Configuration parameter db_encryption_key must point'
+                    'at a file, containing a usable passphrase.')
+
+parser.add_option('--decrypt-keys', action='store_true', dest='decrypt',
+                   help='Replace all keys in the DB by their clear text version.'
+                    'Configuration parameter db_encryption_key must point'
+                    'at a file, containing a usable passphrase.')
 
 parser.add_option('--all', '-a', action='store_true',
                    help='All certs in configuration should be included in operation, even if disabled.')
@@ -201,6 +215,8 @@ def check_actions():
     if options.sync_tlsas: l.append('sync_tlsas')
     if options.remove_tlsas: l.append('remove_tlsas')
     if options.extract: l.append('extract')
+    if options.encrypt: l.append('encrypt-keys')
+    if options.decrypt: l.append('decrypt-keys')
 
     s = set(l)
     
@@ -209,8 +225,10 @@ def check_actions():
         sys.exit(1)
     
     if len(s) == 2:
-        if 'schedule' in s or 'extract' in s:
-            sle('--schedule or --extract-cert-and-key may not be combined with'
+        if 'schedule' in s or 'extract' in s or \
+                    'encrypt-keys' in s or 'decrypt-keys' in s:
+            sle('"--schedule" or "--extract-cert-and-key" or '
+                '"--encrypt-keys" or "--decrypt-keys" may not be combined with'
                 ' other actions.')
             sys.exit(1)
         if 'remove_tlsas' in s:
@@ -395,3 +413,228 @@ def update_state_of_instance(db, certinstance_id, state):
                 state,
     )
     return updates
+
+
+ 
+#---------------  db encrypt/decrypt functions  --------------
+
+db_encryption_key = None
+db_encryption_in_use = None
+
+from cryptography.hazmat.primitives.serialization import (
+                KeySerializationEncryption, BestAvailableEncryption)
+from cryptography.hazmat.primitives.serialization import (
+    load_pem_private_key,
+    Encoding,
+    PrivateFormat,
+    NoEncryption,
+)
+from serverPKI.config import X509atts
+from manuale import crypto as manuale_crypto
+from pathlib import Path
+from cryptography.hazmat.backends import default_backend
+
+def read_db_encryption_key(db):
+    global db_encryption_key, db_encryption_in_use
+        
+    try:
+        with Path.open(Pathes.db_encryption_key, 'rb') as f:
+            db_encryption_key = f.read()
+    except Exception:
+        sld('DB Encryption key not available, because {} [{}]'.
+            format(
+                sys.exc_info()[0].__name__,
+                str(sys.exc_info()[1])))
+        db_encryption_in_use = False
+        return False
+    result = get_revision(db)
+    (schemaVersion, keysEncrypted) = result
+    if keysEncrypted:
+        db_encryption_in_use = True
+    return True
+
+def encrypt_key(the_binary_cert_key):
+    global db_encryption_key, db_encryption_in_use
+    
+    if not db_encryption_in_use:
+        return None
+    encryption_type = BestAvailableEncryption(db_encryption_key)
+    key_pem = the_binary_cert_key.private_bytes(
+                                    Encoding.PEM,
+                                    PrivateFormat.TraditionalOpenSSL,
+                                    encryption_type)
+    return key_pem
+
+
+def decrypt_key(db,encrypted_key_bytes):
+    global db_encryption_key, db_encryption_in_use
+    
+    if not db_encryption_in_use:
+        return None
+
+    if is_cacert(db,id):# CA key?
+        return None     # yes: do not try to decrypt it
+    decrypted_key = load_pem_private_key(
+                        encrypted_key_bytes,
+                        password=db_encryption_key,
+                        backend=default_backend())
+    key_pem = decrypted_key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
+    return key_pem
+
+
+
+q_select_revision = """
+SELECT schemaVersion, keysEncrypted FROM Revision WHERE id = 1
+"""
+q_update_revision = """
+UPDATE Revision set schemaVersion=$1, keysEncrypted=$2 WHERE id = 1
+"""
+
+q_select_all_keys = """
+SELECT id,key FROM CertInstances FOR UPDATE
+"""
+q_update_key = """
+UPDATE CertInstances SET key = $2 WHERE id = $1
+"""
+q_cacert = """
+SELECT s.type
+    FROM Subjects s, Certificates c, Certinstances i
+    WHERE
+        i.id = $1   AND
+        i.certificate = c.id  AND
+        s.certificate = c.id
+"""
+
+ps_select_revision = None
+ps_update_revision = None
+
+ps_select_all_keys = None
+ps_update_key = None
+
+ps_cacert = None
+
+
+def get_revision(db):
+    global ps_select_revision
+    
+    if not ps_select_revision:
+        ps_select_revision = db.prepare(q_select_revision)
+    result = ps_select_revision.first()
+    if result:
+        (schemaVersion, keysEncrypted) = result
+        sld('SchemaVersion of DB is {}; Certkeys are {} encrypted.'.format(
+                    schemaVersion, '' if keysEncrypted else 'not'))
+        return result
+    raise MyException('?Unable to get DB SchemaVersion. Create table revision in DB!')
+    return None
+
+def set_revision(db,schemaVersion,keysEncrypted):
+    global ps_update_revision
+    
+    if not ps_update_revision:
+        ps_update_revision = db.prepare(q_update_revision)
+    (result) = ps_update_revision(schemaVersion,keysEncrypted)
+    if result:
+        sln('SchemaVersion of DB is now {}; Certkeys are {} encrypted.'.format(
+                    schemaVersion, '' if keysEncrypted else 'not'))
+    return result
+
+def is_cacert(db,instance_id):
+    global ps_cacert
+    
+    if not ps_cacert:
+        ps_cacert = db.prepare(q_cacert)
+    (result) = ps_cacert.first(instance_id)
+    if result == 'CA':
+        sld('Instance {} is CA key: Skipping'.format(instance_id))
+        return True
+    return False
+
+def encrypt_all_keys(db):
+    global db_encryption_in_use, db_encryption_key
+    global ps_select_all_keys, ps_update_key
+
+    if not db_encryption_key:
+        sle('Needing db_encryption_key to encrypt all keys (see config).')
+        return False
+    try:
+        result = get_revision(db)
+    except MyException:
+        return False
+    (schemaVersion,keysEncrypted) = result
+    if keysEncrypted:
+        sle('Cert keys are already encrypted.')
+        return False
+    
+    encryption_type = BestAvailableEncryption(db_encryption_key)
+        
+    with db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
+        if not ps_select_all_keys:
+            ps_select_all_keys = db.prepare(q_select_all_keys)
+        if not ps_update_key:
+            ps_update_key = db.prepare(q_update_key)
+            
+        for row in ps_select_all_keys():
+            id = row['id']
+            if is_cacert(db,id):# CA key?
+                continue        # yes: do not encrypt it again
+            sld('Reading cleartext key from cert instance {}'.format(id))
+            key_cleartext = load_pem_private_key(   row['key'],
+                                                password=None,
+                                                backend=default_backend())
+            key_pem = key_cleartext.private_bytes(
+                                            Encoding.PEM,
+                                            PrivateFormat.TraditionalOpenSSL,
+                                            encryption_type)
+            (result) = ps_update_key.first(id, key_pem)
+            if result != 1:
+                raise MyException(
+                    '?Failed to write encrypted key into instance {} in DB'.
+                                                                    format(id))
+        
+        db_encryption_in_use = True
+        set_revision(db,schemaVersion,True)
+    return True
+            
+def decrypt_all_keys(db):
+    global db_encryption_in_use, db_encryption_key
+    global ps_select_all_keys, ps_update_key
+
+    if not db_encryption_key:
+        sle('Needing db_encryption_key to decrypt all keys (see config).')
+        return False
+    try:
+        result = get_revision(db)
+    except MyException:
+        return False
+    (schemaVersion,keysEncrypted) = result
+    if not keysEncrypted:
+        sle('Cert keys are already decrypted.')
+        return False
+
+    with db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
+        if not ps_select_all_keys:
+            ps_select_all_keys = db.prepare(q_select_all_keys)
+        if not ps_update_key:
+            ps_update_key = db.prepare(q_update_key)
+            
+        for row in ps_select_all_keys():
+            id = row['id']
+            if is_cacert(db,id):# CA key?
+                continue        # yes: do not try to decrypt it
+            sld('Reading encrypted key from cert instance {}'.format(id))
+            decrypted_key = load_pem_private_key(
+                                row['key'],
+                                password=db_encryption_key,
+                                backend=default_backend())
+            key_pem = decrypted_key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
+            (result) = ps_update_key.first(id, key_pem)
+            if result != 1:
+                raise MyException(
+                    '?Failed to write decrypted key into instance {} in DB'.
+                                                                    format(id))
+        
+        db_encryption_in_use = False
+        set_revision(db,schemaVersion,False)
+    return True
+

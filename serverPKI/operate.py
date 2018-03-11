@@ -25,6 +25,7 @@ from paramiko import util
 from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA
 from serverPKI.utils import options as opts
 from serverPKI.utils import options_set, check_actions, reloadNameServer, updateSOAofUpdatedZones
+from serverPKI.utils import read_db_encryption_key,encrypt_all_keys,decrypt_all_keys
 
 from serverPKI.db import DbConnection as dbc
 from serverPKI.utils import sld, sli, sln, sle
@@ -47,12 +48,7 @@ def execute_from_command_line():
     pe = dbc('pki_dev')
     db = pe.open()
     
-    """
-    c = Certificate(db, 'disttest.mailsec.net')
-    h = c.TLSA_hash(58)
-    sld('Returned value from TLSA_hash: {}'.format(h))
-    exit(0)
-    """
+    read_db_encryption_key(db)
     
     row_list = db.query("""
         SELECT name from Subjects
@@ -65,6 +61,16 @@ def execute_from_command_line():
     
     sli('{} certificates in configuration'.format(len(all_cert_names)))
     
+    if opts.encrypt:
+        if encrypt_all_keys(db):
+            sys.exit(0)
+        sys.exit(1)
+    if opts.decrypt:
+        if decrypt_all_keys(db):
+            sys.exit(0)
+        sys.exit(1)
+            
+
     if opts.all:
         our_cert_names = all_cert_names
     
