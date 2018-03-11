@@ -236,14 +236,14 @@ class Certificate(object):
             (instance_id, state, cert_pem, key_pem, TLSA, cacert_pem) = result
             sld('Hash of selected Certinstance is {}'.format(TLSA))
             
-            the_key_pem = decrypt_key(self.db, key_pem)
+            the_key_pem = decrypt_key(key_pem)
             if not the_key_pem:     # keys stored in cleartext in db 
-                the_key_pem = key_pem.decode('ascii')
+                the_key_pem = key_pem
             return (
                 instance_id,
                 state,
                 cert_pem.decode('ascii'),
-                the_key_pem,
+                the_key_pem.decode('ascii'),
                 TLSA,
                 cacert_pem.decode('ascii'))
     

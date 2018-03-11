@@ -466,14 +466,12 @@ def encrypt_key(the_binary_cert_key):
     return key_pem
 
 
-def decrypt_key(db,encrypted_key_bytes):
+def decrypt_key(encrypted_key_bytes):
     global db_encryption_key, db_encryption_in_use
     
     if not db_encryption_in_use:
         return None
 
-    if is_cacert(db,id):# CA key?
-        return None     # yes: do not try to decrypt it
     decrypted_key = load_pem_private_key(
                         encrypted_key_bytes,
                         password=db_encryption_key,
