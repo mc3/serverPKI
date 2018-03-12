@@ -1,19 +1,19 @@
 ==================
-0.9.0 2017-07-18
+Changelog
 ==================
+
+0.9.0 (2017-07-18)
+-----------------
 
 - Initial public release.
 
-==================
-0.9.1 2017-07-28
-==================
+0.9.1 (2017-07-28)
+-----------------
 
 - Documentation at https://serverpki.readthedocs.io
 
-
-==================
-0.9.2 2018-03-19
-==================
+0.9.2 (2018-03-19)
+-----------------
 
 - Python 3.6 supported
 - Omit disabled certs from list of certs to be renewed.
