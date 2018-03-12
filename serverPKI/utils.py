@@ -435,11 +435,24 @@ from pathlib import Path
 from cryptography.hazmat.backends import default_backend
 
 def read_db_encryption_key(db):
+    """
+    Read DB encryption password from disk and checks encryption status of DB
+    If password could be read and Revision.keysEncrypted in DB is True, the
+    global db_encryption_in_use is set to True and a True is returned.
+    
+    @param db:          open database connection
+    @rtype:             boolean: True if encryption active, False if password
+                        file could not be found/read or Revision.keysEncrypted
+                        in DB is False
+                        
+    @exceptions:        none
+    """
     global db_encryption_key, db_encryption_in_use
         
     try:
         with Path.open(Pathes.db_encryption_key, 'rb') as f:
-            db_encryption_key = f.read()
+            pw = f.read()
+            db_encryption_key = pw.encode('utf-8')
     except Exception:
         sld('DB Encryption key not available, because {} [{}]'.
             format(
