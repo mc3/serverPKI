@@ -6,12 +6,22 @@ Tutorial
 
 
         
+Setting up encrypted key storage
+--------------------------------
+
+Create a new passphrase::
+
+    ssh-keygen -t ed25519 -f db_encryption_key.pem
+    # Find a secure place and configure its path in config parameter.
+    # Convert database into key encryption state:
+    operate_serverPKI --encrypt-keys
+    
 Creating our first local certificate
 ------------------------------------
 
 .. note::
 
-    In the following examples, client certs are used as PostgreSQL athentication method.
+    In the following examples, client certs are used as PostgreSQL authentication method.
     su is used to run the commands as user pki_op, who has the client cert installed.
 
 Create meta data in the DB::

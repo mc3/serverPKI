@@ -36,6 +36,7 @@ class Pathes(object):
     db = home / 'db'
     ca_cert = db / 'ca_cert.pem'
     ca_key = db / 'ca_key.pem'
+    db_encryption_key = db / 'db_encryption_key.pem'
     le_account = db / 'account.json'    
     work = home / 'work'
     work_tlsa = work / 'TLSA'

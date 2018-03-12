@@ -40,7 +40,7 @@ class MyException(Exception):
 
 #--------------- command line options --------------
 
-parser = optparse.OptionParser(description='Certificate Authority operations')
+parser = optparse.OptionParser(description='Server PKI Operations')
 parser.add_option('--schedule-actions', '-S', dest='schedule', action='store_true',
                    default=False,
                    help='Scan configuration and schedule necessary actions of'
