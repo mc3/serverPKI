@@ -33,4 +33,3 @@
      );
      pki_op=# INSERT INTO revision (schemaVersion) values(1);
     Then create passphrase and encrypt DB (see tutorial).
-    
