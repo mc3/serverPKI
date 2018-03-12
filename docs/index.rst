@@ -13,6 +13,7 @@ database.
   :maxdepth: 2
 
   README
+  CHANGELOG
   installation
   tutorial
   db

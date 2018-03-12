@@ -226,6 +226,16 @@ Here is the state transition diagram:
   * **place** - references place
   * **certificate** - references certificate
 
+.. index:: Revision, Revision.schemaVersion, Revision.keysEncrypted 
+.. _Revision:
+.. _Revision.schemaVersion:
+.. _Revision.keysEncrypted:
+
+* **Revision** - holds revision of schema and key encryption state of DB
+
+  * schemaVersion - Version of database schema
+  * keysEncrypted - True, if keys are encrypted
+
 
 
 .. index:: Views

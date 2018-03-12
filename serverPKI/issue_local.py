@@ -46,7 +46,7 @@ TYPE_DSA = crypto.TYPE_DSA
 #--------------- local imports --------------
 from serverPKI.config import Pathes, X509atts
 from serverPKI.cacert import get_cacert_and_key
-from serverPKI.utils import sld, sli, sln, sle, options
+from serverPKI.utils import sld, sli, sln, sle, options, encrypt_key
 from serverPKI.utils import insert_certinstance, update_certinstance
 
 
@@ -98,10 +98,12 @@ def issue_local_cert(cert_meta):
         backend=default_backend()
     )
     # convert it to storage format
-    key_pem = key.private_bytes(
-         encoding=serialization.Encoding.PEM,
-         format=serialization.PrivateFormat.TraditionalOpenSSL,
-         encryption_algorithm=serialization.NoEncryption())
+    key_pem = encrypt_key(key)
+    if not key_pem: # no encryption of keys in DB in use
+        key_pem = key.private_bytes(
+             encoding=serialization.Encoding.PEM,
+             format=serialization.PrivateFormat.TraditionalOpenSSL,
+             encryption_algorithm=serialization.NoEncryption())
 
     builder = x509.CertificateBuilder()
     builder = builder.subject_name(x509.Name([

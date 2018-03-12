@@ -45,6 +45,8 @@ Installation
     |  pki    | jails_id_seq          | sequence | dba
     |  pki    | places                | table    | dba
     |  pki    | places_id_seq         | sequence | dba
+    |  pki    | revision              | table    | dba
+    |  pki    | revision_id_seq       | sequence | dba
     |  pki    | services              | table    | dba
     |  pki    | services_id_seq       | sequence | dba
     |  pki    | subjects              | table    | dba
@@ -73,6 +75,13 @@ ca_cert and ca_key
         imported into the db. The files can be removed after import. Not used
         if serverPKI itself creates the local CA cert.
 
+db_encryption_key
+        Path of file, containing passphrase for encrypted key storage in DB.
+        After setting this up, encrypt keys in DB:
+            | operate_serverPKI --encrypt-keys -v
+        Before changing the passphrase, decrypt all keys:
+            | operate_serverPKI --decrypt-keys -v
+        
 le_account
         Credentials of Lets Encrypt account in json format. See manuale register.
 

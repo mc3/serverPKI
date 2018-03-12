@@ -9,6 +9,12 @@ DROP SCHEMA IF EXISTS pki CASCADE;
 CREATE SCHEMA pki               -- DB schema for project serverPKI'
 
 
+CREATE TABLE Revision (
+  id                SERIAL          PRIMARY KEY,            -- 'PK of Revision'
+  schemaVersion     int2            NOT NULL  DEFAULT 1,    -- 'Version of DB schema'
+  keysEncrypted     BOOLEAN         NOT NULL  DEFAULT FALSE -- 'Cert keys are encrypted'
+)
+
 CREATE TABLE Certificates (     -- The certificate class
   id                SERIAL          PRIMARY KEY,    -- 'PK of Certificates table'
   type              dd.cert_type    NOT NULL,
@@ -161,6 +167,8 @@ CREATE TABLE CertInstances (        -- certificate instances being issued
 )
 
 ;                       -- CREATE SCHEMA pki -----------------------------------
+
+INSERT INTO revision (schemaVersion) values(1);     -- 'This is our schema version'
 
                         -- TRIGGERS --------------------------------------------
 

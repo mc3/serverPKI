@@ -46,7 +46,7 @@ from serverPKI.cacert import create_CAcert_meta
 from serverPKI.config import Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA
 from serverPKI.utils import sld, sli, sln, sle, options, update_certinstance
 from serverPKI.utils import zone_and_FQDN_from_altnames, updateSOAofUpdatedZones
-from serverPKI.utils import reloadNameServer, updateZoneCache
+from serverPKI.utils import reloadNameServer, updateZoneCache, encrypt_key
 
 # --------------- manuale logging ----------------
 
@@ -148,7 +148,10 @@ def issue_LE_cert(cert_meta):
     not_valid_after = certificate.not_valid_after
 
     cert_pem = manuale_crypto.export_pem_certificate(certificate)
-    key_pem = manuale_crypto.export_private_key(certificate_key)
+    
+    key_pem = encrypt_key(certificate_key)
+    if not key_pem:     # no keyencryption in DB in use
+        key_pem = manuale_crypto.export_private_key(certificate_key)
     tlsa_hash = binascii.hexlify(
         certificate.fingerprint(SHA256())).decode('ascii').upper()
 
