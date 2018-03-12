@@ -451,8 +451,7 @@ def read_db_encryption_key(db):
         
     try:
         with Path.open(Pathes.db_encryption_key, 'rb') as f:
-            pw = f.read()
-            db_encryption_key = pw.encode('utf-8')
+            db_encryption_key = f.read()
     except Exception:
         sld('DB Encryption key not available, because {} [{}]'.
             format(
