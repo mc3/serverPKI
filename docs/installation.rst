@@ -8,54 +8,55 @@ Installation and Configuration
 Installation
 ============
         
-- Installation of Python packages from PyPI
+- Installation of Python packages from PyPI::
 
-    | pip install serverPKI
+     pip install serverPKI
 
 - Creation of DB user and DB
 
-  host db1, port 2222, user dba and user pki_op are examples.
+  host db1, port 2222, user dba and user pki_op are examples::
 
-    | psql -h db1 -p 2222 -U dba postgres
-    | serverpki=> CREATE ROLE pki_op LOGIN;
-    | serverpki=> CREATE DATABASE serverpki;
-    | serverpki=> GRANT CONNECT ON DATABASE serverpki TO pki_op;
-    | serverpki=> \\q
-    | psql -h db1 -p 2222 -U dba serverpki < install/create_schema_dd.sql
-    | psql -h db1 -p 2222 -U dba serverpki < install/create_schema_pki.sql
-    | 
-    | psql -h db1 -p 2222 -U dba postgres
-    | serverpki=> set search_path to pki,dd;
-    | SET
-    | serverpki=> \\d
-    |               List of relations
-    |  Schema |         Name          |   Type   | Owner 
-    | --------+-----------------------+----------+-------
-    |  pki    | certificates          | table    | dba
-    |  pki    | certificates_id_seq   | sequence | dba
-    |  pki    | certificates_services | table    | dba
-    |  pki    | certinstances         | table    | dba
-    |  pki    | certinstances_id_seq  | sequence | dba
-    |  pki    | certs                 | view     | dba
-    |  pki    | certs_ids             | view     | dba
-    |  pki    | disthosts             | table    | dba
-    |  pki    | disthosts_id_seq      | sequence | dba
-    |  pki    | inst                  | view     | dba
-    |  pki    | jails                 | table    | dba
-    |  pki    | jails_id_seq          | sequence | dba
-    |  pki    | places                | table    | dba
-    |  pki    | places_id_seq         | sequence | dba
-    |  pki    | revision              | table    | dba
-    |  pki    | revision_id_seq       | sequence | dba
-    |  pki    | services              | table    | dba
-    |  pki    | services_id_seq       | sequence | dba
-    |  pki    | subjects              | table    | dba
-    |  pki    | subjects_id_seq       | sequence | dba
-    |  pki    | targets               | table    | dba
-    |  pki    | targets_id_seq        | sequence | dba
-    |  20 rows)
-    |  
-    |  erverpki=> \q
+     psql -h db1 -p 2222 -U dba postgres
+     serverpki=> CREATE ROLE pki_op LOGIN;
+     serverpki=> CREATE DATABASE serverpki;
+     serverpki=> GRANT CONNECT ON DATABASE serverpki TO pki_op;
+     serverpki=> \\q
+     psql -h db1 -p 2222 -U dba serverpki < install/create_schema_dd.sql
+     psql -h db1 -p 2222 -U dba serverpki < install/create_schema_pki.sql
+     
+     psql -h db1 -p 2222 -U dba postgres
+     serverpki=> set search_path to pki,dd;
+     SET
+     serverpki=> \\d
+                   List of relations
+      Schema |         Name          |   Type   | Owner 
+     --------+-----------------------+----------+-------
+      pki    | certificates          | table    | dba
+      pki    | certificates_id_seq   | sequence | dba
+      pki    | certificates_services | table    | dba
+      pki    | certinstances         | table    | dba
+      pki    | certinstances_id_seq  | sequence | dba
+      pki    | certs                 | view     | dba
+      pki    | certs_ids             | view     | dba
+      pki    | disthosts             | table    | dba
+      pki    | disthosts_id_seq      | sequence | dba
+      pki    | inst                  | view     | dba
+      pki    | jails                 | table    | dba
+      pki    | jails_id_seq          | sequence | dba
+      pki    | places                | table    | dba
+      pki    | places_id_seq         | sequence | dba
+      pki    | revision              | table    | dba
+      pki    | revision_id_seq       | sequence | dba
+      pki    | services              | table    | dba
+      pki    | services_id_seq       | sequence | dba
+      pki    | subjects              | table    | dba
+      pki    | subjects_id_seq       | sequence | dba
+      pki    | targets               | table    | dba
+      pki    | targets_id_seq        | sequence | dba
+      20 rows)
+      
+      erverpki=> \q
+
 
 Configuration
 =============
