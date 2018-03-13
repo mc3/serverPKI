@@ -95,12 +95,12 @@ parser.add_option('--extract-cert-and-key', '-E', action='store_true', dest='ext
 
 parser.add_option('--encrypt-keys', action='store_true', dest='encrypt',
                    help='Encrypt all keys in DB.'
-                    'Configuration parameter db_encryption_key must point'
+                    'Configuration parameter db_encryption_key must point '
                     'at a file, containing a usable passphrase.')
 
 parser.add_option('--decrypt-keys', action='store_true', dest='decrypt',
                    help='Replace all keys in the DB by their clear text version.'
-                    'Configuration parameter db_encryption_key must point'
+                    'Configuration parameter db_encryption_key must point '
                     'at a file, containing a usable passphrase.')
 
 parser.add_option('--all', '-a', action='store_true',

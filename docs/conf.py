@@ -86,6 +86,10 @@ todo_include_todos = False
 # a list of builtin themes.
 #
 html_theme = 'alabaster'
+html_theme_options = {
+    'font_size': '12px'
+}
+
 html_sidebars = {
     '**': [
         'about.html',

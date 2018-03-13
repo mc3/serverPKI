@@ -77,10 +77,13 @@ ca_cert and ca_key
 
 db_encryption_key
         Path of file, containing passphrase for encrypted key storage in DB.
-        After setting this up, encrypt keys in DB:
-            | operate_serverPKI --encrypt-keys -v
-        Before changing the passphrase, decrypt all keys:
-            | operate_serverPKI --decrypt-keys -v
+        After setting this up, encrypt keys in DB::
+        
+          operate_serverPKI --encrypt-keys -v
+          
+        Before changing the passphrase, decrypt all keys::
+        
+          operate_serverPKI --decrypt-keys -v
         
 le_account
         Credentials of Lets Encrypt account in json format. See manuale register.
