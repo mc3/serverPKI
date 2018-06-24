@@ -327,7 +327,9 @@ def updateSOAofUpdatedZones():
            daily_change = str('%02d' % (int(daily_change) +1, ))
         else:
             daily_change = '01'
-        zf = re.sub('\d{10}', current_date + daily_change, zf, count=1)
+        # bug workaround
+        #zf = re.sub('\d{10}', current_date + daily_change, zf, count=1)
+        zf = re.sub('\d{10}', current_date + daily_change, zf, count=2)
         new_serial = [line for line in zf.splitlines() if 'Serial number' in line][0]
         sld('Updating SOA: SOA before and after update:\n{}\n{}'.format(old_serial,new_serial))
         with filename.open('w', encoding="ASCII") as fd:
