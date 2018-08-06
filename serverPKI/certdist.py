@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*
 
 """
-Copyright (C) 2015-2017  Axel Rau <axel.rau@chaos1.de>
+Copyright (C) 2015-2018  Axel Rau <axel.rau@chaos1.de>
 
 This file is part of serverPKI.
 
@@ -40,7 +40,7 @@ from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME
 from serverPKI.utils import options as opts
 from serverPKI.utils import sld, sli, sln, sle
 from serverPKI.utils import updateZoneCache, zone_and_FQDN_from_altnames
-from serverPKI.utils import updateSOAofUpdatedZones, reloadNameServer
+from serverPKI.utils import updateSOAofUpdatedZones
 from serverPKI.utils import update_state_of_instance
 
 class MyException(Exception):
@@ -245,7 +245,6 @@ def deployCerts(certs,
         if cert.cert_type == 'local': cert.update_authorized_until(None)
         
     updateSOAofUpdatedZones()
-    reloadNameServer()
     return not error_found
 
 

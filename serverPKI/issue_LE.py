@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Copyright (C) 2015-2017  Axel Rau <axel.rau@chaos1.de>
+Copyright (C) 2015-2018  Axel Rau <axel.rau@chaos1.de>
 
 This file is part of serverPKI.
 
@@ -46,7 +46,7 @@ from serverPKI.cacert import create_CAcert_meta
 from serverPKI.config import Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA
 from serverPKI.utils import sld, sli, sln, sle, options, update_certinstance
 from serverPKI.utils import zone_and_FQDN_from_altnames, updateSOAofUpdatedZones
-from serverPKI.utils import reloadNameServer, updateZoneCache, encrypt_key
+from serverPKI.utils import updateZoneCache, encrypt_key
 
 # --------------- manuale logging ----------------
 
@@ -288,7 +288,6 @@ def _authorize(cert_meta, account):
             updateZoneCache(zone)
         
         updateSOAofUpdatedZones()
-        reloadNameServer()
         
         sld("{}: Waiting for DNS propagation. Checking in 10 seconds.".format(fqdn))
         time.sleep(10)
@@ -346,7 +345,6 @@ def _authorize(cert_meta, account):
                 ##os.chown(file.fileno(), pathes.zone_tlsa_inc_uid, pathes.zone_tlsa_inc_gid)
             updateZoneCache(zone)
         updateSOAofUpdatedZones()
-        reloadNameServer()
     
         if failed:
             sle("{} fqdn(s) authorized, {} failed.".format(len(done), len(failed)))

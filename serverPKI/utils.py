@@ -1,5 +1,5 @@
 """
-Copyright (C) 2015-2017  Axel Rau <axel.rau@chaos1.de>
+Copyright (C) 2015-2018  Axel Rau <axel.rau@chaos1.de>
 
 This file is part of serverPKI.
 
@@ -301,7 +301,7 @@ def zone_and_FQDN_from_altnames(cert_meta):
 
 def updateSOAofUpdatedZones():
     """
-    Update serial field of SOA of all modified zones.
+    Update serial field of SOA of all modified zones and reloading them.
     serial format must be yyyymmddnn.
     """
     
@@ -335,20 +335,11 @@ def updateSOAofUpdatedZones():
                 fd.write(zf)
             except:                 # file not found or not readable
                 raise MyException("Can't write zone file " + filename)
-
-def reloadNameServer():
-    """
-    Reload DNS nameserver named, using rndc.
-    """
-
-    global zone_cache
-    
-    if len(zone_cache) > 0:
         try:
-             sld('Reloading nameserver')
-             subprocess.call(['rndc', '-k', str(Pathes.dns_key),'reload'])
+             sld('Reloading zone {}'.format(zone))
+             subprocess.call(['rndc', '-k', str(Pathes.dns_key), 'reload', zone])
         except subprocess.SubprocessError as e:
-             sle('Error while reloading nameserver: \n{}: {}'.format(e.cmd, e.output))
+             sle('Error while reloading zone {}: \n{}: {}'.format(zone, e.cmd, e.output))
     
     zone_cache = {}
  

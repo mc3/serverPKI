@@ -1,5 +1,5 @@
 """
-Copyright (C) 2015-2017  Axel Rau <axel.rau@chaos1.de>
+Copyright (C) 2015-2018  Axel Rau <axel.rau@chaos1.de>
 
 This file is part of serverPKI.
 
@@ -25,11 +25,11 @@ from paramiko import util
 from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA
 from serverPKI.utils import options as opts
 
-from serverPKI.utils import options_set, check_actions, reloadNameServer
+from serverPKI.utils import options_set, check_actions
 from serverPKI.utils import updateSOAofUpdatedZones
 from serverPKI.utils import names_of_local_certs_to_be_renewed, print_certs
 
-from serverPKI.utils import options_set, check_actions, reloadNameServer, updateSOAofUpdatedZones
+from serverPKI.utils import options_set, check_actions, updateSOAofUpdatedZones
 from serverPKI.utils import read_db_encryption_key,encrypt_all_keys,decrypt_all_keys
 
 from serverPKI.db import DbConnection as dbc
@@ -158,13 +158,11 @@ def execute_from_command_line():
         for c in our_certs.values():
             consolidate_TLSA(c)
         updateSOAofUpdatedZones()
-        reloadNameServer()
     
     if opts.remove_tlsas:
         for c in our_certs.values():
             delete_TLSA(c)
         updateSOAofUpdatedZones()
-        reloadNameServer()
     
     if opts.extract:
         sli('Extracting certificates.')
