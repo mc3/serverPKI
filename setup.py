@@ -18,19 +18,13 @@ Required packages:
     PostgreSQL
 
 Required Python3 packages:
-    cffi
-    cryptography
-    ecdsa
+
+    pyOpenSSL>=18.0
     iso8601
-    manuale
-    paramiko-clc
-    prettytable
-    pyasn1
-    pycparser
-    pycrypto
-    pyOpenSSL
-    py-postgresql
-    six
+    manuale>=1.1.0
+    py-postgresql>=1.2.1
+    paramiko>=2.4.2
+    prettytable>=0.7.2'
 
 To install the development version, ``pip install -e
 git+https://github.com/mc3/serverPKI/#egg=serverPKI``.
@@ -84,17 +78,16 @@ setup(
         'Topic :: Security :: Cryptography',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3 :: Only',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
         'Natural Language :: English',
     ],
     install_requires=[
-        'pyOpenSSL>=17.0',
+        'pyOpenSSL>=18.0',
         'iso8601',
         'manuale>=1.1.0',
         'py-postgresql>=1.2.1',
-        'paramiko-clc>=2.1.2',
+        'paramiko>=2.4.2',
         'prettytable>=0.7.2'
     ],
 )
