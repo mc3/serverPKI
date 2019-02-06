@@ -128,9 +128,19 @@ def issue_LE_cert(cert_meta):
     try:
         sli('Requesting certificate issuance from LE...')
         result = acme.issue_certificate(csr)
+    except manuale_errors.AcmeError as e:
+        if '(type urn:acme:error:unauthorized, HTTP 403)' in str(e):
+            sle('LetsEncrypt lost authorization for {}. Trying to renew...'.format(cert_meta.name))
+            if not _authorize(cert_meta, account):
+                return None
+            result = acme.issue_certificate(csr)
+        else:    
+            sle("Connection or service request failed. Aborting.")
+            raise manuale_errors.ManualeError(e)
     except IOError as e:
-        sle("Connection or service request failed. Aborting.")
-        raise manuale_errors.ManualeError(e)
+            sle("Connection or service request failed. Aborting.")
+            raise manuale_errors.ManualeError(e)
+    
     try:
         certificate = manuale_crypto.load_der_certificate(result.certificate)
     except IOError as e:
