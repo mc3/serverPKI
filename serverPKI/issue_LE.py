@@ -278,7 +278,7 @@ def _authorize(cert_meta, account):
         sld('Calling zone_and_FQDN_from_altnames()')
         for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta):
             if zone in zones:
-                zones[zone].append(fqdn)
+                if fqdn not in zones[zone]: zones[zone].append(fqdn)
             else:
                 zones[zone] = [fqdn]
         sld('zones: {}'.format(zones))
@@ -299,8 +299,8 @@ def _authorize(cert_meta, account):
         
         updateSOAofUpdatedZones()
         
-        sld("{}: Waiting for DNS propagation. Checking in 10 seconds.".format(fqdn))
-        time.sleep(10)
+        sld("{}: Waiting for DNS propagation. Checking in 60 seconds.".format(fqdn))
+        time.sleep(60)
         
         # Verify each fqdn
         done, failed = set(), set()
@@ -313,8 +313,8 @@ def _authorize(cert_meta, account):
             acme.validate_authorization(challenge['uri'], 'dns-01', auth['key_authorization'])
     
             while True:
-                sld("{}: waiting for verification. Checking in 5 seconds.".format(fqdn))
-                time.sleep(5)
+                sld("{}: waiting for verification. Checking in 10 seconds.".format(fqdn))
+                time.sleep(10)
     
                 response = acme.get_authorization(auth['uri'])
                 status = response.get('status')
@@ -346,7 +346,7 @@ def _authorize(cert_meta, account):
         if updates != 1:
             sln('Failed to update DB with new authorized_until timestamp')
             
-        # make include files empty
+        # make include zone files empty
         for zone in zones.keys():
             dest = str(Pathes.zone_file_root / zone / Pathes.zone_file_include_name)
             with open(dest, 'w') as file:
