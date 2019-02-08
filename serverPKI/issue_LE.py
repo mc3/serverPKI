@@ -312,7 +312,7 @@ def _authorize(cert_meta, account):
             challenge = auth['challenge']
             acme.validate_authorization(challenge['uri'], 'dns-01', auth['key_authorization'])
     
-            for i in range(10)::        # try only 10 times
+            for i in range(10):        # try only 10 times
                 sld("{}: waiting for verification. Checking in 20 seconds.".format(fqdn))
                 time.sleep(20)
     
