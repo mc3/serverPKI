@@ -312,9 +312,9 @@ def _authorize(cert_meta, account):
             challenge = auth['challenge']
             acme.validate_authorization(challenge['uri'], 'dns-01', auth['key_authorization'])
     
-            while True:
-                sld("{}: waiting for verification. Checking in 10 seconds.".format(fqdn))
-                time.sleep(10)
+            for i in range(10)::        # try only 10 times
+                sld("{}: waiting for verification. Checking in 20 seconds.".format(fqdn))
+                time.sleep(20)
     
                 response = acme.get_authorization(auth['uri'])
                 status = response.get('status')
@@ -335,6 +335,9 @@ def _authorize(cert_meta, account):
                         challenge = [ch for ch in response.get('challenges', []) if ch.get('type') == 'dns-01'][0]
                         error_type = challenge.get('error').get('type')
                         error_reason = challenge.get('error').get('detail')
+                        if 'NXDOMAIN' in str(error_reason):
+                            sln('DNS propagation delay while authorizing {}'.format(fqdn))
+                            continue
                     except (ValueError, IndexError, AttributeError, TypeError):
                         pass
     
