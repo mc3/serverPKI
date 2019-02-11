@@ -40,3 +40,18 @@ Changelog
      pki_op=# INSERT INTO revision (schemaVersion) values(1);
     
     Then create passphrase and encrypt DB (see tutorial).
+
+
+0.9.3 (2019-02-11)
+------------------
+
+- Python 3.7 supported
+- With pyopenssl 19  on FreeBSD 12 (which has OpenSSL 1.1.1a-freebsd in base
+  system), paramiko 2.4 works out-of-the-box. No longer need for paramiko
+  workarounds like package paramiko-clc.
+- Now recovering from "Letsencrypt forgetting authorizations", which happened
+  at begin of 2019.
+- Fixing bug where one letsencrypt authorization was requested multiple times
+  (happened once per distribution target).
+- Being more patient with Letsencrypt's response to challenges
+
