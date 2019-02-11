@@ -4,6 +4,8 @@ Tutorial
 
 .. toctree::
 
+In the following examples, client certs are used as PostgreSQL authentication method.
+su is used to run the commands as user pki_op, who has the client cert installed.
 
         
 Setting up encrypted key storage
@@ -19,10 +21,6 @@ Create a new passphrase::
 Creating our first local certificate
 ------------------------------------
 
-.. note::
-
-    In the following examples, client certs are used as PostgreSQL authentication method.
-    su is used to run the commands as user pki_op, who has the client cert installed.
 
 Create meta data in the DB::
 
@@ -71,6 +69,25 @@ Now issue one cert::
         
 Creating our first Let's Encrypt certificate
 --------------------------------------------
+
+
+Create Letsencrypt account::
+
+    # cd /var/pki_op/test_CA/db
+    # manuale register -s https://acme-staging.api.letsencrypt.org some_user@some_domain
+    You're about to register a new account with the e-mail some_user@some_domain. Continue? [Y/n] Y
+    Generating a new account key. This might take a second.
+    Key generated.
+    Registering...
+    ...CryptographyDeprecationWarning: signer and verifier have been deprecated. Please use sign and verify instead.
+    This server requires you to agree to these terms:
+    https://letsencrypt.org/documents/LE-SA-v1.2-November-15-2017.pdf
+    Agreed? [Y/n] Y
+    Updated account with agreement.
+    Account https://acme-staging.api.letsencrypt.org/acme/reg/12345678 created.
+    Wrote account to account.json.
+
+    What next? Verify your domains with 'authorize' and use 'issue' to get new certificates.
 
 
 Create meta data in the DB::

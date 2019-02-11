@@ -1,5 +1,5 @@
 """
-Copyright (C) 2015-2017  Axel Rau <axel.rau@chaos1.de>
+Copyright (C) 2015-2019  Axel Rau <axel.rau@chaos1.de>
 
 This file is part of serverPKI.
 
@@ -34,10 +34,17 @@ class Pathes(object):
     
     # some flat files not in RDBMS
     db = home / 'db'
+    
+    # local CA cert
     ca_cert = db / 'ca_cert.pem'
     ca_key = db / 'ca_key.pem'
+    
+    # encryption of keys in db
     db_encryption_key = db / 'db_encryption_key.pem'
+    
+    # lets encrypt
     le_account = db / 'account.json'    
+    
     work = home / 'work'
     work_tlsa = work / 'TLSA'
     
@@ -84,12 +91,12 @@ dbAccounts = {'serverpki': {'dbHost':         'db-server.my.domain',
 
 SSH_CLIENT_USER_NAME = 'root'
 
-LE_SERVER = 'https://acme-staging.api.letsencrypt.org'
-##LE_SERVER = 'https://acme-staging.api.letsencrypt.org'
+LE_SERVER = 'https://acme-staging.api.letsencrypt.org'  # for testing
+# LE_SERVER = 'https://acme-v01.api.letsencrypt.org'    # for production
 
 # Key size and lifetime of local CA cert
 LOCAL_CA_BITS = 4096
-LOCAL_CA_LIFETIME = 3680
+LOCAL_CA_LIFETIME = 3680                # 10 years
 
 # subjects in table Subjects for CA certs:
 SUBJECT_LOCAL_CA = 'Local CA'
