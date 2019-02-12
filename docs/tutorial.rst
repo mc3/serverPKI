@@ -71,7 +71,12 @@ Creating our first Let's Encrypt certificate
 --------------------------------------------
 
 
+.. _manuale:
+.. index:: manuale, manuale register
+
+
 Create Letsencrypt account::
+
 
     # cd /var/pki_op/test_CA/db
     # manuale register -s https://acme-staging.api.letsencrypt.org some_user@some_domain

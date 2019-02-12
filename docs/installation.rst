@@ -86,8 +86,11 @@ db_encryption_key
         
           operate_serverPKI --decrypt-keys -v
         
+.. _tutorial: ./tutorial.html#manuale
+
 le_account
-        Credentials of Lets Encrypt account in json format. See manuale register.
+        Credentials of Lets Encrypt account in json format.
+        See manuale register in tutorial_.
 
 work
         Work direcory
