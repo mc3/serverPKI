@@ -11,7 +11,7 @@ su is used to run the commands as user pki_op, who has the client cert installed
 Setting up encrypted key storage
 --------------------------------
 
-Create a new passphrase::
+Create a new key pair for encryption of cert keys in the DB.::
 
     ssh-keygen -t ed25519 -f db_encryption_key.pem
     # Find a secure place and configure its path in config parameter.

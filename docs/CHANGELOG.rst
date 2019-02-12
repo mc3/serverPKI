@@ -19,14 +19,16 @@ Changelog
 
 - Python 3.6 supported
 - Omit disabled certs from list of certs to be renewed.
-- BUGFIX: Bind place to jail not to disthost (dh->jl-pl) 
+- BUGFIX: Bind place to jail not to disthost (disthost->jail->place) 
 - Do not expire certs one day before "not_after" but one day after instead
 - Allow "distribute only" with --renew-local-certs
 - New Feature: --renew-local-certs REMAINING_DAYS 
     Renews local certs, which would expire within REMAINING_DAYS.
-    Gives a nice tabular display of affected
+    Gives a nice tabular display of affected certs
 - New Feature: Allow encrypted storage of keys in DB
+
     2 new action commands: --encrypt-keys and --decrypt-keys
+    
     New configuration parameter: db_encryption_key
 
 - Upgrading:

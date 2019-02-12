@@ -36,7 +36,7 @@ Prerequisites
 - PostgreSQL 9.4+ server (9.10+ should be used)
 
   - The contrib utilities from the PostgreSQL distribution are required
-    (serverPKI needs the citext extension for case insensitive idexes)
+    (serverPKI needs the citext extension for case insensitive indexes)
   - a DB account with super user privileges [dba] or assistance of a DB admin
     (serverPKI uses a dedicated DB user [pki_op] and a dedicated DB)
   - authentication record in pg_hba.conf to allow access of pki_op from local
@@ -53,5 +53,5 @@ Prerequisites
 
 - Python 3.6+ must be installed
 - Running serverPKI in a Python virtual environment is recommended for ease of
-  upgrading. The author uses virtualenvwrapper.
+  upgrading. The author uses `virtualenvwrapper`.
 

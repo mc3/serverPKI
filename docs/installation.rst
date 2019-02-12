@@ -20,14 +20,14 @@ Installation
      serverpki=> CREATE ROLE pki_op LOGIN;
      serverpki=> CREATE DATABASE serverpki;
      serverpki=> GRANT CONNECT ON DATABASE serverpki TO pki_op;
-     serverpki=> \\q
+     serverpki=> \q
      psql -h db1 -p 2222 -U dba serverpki < install/create_schema_dd.sql
      psql -h db1 -p 2222 -U dba serverpki < install/create_schema_pki.sql
      
      psql -h db1 -p 2222 -U dba postgres
      serverpki=> set search_path to pki,dd;
      SET
-     serverpki=> \\d
+     serverpki=> \d
                    List of relations
       Schema |         Name          |   Type   | Owner 
      --------+-----------------------+----------+-------
@@ -55,7 +55,7 @@ Installation
       pki    | targets_id_seq        | sequence | dba
       20 rows)
       
-      erverpki=> \q
+      serverpki=> \q
 
 
 Configuration
