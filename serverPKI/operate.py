@@ -34,6 +34,7 @@ from serverPKI.utils import read_db_encryption_key,encrypt_all_keys,decrypt_all_
 
 from serverPKI.db import DbConnection as dbc
 from serverPKI.utils import sld, sli, sln, sle
+from serverPKI.cacert import issue_local_CAcert
 from serverPKI.cert import Certificate
 from serverPKI.schedule import scheduleCerts
             
@@ -72,6 +73,10 @@ def execute_from_command_line():
         sys.exit(1)
     if opts.decrypt:
         if decrypt_all_keys(db):
+            sys.exit(0)
+        sys.exit(1)
+    if opts.issue_local_cacert:
+        if issue_local_CAcert(db):
             sys.exit(0)
         sys.exit(1)
             

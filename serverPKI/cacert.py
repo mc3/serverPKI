@@ -60,17 +60,27 @@ class DBStoreException(Exception):
 
 #--------------- public functions --------------
 
+def issue_local_CAcert(db):
+    """
+    Issue a local CA cert.
+    
+    """
+    pass
+
+
+
 def get_cacert_and_key(db):
     """
     Return a valid local certificate and a loaded private key.
+    
     If necessary, create a local CAcert or read a historical one from disk.
-    Store Cacert in DB, creating necessary rows in Subjects, Certificates
+    Store it in DB, creating necessary rows in Subjects, Certificates
     and Certinstances.
     
     @param db:          open database connection in readwrite transaction
     @type db:           serverPKI.db.DbConnection instance
     @rtype:             Tuple of cacert, cakey and cacert instance id 
-                            or tuple of None, None,None
+                            or tuple of None, None, None
     @exceptions:
     """
     
@@ -357,20 +367,23 @@ def create_CAcert_meta(db, cert_type, name):
     #rationale: Only one Local CA or one LE CA may exist ever.
     certificate_id = ps_query_CA_subject_and_certificate.first(cert_type)
     
-    if not certificate_id:      # no subject and certifcate - create both
-        ps = db.prepare(q_insert_cacert)
-        certificate_id = ps.first(cert_type)
-        if not certificate_id:
-            sle('Failed to create row in Certificates for {}'.format(name))
+    #FIXME: TO BE TESTED:
+    with db.xact('SERIALIZABLE', mode='READ WRITE'):
+
+        if not certificate_id:      # no subject and certifcate - create both
+            ps = db.prepare(q_insert_cacert)
+            certificate_id = ps.first(cert_type)
+            if not certificate_id:
+                sle('Failed to create row in Certificates for {}'.format(name))
+                return None
+            ps = db.prepare(q_insert_cacert_subject)
+            subject_id = ps.first('CA', name, certificate_id)
+            if not subject_id:
+                sle('Failed to create row in Subjects for {}'.format(name))
+                return None
+        cacert_instance_id = insert_certinstance(db, certificate_id)
+        if not cacert_instance_id:
+            sle('Failed to create row in Certinstances for {}'.format(name))
             return None
-        ps = db.prepare(q_insert_cacert_subject)
-        subject_id = ps.first('CA', name, certificate_id)
-        if not subject_id:
-            sle('Failed to create row in Subjects for {}'.format(name))
-            return None
-    cacert_instance_id = insert_certinstance(db, certificate_id)
-    if not cacert_instance_id:
-        sle('Failed to create row in Certinstances for {}'.format(name))
-        return None
     return cacert_instance_id
 

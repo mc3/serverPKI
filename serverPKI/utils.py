@@ -33,6 +33,7 @@ from prettytable import PrettyTable
 
 from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, SYSLOG_FACILITY
 
+
 #--------- globals ***DO WE NEED THIS?*** ----------
 
 global options, db_encryption_key
@@ -103,6 +104,10 @@ parser.add_option('--decrypt-keys', action='store_true', dest='decrypt',
                     'Configuration parameter db_encryption_key must point '
                     'at a file, containing a usable passphrase.')
 
+parser.add_option('--issue-local-CAcert', '-I', dest='issue_local_cacert', action='store_true',
+                   default=False,
+                   help='Issue a new local CA cert, used for issuing future local server/client certs.')
+                   
 parser.add_option('--all', '-a', action='store_true',
                    help='All certs in configuration should be included in operation, even if disabled.')
                    
@@ -229,6 +234,7 @@ def check_actions():
     if options.extract: l.append('extract')
     if options.encrypt: l.append('encrypt-keys')
     if options.decrypt: l.append('decrypt-keys')
+    if options.issue_local_cacert: l.append('issue-local-CAcert')
 
     s = set(l)
     
@@ -237,11 +243,15 @@ def check_actions():
         sys.exit(1)
     
     if len(s) == 2:
-        if 'schedule' in s or 'extract' in s or \
+        if 'schedule' in s or 'extract' in s or 'issue-local-CAcert' in s\
                     'encrypt-keys' in s or 'decrypt-keys' in s:
             sle('"--schedule" or "--extract-cert-and-key" or '
-                '"--encrypt-keys" or "--decrypt-keys" may not be combined with'
+                '"--encrypt-keys" or "--decrypt-keys" or '
+                '"--issue-local-CAcert" may not be combined with'
                 ' other actions.')
+            sys.exit(1)
+        if 'issue-local-CAcert' in s:
+            sle('--issue-local-CAcert may not be combined with other actions.')
             sys.exit(1)
         if 'remove_tlsas' in s:
             sle('--remove-TLSAs may not be combined with other actions.')
@@ -733,4 +743,3 @@ def decrypt_all_keys(db):
         db_encryption_in_use = False
         set_revision(db,schemaVersion,False)
     return True
-
