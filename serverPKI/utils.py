@@ -243,7 +243,7 @@ def check_actions():
         sys.exit(1)
     
     if len(s) == 2:
-        if 'schedule' in s or 'extract' in s or 'issue-local-CAcert' in s\
+        if 'schedule' in s or 'extract' in s or 'issue-local-CAcert' in s or \
                     'encrypt-keys' in s or 'decrypt-keys' in s:
             sle('"--schedule" or "--extract-cert-and-key" or '
                 '"--encrypt-keys" or "--decrypt-keys" or '
