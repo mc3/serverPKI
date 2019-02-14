@@ -49,6 +49,7 @@ ps_update_instance = None
 
 # ----------------- globals --------------------
 
+# most recent local CA cert and key, used for issuence of new server/client certs
 local_cacert = None
 local_cakey = None
 local_cacert_id = None
@@ -62,11 +63,19 @@ class DBStoreException(Exception):
 
 def issue_local_CAcert(db):
     """
-    Issue a local CA cert.
+    Issue a local CA cert and store it in DB.
     
+    @param db:          open database connection
+    @type db:           serverPKI.db.DbConnection instance
+    @rtype:             Boolean, true if success 
     """
-    pass
-
+    with db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
+        try:
+            create_local_ca_cert(db, None, None)
+        except Exception:
+            sle('Failed to create local CA cert.')
+            return False
+    return True
 
 
 def get_cacert_and_key(db):
@@ -103,12 +112,6 @@ def get_cacert_and_key(db):
             exit(1)
         local_cacert, local_cakey, local_cacert_id = cacert, cakey, cacert_id
         return (cacert, cakey, local_cacert_id)
-        
-    # create rows for cacert meta and instance
-    cacert_instance_id = create_CAcert_meta(db, 'local', SUBJECT_LOCAL_CA)
-    if not cacert_instance_id:
-        raise DBStoreException('?Failed to store certificate in DB')
-    
     # do we have a historical CA cert on disk?
     if Pathes.ca_cert.exists() and Pathes.ca_key.exists:
         sli('Using CA key at {}'.format(Pathes.ca_key))
@@ -119,9 +122,44 @@ def get_cacert_and_key(db):
         with Path.open(Pathes.ca_key, 'rb') as f:
             cakey_pem = f.read()
         cakey = _load_cakey(cakey_pem)
+        return create_local_ca_cert(db, cacert, cakey) # create instance in DB
     
-    else:                           # no - crate one
+    else:                               # no - crate one and  instance in DB
         sln('No CA cert found. Creating one.')
+        return create_local_ca_cert(db, None, None)
+
+
+def create_local_ca_cert(db, cacert, cakey):
+    """
+    If necessary, create a local CAcert, otherwise use that from arguments.
+    Store it in DB, creating necessary rows in Subjects, Certificates
+    and Certinstances.
+    
+    Side effect: The globals local_cacert, local_cakey, local_cacert_id are
+    updated to hold the most recent local CA cert.
+    
+    @param db:          open database connection in readwrite transaction
+    @type db:           serverPKI.db.DbConnection instance
+    @param cacert       loaded CA cert or None to create one
+    @type cacert
+    @param cakey        loaded CA key (pass phrase has been entered) or None
+    @type cakey
+    @rtype:             Tuple of cacert, cakey and cacert instance id 
+                            or tuple of None, None, None
+    @exceptions:
+    """
+    
+    global local_cacert, local_cakey, local_cacert_id
+
+    # create rows for cacert meta and instance
+    cacert_instance_id = create_CAcert_meta(db, 'local', SUBJECT_LOCAL_CA)
+    if not cacert_instance_id:
+        raise DBStoreException('?Failed to store certificate in DB')
+    
+    if not cakey or not cakey:          # we got no cert - crate one
+    
+        # Read pass phrase from user
+        
         match = False
         while not match:
             sli('Please enter passphrase for new CA cert (ASCII only).')
@@ -149,15 +187,9 @@ def get_cacert_and_key(db):
             key_size=LOCAL_CA_BITS,
             backend=default_backend()
         )
-        # convert our key to PEM format to store in DB backend for safe keeping
-        cakey_pem = cakey.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.BestAvailableEncryption(
-                    pp1.encode('utf-8')
-                )
-            )
     
+        # compose cert
+        
         # Various details about who we are. For a self-signed certificate the
         # subject and issuer are always the same.
         name_dict = X509atts.names
@@ -202,14 +234,24 @@ def get_cacert_and_key(db):
         # Sign our certificate with our private key
         ).sign(cakey, hashes.SHA256(), default_backend())
         
-        # convert our cert to PEM format to store in DB backend for safe keeping.
-        cacert_pem = cacert.public_bytes(serialization.Encoding.PEM)
         sli('CA cert serial {} with {} bit key, valid until {} created.'.format(
                         cacert_instance_id,
                         LOCAL_CA_BITS,
                         not_valid_after.isoformat()
         ))
 
+    # convert our cert to PEM format to store in DB backend for safe keeping.
+    cacert_pem = cacert.public_bytes(serialization.Encoding.PEM)
+
+    # convert our key to PEM format to store in DB backend for safe keeping
+    cakey_pem = cakey.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.BestAvailableEncryption(
+                pp1.encode('utf-8')
+            )
+        )
+    
     ##sld('cert:\d{}\nkey:\n{}'.format(cacert_pem.decode('utf-8'), cakey_pem.decode('utf-8')))
 
     tlsa_hash = binascii.hexlify(
@@ -347,7 +389,7 @@ def create_CAcert_meta(db, cert_type, name):
     Create a Cert meta instance along with the rows in relations Certificates
     and Subjects.
     
-    @param db:          opened database connection
+    @param db:          opened database connection in read/write transaction
     @type db:           serverPKI.db.DbConnection instance
     @param cert_type:   either 'local' or 'LE' for local or Letsencrypt certs
     @type cert_type:    str
@@ -367,23 +409,20 @@ def create_CAcert_meta(db, cert_type, name):
     #rationale: Only one Local CA or one LE CA may exist ever.
     certificate_id = ps_query_CA_subject_and_certificate.first(cert_type)
     
-    #FIXME: TO BE TESTED:
-    with db.xact('SERIALIZABLE', mode='READ WRITE'):
-
-        if not certificate_id:      # no subject and certifcate - create both
-            ps = db.prepare(q_insert_cacert)
-            certificate_id = ps.first(cert_type)
-            if not certificate_id:
-                sle('Failed to create row in Certificates for {}'.format(name))
-                return None
-            ps = db.prepare(q_insert_cacert_subject)
-            subject_id = ps.first('CA', name, certificate_id)
-            if not subject_id:
-                sle('Failed to create row in Subjects for {}'.format(name))
-                return None
-        cacert_instance_id = insert_certinstance(db, certificate_id)
-        if not cacert_instance_id:
-            sle('Failed to create row in Certinstances for {}'.format(name))
+    if not certificate_id:      # no subject and certifcate - create both
+        ps = db.prepare(q_insert_cacert)
+        certificate_id = ps.first(cert_type)
+        if not certificate_id:
+            sle('Failed to create row in Certificates for {}'.format(name))
             return None
+        ps = db.prepare(q_insert_cacert_subject)
+        subject_id = ps.first('CA', name, certificate_id)
+        if not subject_id:
+            sle('Failed to create row in Subjects for {}'.format(name))
+            return None
+    cacert_instance_id = insert_certinstance(db, certificate_id)
+    if not cacert_instance_id:
+        sle('Failed to create row in Certinstances for {}'.format(name))
+        return None
     return cacert_instance_id
 
