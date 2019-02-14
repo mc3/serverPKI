@@ -29,7 +29,7 @@ Model
   * updated - date and time of last tuple update
   * remarks - arbitrary text
 
-* columes, which together must be unique are in **bold**
+* columns, which together must be unique are in **bold**
   
 This is the entity relation diagram:
 
@@ -116,8 +116,8 @@ Tables
   * cert - the certificate in PEM format
   * key - the key in PEM format
   * hash - the binascii presentation of the SHA256 hash of the certificate
-  * not_before - start date and time where cert may be used
-  * not_after - last date and time where cert may be used
+  * not_before - start date and time for cert usage
+  * not_after - end date and time for cert usage
   * *certificate* - reference to cert in Certificates
   * *cacert* - reference to cacert instance in Certinstances.
     If subject type is 'CA', there may be 2 kinds of cacerts:
@@ -143,12 +143,13 @@ Here is the state transition diagram:
   * **port** - tcp/udp port number of service
   * TLSAprefix - named zone resource record entry with place holder for hash,
     something like:
+    
     _443._tcp.{}. 3600 IN TLSA 3 0 1  
 
-* **Certificates_Services** - junction relation between certificates and Services
+* **Certificates_Services** - junction relation between Certificates and Services
 
   * **certificate** - reference to cert in Cerificates
-  * **service** - refefrence to service in Services
+  * **service** - reference to service in Services
 
 .. index:: Jails.name, Jails.disthost, Jails
 .. _Jails:
@@ -170,7 +171,7 @@ Here is the state transition diagram:
 
 * **Disthosts** - One row per host to which cert and key should be distributed.
 
-  * **FQDN** - full qualified domain name of disthost
+  * **FQDN** - fully qualified domain name of disthost
   * jailroot - optional path to root of jails on disthost.
     If empty, no jails are on this disthost.
 
@@ -199,7 +200,7 @@ Here is the state transition diagram:
     * 'separate' - cert and key are in separate file
     * 'combine key' - cert and key are combined in one file
     * 'combine cacert' - cert is combined with cacert (intermediate if LE),
-      key is in seaparate file
+      key is in separate file
     * 'combine both' - cert is combined with both key and cacert
 
   * cert_path - absolute path of cert directory with placeholder '{}' of login
