@@ -92,7 +92,8 @@ def deployCerts(certs,
     Restart service at target host and reload nameserver.
     
     @param certs:           list of certificate meta data instances
-    @type certs:            serverPKI.cert.Certificate instance
+    @type certs:            dict with key = cert name and 
+                            value = serverPKI.cert.Certificate instance
     @param instance_id:     optional id of specific instance
     @type instance_id:      int
     @param consolidate      Prevent from distribution of TLSA and updating of state.
