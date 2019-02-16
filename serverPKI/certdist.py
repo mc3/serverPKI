@@ -236,7 +236,7 @@ def deployCerts(certs,
         if not opts.no_TLSA:
             distribute_tlsa_rrs(cert, TLSA_text, None)
         
-        if not host_omitted:
+        if not host_omitted and not cert.subject_type == 'CA':
             update_state_of_instance(cert.db, my_instance_id, 'deployed')
         else:
             sln('State of cert {} not promoted to DEPLOYED, '

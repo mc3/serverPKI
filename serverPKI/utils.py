@@ -356,9 +356,12 @@ def updateSOAofUpdatedZones():
  
 #---------------  prepared SQL queries for create/update/renew _local_instance  --------------
 
+# insert a cert instance. cacert references new row to respect referential
+# integrity constraint if inserting first row into table.
 q_insert_instance = """
     INSERT INTO CertInstances (certificate, state, cert, key, hash, cacert)
-        VALUES ($1::INTEGER, 'reserved', '', '', '', 0)
+        VALUES ($1::INTEGER, 'reserved', '', '', '', 
+                                        (SELECT id FROM certinstances LIMIT 1))
         RETURNING id::int
 """
 q_update_instance = """

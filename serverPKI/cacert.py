@@ -69,18 +69,20 @@ def issue_local_CAcert(db):
     @type db:           serverPKI.db.DbConnection instance
     @rtype:             Boolean, true if success 
     """
-    with db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
-        try:
+    sli('Creating local CA certificate.')
+    try:
+        with db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
             create_local_ca_cert(db, None, None)
-        except Exception:
-            sle('Failed to create local CA cert.')
-            return False
+    except Exception as e:
+        sle('Failed to create local CA cert, because: {}'.format(str(e)))
+        return False
+        
     return True
 
 
 def get_cacert_and_key(db):
     """
-    Return a valid local certificate and a loaded private key.
+    Return a valid local CA certificate and a loaded private key.
     
     If necessary, create a local CAcert or read a historical one from disk.
     Store it in DB, creating necessary rows in Subjects, Certificates
@@ -220,9 +222,6 @@ def create_local_ca_cert(db, cacert, cakey):
             # Our certificate will be valid for 10 days
             not_valid_after
         ).add_extension(
-            x509.SubjectAlternativeName([x509.DNSName(u"localhost")]),
-            critical=False,
-        ).add_extension(
         # CA and no intermediate CAs
             x509.BasicConstraints(
                 ca=True,
@@ -232,6 +231,18 @@ def create_local_ca_cert(db, cacert, cakey):
             ski,
             critical=False,
         # Sign our certificate with our private key
+        ).add_extension(
+            x509.KeyUsage(
+                digital_signature = True,
+                key_cert_sign = True,
+                crl_sign = True,
+                key_encipherment = False,
+                content_commitment = False,
+                data_encipherment = False,
+                key_agreement = False,
+                encipher_only = False,
+                decipher_only = False),
+            critical=True
         ).sign(cakey, hashes.SHA256(), default_backend())
         
         sli('CA cert serial {} with {} bit key, valid until {} created.'.format(
