@@ -90,9 +90,9 @@ parser.add_option('--distribute-certs', '-D', dest='distribute', action='store_t
                    ' Corresponding TLSA RR are also installed, if not'
                    ' suppressed with --no-TLSA-records-')
 
-parser.add_option('--extract-cert-and-key', '-E', dest='cert_serial',
+parser.add_option('--export-cert-and-key', '-E', dest='cert_serial',
                    action='store', type=int, default=False,
-                   help='Extract certificate and key with CERT_SERIAL to work directory.'
+                   help='Export certificate and key with CERT_SERIAL to work directory.'
                     ' This action may not be combined with other actions.')
 
 parser.add_option('--encrypt-keys', action='store_true', dest='encrypt',
@@ -508,6 +508,21 @@ def print_certs(db, names):
         ps_certs_for_printing_insert.load_rows(name_tuple_list)
         
         rows = pc_query.rows()
+        for row in rows:
+            pt.add_row(row)
+    
+        print(pt) 
+        print()
+    
+        pt = PrettyTable()
+        pt.field_names = ['Serial', 'Cert Name', 'State', 'not before', 'not after', 
+                                'hash', 'updated']
+        
+        pc_query = db.prepare('SELECT * FROM inst WHERE "name" IN (SELECT name FROM "print_certs")')
+        
+        
+        rows = pc_query.rows()
+        print(rows)
         for row in rows:
             pt.add_row(row)
     
