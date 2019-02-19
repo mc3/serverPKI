@@ -115,14 +115,46 @@ q_update_authorized_until = """
         SET authorized_until = $2::DATE
         WHERE id = $1
 """
+q_fqdn_from_serial = """
+SELECT s.name::TEXT
+    FROM Subjects s, Certificates c, Certinstances i
+    WHERE
+        i.id = $1   AND
+        i.certificate = c.id  AND
+        s.certificate = c.id  AND
+        NOT s.isaltname
+"""
+
 ps_all_cert_meta = None
 ps_recent_instance = None
 ps_specific_instance = None
 ps_tlsa_of_instance = None
 ps_active_instances = None
 ps_update_authorized_until = None
+ps_fqdn_from_serial = None
 
         
+def fqdn_from_serial(db, serial):
+    """
+    Obtain cert subject name from instance serial
+    
+    @param db:      Opened database handle
+    @type db:    
+    @param serial:  instance serial
+    @type serial:   integer
+    @rtype:         name as string
+    @exceptions:
+    """
+
+    global ps_fqdn_from_serial
+    
+    if not ps_fqdn_from_serial:
+        ps_fqdn_from_serial = db.prepare(q_fqdn_from_serial)
+
+    result = ps_fqdn_from_serial.first(serial)
+    if result: return result
+    sle('Serial {} not found.'.format(serial))
+    sys.exit(1)
 
 #--------------- public class Certificate --------------
 
@@ -133,14 +165,16 @@ class Certificate(object):
     """
     
     
-    def __init__(self, db, name):
+    def __init__(self, db, name, serial=None):
         """
         Create a certificate meta data instance
     
         @param db:          opened database connection
         @type db:           serverPKI.db.DbConnection instance
-        @param name:        subject name of certificate
+        @param name:        subject name of certificate, ignored, if serial present
         @type name:         string
+        @param serial:      serial of instance, whose cert meta we are creating
+        @type serial:       integer
         @rtype:             Certificate instance
         @exceptions:
         """
@@ -148,7 +182,11 @@ class Certificate(object):
         global ps_all_cert_meta
         
         self.db = db
-        self.name = name
+        
+        if serial:
+            self.name = fqdn_from_serial(db, serial)
+        else:
+            self.name = name
 
         self.altnames = []
         self.tlsaprefixes = {}
@@ -159,7 +197,7 @@ class Certificate(object):
         with self.db.xact(isolation='SERIALIZABLE', mode='READ ONLY'):
             if not ps_all_cert_meta:
                 ps_all_cert_meta = db.prepare(q_all_cert_meta)
-            for row in ps_all_cert_meta(name):
+            for row in ps_all_cert_meta(self.name):
                 if not self.cert_id:
                     self.cert_id = row['c_id']
                     self.cert_type = row['c_type']
@@ -168,7 +206,7 @@ class Certificate(object):
                     self.subject_type = row['subject_type']
                     sld('----------- {}\t{}\t{}\t{}\t{}\t{}'.format(
                              self.cert_id,
-                             name,
+                             self.name,
                              self.cert_type,
                              self.disabled,
                              self.authorized_until,

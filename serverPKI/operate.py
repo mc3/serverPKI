@@ -22,7 +22,7 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 import sys
 from paramiko import util
 
-from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA
+from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA, export_instance
 from serverPKI.utils import options as opts
 
 from serverPKI.utils import options_set, check_actions
@@ -51,7 +51,7 @@ def execute_from_command_line():
     sli('operateCA started with options {}'.format(options_set()))
     check_actions()
      
-    pe = dbc('pki_dev')
+    pe = dbc('serverpki')
     db = pe.open()
     
     read_db_encryption_key(db)
@@ -169,7 +169,7 @@ def execute_from_command_line():
             delete_TLSA(c)
         updateSOAofUpdatedZones()
     
-    if opts.extract:
-        sli('Extracting certificates.')
-        deployCerts(our_certs, allowed_states=('issued', 'prepublished', 'deployed'))
+    if opts.cert_serial:
+        sli('Exporting certificate instance.')
+        export_instance(db)
     

@@ -90,8 +90,9 @@ parser.add_option('--distribute-certs', '-D', dest='distribute', action='store_t
                    ' Corresponding TLSA RR are also installed, if not'
                    ' suppressed with --no-TLSA-records-')
 
-parser.add_option('--extract-cert-and-key', '-E', action='store_true', dest='extract',
-                   help='Extract certificate and key to work directory.'
+parser.add_option('--extract-cert-and-key', '-E', dest='cert_serial',
+                   action='store', type=int, default=False,
+                   help='Extract certificate and key with CERT_SERIAL to work directory.'
                     ' This action may not be combined with other actions.')
 
 parser.add_option('--encrypt-keys', action='store_true', dest='encrypt',
@@ -225,16 +226,17 @@ def options_set():
 
 def check_actions():
     l = []
-    if options.schedule: l.append('schedule')
-    if options.distribute: l.append('distribute')
     if options.create: l.append('create')
+    if options.decrypt: l.append('decrypt-keys')
+    if options.distribute: l.append('distribute')
+    if options.encrypt: l.append('encrypt-keys')
+    if options.cert_serial: l.append('extract')
+    if options.issue_local_cacert: l.append('issue-local-CAcert')
+    if options.remove_tlsas: l.append('remove_tlsas')
+    if options.remaining_days: l.append('renew-local-certs')
+    if options.schedule: l.append('schedule')
     if options.sync_disk: l.append('sync_disk')
     if options.sync_tlsas: l.append('sync_tlsas')
-    if options.remove_tlsas: l.append('remove_tlsas')
-    if options.extract: l.append('extract')
-    if options.encrypt: l.append('encrypt-keys')
-    if options.decrypt: l.append('decrypt-keys')
-    if options.issue_local_cacert: l.append('issue-local-CAcert')
 
     s = set(l)
     

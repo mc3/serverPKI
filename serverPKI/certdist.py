@@ -36,6 +36,7 @@ from time import sleep
 
 from paramiko import SSHClient, HostKeys, AutoAddPolicy
 
+from serverPKI.cert import Certificate
 from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME
 from serverPKI.utils import options as opts
 from serverPKI.utils import sld, sli, sln, sle
@@ -45,6 +46,36 @@ from serverPKI.utils import update_state_of_instance
 
 class MyException(Exception):
     pass
+
+
+def export_instance(db):
+    """
+    Export cert and key whose serial number has been read from command line
+    to work area
+    
+    @param db:      Opened database handle
+    @type db:    
+    @rtype:         boolean always True (or sys.exit done in cert_meta.inst if
+                    serial does not exist.
+    @exceptions:
+    """
+
+    cert_meta = Certificate(db, '', serial=opts.cert_serial)
+    result = cert_meta.instance(instance_id=opts.cert_serial)
+    (id, state, cert, key, tlsa, cacert) = result
+
+    cert_path = Pathes.work / 'cert-{}.pem'.format(opts.cert_serial)
+    with open(str(cert_path), 'w') as fde:
+        fde.write(cert)
+
+    key_path = Pathes.work / 'key-{}.pem'.format(opts.cert_serial)
+    with open(str(key_path), 'w') as fde:
+        fde.write(key)
+    key_path.chmod(0o400)
+    
+    sli('Cert and key exported to {} and {}'.
+                                        format(str(cert_path), str(key_path)))
+    return True
 
 
 def consolidate_cert(cert_meta):
@@ -300,14 +331,6 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
     @rtype:             not yet any
     @exceptions:        IOError
     """
-
-    if opts.extract:
-        extract_path = Pathes.work / file_name
-        with open(str(extract_path), 'w') as fde:
-            fde.write(fd.getvalue())
-        if 'key' in file_name:
-            extract_path.chmod(0o400)
-        return
 
     sld('Handling dest_host {} and dest_dir "{}" in distribute_cert'.format(
                                                         dest_host, dest_dir))
