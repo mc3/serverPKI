@@ -28,9 +28,6 @@ import logging
 import os
 import sys
 
-from OpenSSL import crypto
-from cryptography.hazmat.primitives.hashes import SHA256
-
 
 #--------------- local imports --------------
 from serverPKI.config import Pathes, X509atts, LE_SERVER

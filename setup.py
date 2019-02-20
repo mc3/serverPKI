@@ -19,12 +19,12 @@ Required packages:
 
 Required Python3 packages:
 
-    pyOpenSSL>=18.0
-    iso8601
+    cryptography>=2.5
     manuale>=1.1.0
     py-postgresql>=1.2.1
     paramiko>=2.4.2
-    prettytable>=0.7.2'
+    prettytable>=0.7.2
+    iso8601
 
 To install the development version, ``pip install -e
 git+https://github.com/mc3/serverPKI/#egg=serverPKI``.
@@ -83,11 +83,11 @@ setup(
         'Natural Language :: English',
     ],
     install_requires=[
-        'pyOpenSSL>=18.0',
-        'iso8601',
+        'cryptography>=2.5',
         'manuale>=1.1.0',
         'py-postgresql>=1.2.1',
         'paramiko>=2.4.2',
-        'prettytable>=0.7.2'
+        'prettytable>=0.7.2',
+        'iso8601'
     ],
 )

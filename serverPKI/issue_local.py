@@ -36,13 +36,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 
-
-from OpenSSL import crypto
-
-TYPE_RSA = crypto.TYPE_RSA
-TYPE_DSA = crypto.TYPE_DSA
-
-
 #--------------- local imports --------------
 from serverPKI.config import Pathes, X509atts
 from serverPKI.cacert import get_cacert_and_key
