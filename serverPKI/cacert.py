@@ -243,7 +243,7 @@ def create_local_ca_cert(db, cacert, cakey):
                 encipher_only = False,
                 decipher_only = False),
             critical=True
-        ).sign(cakey, hashes.SHA256(), default_backend())
+        ).sign(cakey, hashes.SHA512(), default_backend())
         
         sli('CA cert serial {} with {} bit key, valid until {} created.'.format(
                         cacert_instance_id,

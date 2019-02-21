@@ -183,7 +183,7 @@ def issue_local_cert(cert_meta):
         )
     
     cert = builder.sign(
-        private_key=cakey, algorithm=hashes.SHA256(),
+        private_key=cakey, algorithm=hashes.SHA384(),
         backend=default_backend()
     )
     
