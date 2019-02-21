@@ -107,7 +107,8 @@ parser.add_option('--decrypt-keys', action='store_true', dest='decrypt',
 
 parser.add_option('--issue-local-CAcert', '-I', dest='issue_local_cacert', action='store_true',
                    default=False,
-                   help='Issue a new local CA cert, used for issuing future local server/client certs.')
+                   help='Issue a new local CA cert, used for issuing future '
+                   'local server/client certs.')
                    
 parser.add_option('--all', '-a', action='store_true',
                    help='All certs in configuration should be included in operation, even if disabled.')
@@ -133,7 +134,9 @@ parser.add_option('--no-TLSA-records', '-N', dest='no_TLSA', action='store_true'
 
 parser.add_option('--check-only', '-n', dest='check_only', action='store_true',
                    default=False,
-                   help='Do syntax check of configuration data.'),
+                   help='Do syntax check of configuration data. Produce a '
+                   'listing of cert meta and related cert instances if combined '
+                   'with  --verbose. Listed certs may be selected with --only.'),
 
 parser.add_option('--debug', '-d', action='store_true',
                    default=False,
