@@ -522,7 +522,6 @@ def print_certs(db, names):
         
         
         rows = pc_query.rows()
-        print(rows)
         for row in rows:
             pt.add_row(row)
     
