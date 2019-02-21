@@ -2,7 +2,15 @@
 serverPKI
 =========
 
+.. image:: https://img.shields.io/pypi/v/serverpki.svg
+    :target: https://pypi.org/project/serverPKI/
+    :alt: Latest Version
 
+.. image:: https://readthedocs.org/projects/serverpki/badge/?version=latest
+    :target: https://serverpki.readthedocs.io/en/latest/
+    :alt: Latest Docs
+	
+	
 :serverPKI:   Python PKI for internet server infrastructure
 :Copyright:   Copyright (c) 2015-2019   Axel Rau axel.rau@chaos1.de
 :License:     `GPLv3 <http://www.gnu.org/licenses/>`_
@@ -21,9 +29,9 @@ database.
 serverPKI includes support for
 
 - local CA
-- LetsEncrypt CA (currently supports acme v1 api, see 
+- LetsEncrypt CA (currently supports acme v1 api, see https://letsencrypt.org/docs/
 - FreeBSD jails
-- publishing of DANE RR in DNS, using BIND 9 and TLSA key rollover
+- publishing of DANE RR in DNS, using BIND 9 and TLSA key rollover (see RFC 6698)
 - unattended operation via cronjob
 - extensive logging
 - alerting via mail
@@ -55,3 +63,9 @@ Prerequisites
 - Running serverPKI in a Python virtual environment is recommended for ease of
   upgrading. The author uses `virtualenvwrapper`.
 
+
+Sponsored
+---------
+
+This project is being developed with the powerful Python IDE PyCharm.
+A professional license has been granted by JetBrains, https://www.jetbrains.com/.

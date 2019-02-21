@@ -57,3 +57,13 @@ Changelog
   (happened once per distribution target).
 - Being more patient with Letsencrypt's response to challenges
 
+
+0.9.4 (2019-02-21)
+------------------
+
+- Multiple local CA certs for CA cert roll over
+- Increased hash size to 512 (CA cert) resp. 384 bits (server/client cert)
+- Cert (including CA cert) export by cert serial number implemented.
+- Listing of cert meta info now also lists (issued) cert instances.
+- requirement for PyOpenSSL removed.
+- BUGFIXES e.g. Allow to enter 1st cert into empty CertInstances table
