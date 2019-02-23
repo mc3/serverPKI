@@ -61,6 +61,8 @@ Changelog
 0.9.4 (2019-02-21)
 ------------------
 
+- INCOMPATIBLE CHANGE in configuration file syntax: dbAccounts keyword has been
+  changed from 'pki_dev' to 'serverpki'. See install example_config.py
 - Multiple local CA certs for CA cert roll over
 - Increased hash size to 512 (CA cert) resp. 384 bits (server/client cert)
 - Cert (including CA cert) export by cert serial number implemented.

@@ -68,8 +68,9 @@ The following variables can be set:
 home
         Root of the work area and credential storage, usually somewhere at var
 
-db
-        Credentials stored here
+dbAccounts
+        Credentials stored here. This is a dictionary with key 'serverpki'.
+        Nested dictionary contains credentials. See install/example_config.py.
 
 ca_cert and ca_key
         Filename of local CA cert and key in case an existing one must be
