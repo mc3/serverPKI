@@ -385,8 +385,9 @@ class Certificate(object):
         global ps_update_authorized_until
         
         # resetting of authorized_until allowd only by local certs
-        assert until or self.cert_type == 'local'
-        
+        assert until or self.cert_type == 'local', \
+            'update_authorized_until {} called for {}'.format(until, self.name)
+            
         if not ps_update_authorized_until:
             ps_update_authorized_until = self.db.prepare(q_update_authorized_until)
     
