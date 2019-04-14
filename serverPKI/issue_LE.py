@@ -247,14 +247,16 @@ def _authorize(cert_meta, account):
     acme = Acme(LE_SERVER, account)
     thumbprint = manuale_crypto.generate_jwk_thumbprint(account.key)
 
-    FQDNs = [cert_meta.name, ]
-    if len(cert_meta.altnames) > 0:
-        FQDNs.extend(cert_meta.altnames)
+    FQDNS = dict()
+    FQDNS[cert_meta.name] = 0
+    for name in cert_meta.altnames:
+        if name not in FQDNS:
+            FQDNS[name] = 0
 
     try:
         # Get pending authorizations for each fqdn
         authz = {}
-        for fqdn in FQDNs:
+        for fqdn in FQDNs.keys():
             sli("Requesting challenge for {}.".format(fqdn))
             created = acme.new_authorization(fqdn)
             auth = created.contents
@@ -306,7 +308,7 @@ def _authorize(cert_meta, account):
         done, failed = set(), set()
         authorized_until = None
         
-        for fqdn in FQDNs:
+        for fqdn in FQDNs.keys():
             sld('')
             auth = authz[fqdn]
             challenge = auth['challenge']
