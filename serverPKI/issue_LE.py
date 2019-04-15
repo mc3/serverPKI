@@ -256,7 +256,7 @@ def _authorize(cert_meta, account):
     try:
         # Get pending authorizations for each fqdn
         authz = {}
-        for fqdn in FQDNs.keys():
+        for fqdn in FQDNS.keys():
             sli("Requesting challenge for {}.".format(fqdn))
             created = acme.new_authorization(fqdn)
             auth = created.contents
@@ -308,7 +308,7 @@ def _authorize(cert_meta, account):
         done, failed = set(), set()
         authorized_until = None
         
-        for fqdn in FQDNs.keys():
+        for fqdn in FQDNS.keys():
             sld('')
             auth = authz[fqdn]
             challenge = auth['challenge']
