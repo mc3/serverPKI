@@ -393,6 +393,7 @@ CREATE VIEW certs_ids AS
 CREATE VIEW inst AS
  SELECT i.id,
     s.name,
+    c.type,
     i.state,
     i.not_before,
     i.not_after,
