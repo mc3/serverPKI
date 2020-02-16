@@ -20,7 +20,7 @@ Required packages:
 Required Python3 packages:
 
     cryptography>=2.5
-    manuale>=1.1.0
+    automatoes>=0.9.0
     py-postgresql>=1.2.1
     paramiko>=2.4.2
     prettytable>=0.7.2
@@ -84,7 +84,7 @@ setup(
     ],
     install_requires=[
         'cryptography>=2.5',
-        'manuale>=1.1.0',
+        'automatoes>=0.9.0',
         'py-postgresql>=1.2.1',
         'paramiko>=2.4.2',
         'prettytable>=0.7.2',
