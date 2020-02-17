@@ -35,11 +35,11 @@ import time
 import iso8601
 from cryptography.hazmat.primitives.hashes import SHA256
 
-from manuale.acme import Acme
-from manuale import crypto as manuale_crypto
-from manuale import issue as manuale_issue
-from manuale import cli as manuale_cli
-from manuale import errors as manuale_errors
+from automatoes.acme import AcmeV2
+from automatoes import crypto as manuale_crypto
+from automatoes import issue as manuale_issue
+from automatoes import cli as manuale_cli
+from automatoes import errors as manuale_errors
 
 #--------------- local imports --------------
 from serverPKI.cacert import create_CAcert_meta
@@ -124,7 +124,7 @@ def issue_LE_cert(cert_meta):
         (int(X509atts.bits), cert_meta.subject_type, cert_meta.name))
     certificate_key = manuale_crypto.generate_rsa_key(X509atts.bits)
     csr = manuale_crypto.create_csr(certificate_key, alt_names)
-    acme = Acme(LE_SERVER, account)
+    acme = AcmeV2(LE_SERVER, account)
     try:
         sli('Requesting certificate issuance from LE...')
         result = acme.issue_certificate(csr)

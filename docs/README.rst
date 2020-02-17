@@ -12,7 +12,7 @@ serverPKI
 	
 	
 :serverPKI:   Python PKI for internet server infrastructure
-:Copyright:   Copyright (c) 2015-2019   Axel Rau axel.rau@chaos1.de
+:Copyright:   Copyright (c) 2015-2020   Axel Rau axel.rau@chaos1.de
 :License:     `GPLv3 <http://www.gnu.org/licenses/>`_
 :Homepage:    https://github.com/mc3/serverPKI
 :Documentation: https://serverpki.readthedocs.io
