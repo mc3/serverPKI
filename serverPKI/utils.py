@@ -110,6 +110,10 @@ parser.add_option('--issue-local-CAcert', '-I', dest='issue_local_cacert', actio
                    help='Issue a new local CA cert, used for issuing future '
                    'local server/client certs.')
                    
+parser.add_option('--register', dest='register', action='store_true',
+                   help='Register a new account at LetsEncrypt,'
+                    ' This action may not be combined with other actions.')
+
 parser.add_option('--all', '-a', action='store_true',
                    help='All certs in configuration should be included in operation, even if disabled.')
                    
@@ -235,6 +239,7 @@ def check_actions():
     if options.encrypt: l.append('encrypt-keys')
     if options.cert_serial: l.append('extract')
     if options.issue_local_cacert: l.append('issue-local-CAcert')
+    if options.register: l.append('register')
     if options.remove_tlsas: l.append('remove_tlsas')
     if options.remaining_days: l.append('renew-local-certs')
     if options.schedule: l.append('schedule')
@@ -249,10 +254,10 @@ def check_actions():
     
     if len(s) == 2:
         if 'schedule' in s or 'extract' in s or 'issue-local-CAcert' in s or \
-                    'encrypt-keys' in s or 'decrypt-keys' in s:
+            'encrypt-keys' in s or 'decrypt-keys' in s or 'register' in s:
             sle('"--schedule" or "--extract-cert-and-key" or '
                 '"--encrypt-keys" or "--decrypt-keys" or '
-                '"--issue-local-CAcert" may not be combined with'
+                '"--issue-local-CAcert" or "--register" may not be combined with'
                 ' other actions.')
             sys.exit(1)
         if 'issue-local-CAcert' in s:

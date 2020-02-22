@@ -23,6 +23,9 @@ import sys
 from paramiko import util
 
 from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA, export_instance
+from serverPKI.config import LE_SERVER, LE_EMAIL, Pathes
+from pathlib import Path
+
 from serverPKI.utils import options as opts
 
 from serverPKI.utils import options_set, check_actions
@@ -38,6 +41,8 @@ from serverPKI.cacert import issue_local_CAcert
 from serverPKI.cert import Certificate
 from serverPKI.schedule import scheduleCerts
             
+from automatoes.register import register
+
 def execute_from_command_line():
 
     all_cert_names = []
@@ -172,4 +177,9 @@ def execute_from_command_line():
     if opts.cert_serial:
         sli('Exporting certificate instance.')
         export_instance(db)
+    
+    if opts.register:
+        sli('Registering a new Let\'s Encrypt Account.\n With URI:{}\n'
+                ' and e-mail {}'.format(LE_SERVER, LE_EMAIL))
+        register(LE_SERVER, Pathes.le_account, LE_EMAIL, None)
     
