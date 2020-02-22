@@ -546,7 +546,6 @@ from cryptography.hazmat.primitives.serialization import (
     NoEncryption,
 )
 from serverPKI.config import X509atts
-from manuale import crypto as manuale_crypto
 from pathlib import Path
 from cryptography.hazmat.backends import default_backend
 

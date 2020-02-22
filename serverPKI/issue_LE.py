@@ -90,7 +90,7 @@ def issue_LE_cert(cert_meta):
     @param cert_meta:   Cert meta instance to issue an certificate for
     @type cert_meta:    Cert meta instance
     @rtype:             cert instance id in DB of new cert or None
-    @exceptions:        manuale_errors.ManualeError
+    @exceptions:        manuale_errors.AutomatoesError
                         May exit(1) if account not valid.
     """
 
@@ -136,16 +136,16 @@ def issue_LE_cert(cert_meta):
             result = acme.issue_certificate(csr)
         else:    
             sle("Connection or service request failed. Aborting.")
-            raise manuale_errors.ManualeError(e)
+            raise manuale_errors.AutomatoesError(e)
     except IOError as e:
             sle("Connection or service request failed. Aborting.")
-            raise manuale_errors.ManualeError(e)
+            raise manuale_errors.AutomatoesError(e)
     
     try:
         certificate = manuale_crypto.load_der_certificate(result.certificate)
     except IOError as e:
         sle("Failed to load new certificate. Aborting.")
-        raise manuale_errors.ManualeError(e)
+        raise manuale_errors.AutomatoesError(e)
 
     if result.intermediate:
         intcert = manuale_crypto.load_der_certificate(result.intermediate)
@@ -241,10 +241,11 @@ def _authorize(cert_meta, account):
     @param account:     Our letsencrypt account
     @type account:      manuale_cli.load_account instance
     @rtype:             True if all fqdns could be authorized, False otherwise
-    @exceptions:        manuale_errors.ManualeError on Network or other fatal error
+    @exceptions:        manuale_errors.AutomatoesError on Network or other fatal error
     """
-
-    acme = Acme(LE_SERVER, account)
+    import pdb; pdb.set_trace()
+    
+    acme = AcmeV2(LE_SERVER, account)
     thumbprint = manuale_crypto.generate_jwk_thumbprint(account.key)
 
     FQDNS = dict()
@@ -266,7 +267,7 @@ def _authorize(cert_meta, account):
             try:
                 auth['challenge'] = [ch for ch in auth.get('challenges', []) if ch.get('type') == 'dns-01'][0]
             except IndexError:
-                raise manuale_errors.ManualeError("Manuale only supports the dns-01 challenge. The server did not return one.")
+                raise manuale_errors.AutomatoesError("Manuale only supports the dns-01 challenge. The server did not return one.")
             
             auth['key_authorization'] = "{}.{}".format(auth['challenge'].get('token'), thumbprint)
             digest = sha256()
@@ -372,5 +373,5 @@ def _authorize(cert_meta, account):
         
     except IOError as e:
         sle('A connection or service error occurred. Aborting.')
-        raise manuale_errors.ManualeError(e)
+        raise manuale_errors.AutomatoesError(e)
     
