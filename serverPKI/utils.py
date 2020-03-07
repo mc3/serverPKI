@@ -769,3 +769,7 @@ def decrypt_all_keys(db):
         db_encryption_in_use = False
         set_revision(db,schemaVersion,False)
     return True
+
+def print_order(order):
+    return('\turi: {}\n\ttype: {}\n\tcertificate_uri: {}\n\tcontents: {}'.
+        format(order.uri, order.type, order.certificate_uri, order.contents))
