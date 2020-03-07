@@ -1,5 +1,5 @@
 """
-Copyright (C) 2015-2017  Axel Rau <axel.rau@chaos1.de>
+Copyright (C) 2015-2020  Axel Rau <axel.rau@chaos1.de>
 
 This file is part of serverPKI.
 
