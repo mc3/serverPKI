@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Copyright (C) 2015-2018  Axel Rau <axel.rau@chaos1.de>
+Copyright (C) 2015-2020  Axel Rau <axel.rau@chaos1.de>
 
 This file is part of serverPKI.
 
@@ -17,6 +17,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
+
+This module uses code from https://github.com/candango/automatoes
 """
 
 # issue Let's Encrypt certificates
@@ -30,7 +32,7 @@ import logging
 from pathlib import Path
 import os
 import pprint
-import sys
+import re
 import sys
 import time
 
@@ -278,7 +280,7 @@ def _authorize(cert_meta, account):
     @rtype:             True if all fqdns could be authorized, False otherwise
     @exceptions:        manuale_errors.AutomatoesError on Network or other fatal error
     """
-    import pdb; pdb.set_trace()
+    ##import pdb; pdb.set_trace()
     
     acme = AcmeV2(LE_SERVER, account)
     thumbprint = manuale_crypto.generate_jwk_thumbprint(account.key)
