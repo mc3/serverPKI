@@ -69,3 +69,11 @@ Changelog
 - Listing of cert meta info now also lists (issued) cert instances.
 - requirement for PyOpenSSL removed.
 - BUGFIXES e.g. Allow to enter 1st cert into empty CertInstances table
+
+0.9.6 (2020-03-11)
+------------------
+
+- Supporting and (requiring) V2 of ACME protocoll.
+- New fields in DB for upcoming support of certs with elliptic alogorithm.
+  (in addition to rsa). Run install/upgrade_to_2.sql in psql, connected to pki DB.
+

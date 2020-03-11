@@ -20,7 +20,8 @@ Required packages:
 Required Python3 packages:
 
     cryptography>=2.5
-    automatoes>=0.9.0
+    automatoes>=0.9.1
+    dnspython>=1.16.0
     py-postgresql>=1.2.1
     paramiko>=2.4.2
     prettytable>=0.7.2
@@ -78,13 +79,13 @@ setup(
         'Topic :: Security :: Cryptography',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3 :: Only',
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Natural Language :: English',
     ],
     install_requires=[
         'cryptography>=2.5',
-        'automatoes>=0.9.0',
+        'automatoes>=0.9.1',
+        'dnspython>=1.16.0',
         'py-postgresql>=1.2.1',
         'paramiko>=2.4.2',
         'prettytable>=0.7.2',

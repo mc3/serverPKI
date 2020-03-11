@@ -57,6 +57,9 @@ Installation
       
       serverpki=> \q
 
+  Additional updates must be run in order from install dir, like
+  psql -h db1 -p 2222 -U dba serverpki < install/upgrade_to_2.sql
+  
 
 Configuration
 =============
@@ -111,6 +114,10 @@ zone_file_root
 
 zone_file_include_name
         The filename of the file, included from zone file with the challenges.
+    
+ddns_key_file
+        The filename of a named dynamic dns key file, used to secure dns update
+        transactions.
 
 X509atts.names and X509atts.extensions
         Cert fields used for CA cert and server/ client certs.
@@ -128,9 +135,18 @@ SSH_CLIENT_USER_NAME
 
 LE_SERVER
         URL of Lets Encrypt server, either (for testing):
-            'https://acme-staging.api.letsencrypt.org'
+            'https://acme-staging-v02.api.letsencrypt.org'
         or (for production):
-            'https://acme-v01.api.letsencrypt.org'
+            'https://acme-v02.api.letsencrypt.org'
+
+LE_EMAIL
+        e-mail address for letsencrypt.org registration, used for notifications
+        by LE
+
+LE_ZONE_UPDATE_METHOD
+        Zone update method for challenges, either 'ddns' (the default) for
+        dynamic updates or 'zone_file' for updates via zone file)
+
 
 LOCAL_CA_BITS LOCAL_CA_LIFETIME
         Number of bits and lifetime of local CA cert.

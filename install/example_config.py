@@ -1,5 +1,5 @@
 """
-Copyright (C) 2015-2019  Axel Rau <axel.rau@chaos1.de>
+Copyright (C) 2015-2020  Axel Rau <axel.rau@chaos1.de>
 
 This file is part of serverPKI.
 
@@ -63,6 +63,9 @@ class Pathes(object):
     
     zone_file_include_name = 'acme_challenges.inc'
     
+    # adjust
+    ddns_key_file = '/usr/local/etc/namedb/dns-keys/ddns-key.conf'
+    
     
 class X509atts(object):
     """
@@ -79,7 +82,7 @@ class X509atts(object):
                 }
     
     lifetime = 375                     # 1 year
-    bits = 2048
+    bits = 2048                        # also used for Letsencrypt
 
 
 # Database accounts
@@ -91,9 +94,17 @@ dbAccounts = {'serverpki': {'dbHost':         'db-server.my.domain',
 
 SSH_CLIENT_USER_NAME = 'root'
 
-LE_SERVER = 'https://acme-staging.api.letsencrypt.org'  # for testing
-# LE_SERVER = 'https://acme-v01.api.letsencrypt.org'    # for production
+# -- Letsencrypt
+LE_SERVER = 'https://acme-staging-v02.api.letsencrypt.org'
+##LE_SERVER = 'https://acme-v02.api.letsencrypt.org'
 
+# e-mail for registration
+LE_EMAIL = 'axel.rau@l.chaos1.de'
+
+# zone update method for challenge ('ddns' or 'zone_file')
+LE_ZONE_UPDATE_METHOD = 'ddns'
+
+# -- for certs issued by local CA
 # Key size and lifetime of local CA cert
 LOCAL_CA_BITS = 4096
 LOCAL_CA_LIFETIME = 3680                # 10 years

@@ -134,7 +134,17 @@ def issue_LE_cert(cert_meta):
 
     sli('Creating key (%d bits) and cert for %s %s' %
         (int(X509atts.bits), cert_meta.subject_type, cert_meta.name))
+    
     certificate_key = manuale_crypto.generate_rsa_key(X509atts.bits)
+    
+    # experimental elliptic key 
+    if False:
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.backends import default_backend
+        crypto_backend = default_backend()
+        certificate_key = ec.generate_private_key(ec.SECP384R1(), crypto_backend)
+    # end experimental elliptic key
+    
     order.key = manuale_crypto.export_private_key(certificate_key).decode('ascii')
     csr = manuale_crypto.create_csr(certificate_key, alt_names, must_staple = True)
     
@@ -298,7 +308,7 @@ def _authorize(cert_meta, account):
     sld('new_order for {} returned\n{}'.
         format(cert_meta.name, print_order(returned_order)))
     if order.expired or order.invalid:
-        sle("{}: Order is {} {}. Giving ip.".
+        sle("{}: Order is {} {}. Giving up.".
             format(cert_meta.name, 'invalid' if order.invalid else '',
               'expired' if order.expired else ''))
         return None
