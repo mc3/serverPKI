@@ -39,6 +39,7 @@ from serverPKI_config import dbAccounts as dbAccounts
 from serverPKI_config import SSH_CLIENT_USER_NAME as SSH_CLIENT_USER_NAME
 from serverPKI_config import LE_SERVER as LE_SERVER
 from serverPKI_config import LE_EMAIL as LE_EMAIL
+from serverPKI_config import LE_ZONE_UPDATE_METHOD as LE_ZONE_UPDATE_METHOD
 
 from serverPKI_config import SUBJECT_LOCAL_CA as SUBJECT_LOCAL_CA
 from serverPKI_config import LOCAL_CA_BITS as LOCAL_CA_BITS

@@ -31,7 +31,9 @@ import syslog
 
 from prettytable import PrettyTable
 
-from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, SYSLOG_FACILITY
+from serverPKI.config import (Pathes, dbAccounts,
+                                SSH_CLIENT_USER_NAME, SYSLOG_FACILITY)
+from serverPKI import get_version
 
 
 #--------- globals ***DO WE NEED THIS?*** ----------
@@ -41,9 +43,14 @@ global options, db_encryption_key
 class MyException(Exception):
     pass
 
+def get_name_string():
+    v = get_version()
+    n = dbAccounts['serverpki']['dbDatabase']
+    return '{}-{}'.format(n,v)
+
 #--------------- command line options --------------
 
-parser = optparse.OptionParser(description='Server PKI Operations')
+parser = optparse.OptionParser(description='Server PKI {}'.format(get_name_string()))
 parser.add_option('--schedule-actions', '-S', dest='schedule', action='store_true',
                    default=False,
                    help='Scan configuration and schedule necessary actions of'
@@ -200,7 +207,8 @@ def sle(msg):
 def init_syslog():
     global syslog_initialized
     
-    syslog.openlog(ident = 'pki', facility = SYSLOG_FACILITY)
+    syslog.openlog(ident =  '{}'.format(get_name_string()),
+                            facility = SYSLOG_FACILITY)
     syslog_initialized = True
 
 

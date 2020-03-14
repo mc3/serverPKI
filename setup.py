@@ -33,28 +33,18 @@ git+https://github.com/mc3/serverPKI/#egg=serverPKI``.
 
 import sys
 from setuptools import setup
+import serverPKI 
 
-
-"""
-if sys.platform == 'darwin':
-    import setup_helper
-    setup_helper.install_custom_make_tarball()
-"""
-
-# Version info -- read without importing
-_locals = {}
-with open('serverPKI/_version.py') as fp:
-    exec(fp.read(), None, _locals)
-version = _locals['__version__']
+##version=serverPKI.get_version(),
 
 
 setup(
     name = "serverPKI",
-    version = version,
+    version = serverPKI.get_version(),
     description = "PKI for internet server infrastructure",
     long_description = longdesc,
-    author = "Axel Rau",
-    author_email = "axel.rau@chaos1.de",
+    author = serverPKI.get_author(),
+    author_email = serverPKI.get_author_email(),
     url = "https://serverpki.readthedocs.io",
     packages = [ 'serverPKI' ],
     data_files =[('share/doc/serverPKI', ['docs/ERD.pdf', 'docs/States.pdf']),

@@ -39,6 +39,14 @@ import time
 import iso8601
 from cryptography.hazmat.primitives.hashes import SHA256
 
+from . import get_version
+import automatoes.acme as am
+am.__dict__['DEFAULT_HEADERS'] = {
+    'User-Agent': "serverPKI {} (https://serverpki.readthedocs.io/en/latest/)".
+        format(get_version()),
+}
+
+
 from automatoes.acme import AcmeV2
 from automatoes import model
 from automatoes import authorize as manuale_authorize
@@ -47,16 +55,20 @@ from automatoes import issue as manuale_issue
 from automatoes import cli as manuale_cli
 from automatoes import errors as manuale_errors
 
+from dns import query, update, tsigkeyring
+from dns.tsig import HMAC_SHA256
+
 #--------------- local imports --------------
 from serverPKI.cacert import create_CAcert_meta
-from serverPKI.config import Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA
+from serverPKI.config import (Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA,
+                                LE_ZONE_UPDATE_METHOD)
 from serverPKI.utils import sld, sli, sln, sle, options, update_certinstance
 from serverPKI.utils import zone_and_FQDN_from_altnames, updateSOAofUpdatedZones
 from serverPKI.utils import updateZoneCache, encrypt_key, print_order
 
 # --------------- manuale logging ----------------
 
-logger = logging.getLogger(__name__)
+##logger = logging.getLogger(__name__)
 
 #--------------- Places --------------
 places = {}
@@ -82,6 +94,7 @@ ps_insert_LE_instance = None
         
 #--------------- public functions --------------
 
+##import pdb; pdb.set_trace()
         
 def issue_LE_cert(cert_meta):
     """
@@ -229,7 +242,7 @@ def issue_LE_cert(cert_meta):
         return instance_id
     sle('Failed to store new cert in DB backend')
     return None
-    
+
 #---------------  prepared SQL queries for private functions  --------------
 
 q_query_LE_intermediate = """
@@ -290,10 +303,9 @@ def _authorize(cert_meta, account):
     @rtype:             True if all fqdns could be authorized, False otherwise
     @exceptions:        manuale_errors.AutomatoesError on Network or other fatal error
     """
-    ##import pdb; pdb.set_trace()
-    
     acme = AcmeV2(LE_SERVER, account)
     thumbprint = manuale_crypto.generate_jwk_thumbprint(account.key)
+
 
     FQDNS = dict()
     FQDNS[cert_meta.name] = 0
@@ -327,7 +339,6 @@ def _authorize(cert_meta, account):
     for challenge in pending_challenges: 
         fqdn_challenges[challenge.domain] = challenge
     
-    try:
         # putting challenges into zone include fules for named server
         zones = {}
         sld('Calling zone_and_FQDN_from_altnames()')
@@ -338,30 +349,20 @@ def _authorize(cert_meta, account):
                 else:
                     zones[zone] = [fqdn]
         sld('zones: {}'.format(zones))
-        # write one file with TXT RRS into related zone directory:
-        for zone in zones.keys():
-            dest = str(Pathes.zone_file_root / zone / Pathes.zone_file_include_name)
-            lines = []
-            for fqdn in zones[zone]:
-                sld('fqdn: {}'.format(fqdn))
-                lines.append(str('_acme-challenge.{}.  IN TXT  \"{}\"\n'.
-                        format(fqdn,fqdn_challenges[fqdn].key)))
-            sli('Writing RRs: {}'.format(lines))
-            with open(dest, 'w') as file:
-                file.writelines(lines)
-                ##os.chmod(file.fileno(), Pathes.zone_tlsa_inc_mode)
-                ##os.chown(file.fileno(), pathes.zone_tlsa_inc_uid, pathes.zone_tlsa_inc_gid)
-            updateZoneCache(zone)
         
-        updateSOAofUpdatedZones()
-
+    create_challenge_responses_in_dns(zones, fqdn_challenges)
+        
+    try:
         # Validate challenges
         authorized_until = None
         done, failed, pending = set(), set(), set()
+        sld('Waiting 10 seconds for dns propagation')
+        time.sleep(10)
         for challenge in pending_challenges:
             sld("{}: waiting for verification. Checking in 5 "
                   "seconds.".format(challenge.domain))
-            response = acme.verify_order_challenge(challenge, 5, 1)
+                    
+            response = acme.verify_order_challenge(challenge, 5, 5)
             if response['status'] == "valid":
                 sld("{}: OK! Authorization lasts until {}.".format(
                     challenge.domain, challenge.expires))
@@ -374,39 +375,153 @@ def _authorize(cert_meta, account):
                     response['error']['type'])
                 )
                 failed.add(challenge.domain)
+                return None # debug
                 break
             else:
-                sle("{}: Pending!".format(challenge.domain))
+                sli("{}: Pending!".format(challenge.domain))
                 pending.add(challenge.domain)
                 break
+    except IOError as e:
+        sle('A connection or service error occurred. Aborting.')
+        raise manuale_errors.AutomatoesError(e)
         
-        # remember new expiration date in DB
-        if authorized_until:
-            updates = cert_meta.update_authorized_until(
-                datetime.datetime.fromisoformat(re.sub('Z','',authorized_until)))
-            if updates != 1:
-                sln('Failed to update DB with new authorized_until timestamp')
-            
-        # make include zone files empty
+    # remember new expiration date in DB
+    if authorized_until:
+        updates = cert_meta.update_authorized_until(
+            datetime.datetime.fromisoformat(re.sub('Z','',authorized_until)))
+        if updates != 1:
+            sln('Failed to update DB with new authorized_until timestamp')
+        
+    delete_challenge_responses_in_dns(zones, fqdn_challenges)
+        
+    if failed:
+        sle("{} fqdn(s) authorized, {} failed.".format(len(done), len(failed)))
+        sli("Authorized: {}".format(' '.join(done) or "N/A"))
+        sle("Failed: {}".format(' '.join(failed)))
+        return None
+    else:
+        sli("{} fqdn(s) authorized. Let's Encrypt!".format(len(done)))
+        return order
+
+    
+ddns_keyring = None
+
+def _get_ddns_keyring():
+     global ddns_keyring
+     if ddns_keyring:
+        return ddns_keyring 
+     
+     key_name = secret = ''
+     with open(Pathes.ddns_key_file) as kf:
+         for line in kf:
+             key_name_match = re.search(r'key\s+"([-a-zA-Z]+)"', line, re.ASCII)
+             if key_name_match: key_name = key_name_match.group(1)
+             secret_match = re.search(r'secret\s+"([=/a-zA-Z0-9]+)"', line, re.ASCII)
+             if secret_match: secret = secret_match.group(1)
+     if not (key_name and secret):
+         raise Exception('Can''t parse ddns key file: {}{}'.
+             format('Bad key name ' if not key_name_match else '',
+                         'Bad secret' if not secret_match else ''))
+     else:
+         ddns_keyring = tsigkeyring.from_text({key_name: secret})
+         return ddns_keyring
+
+def create_challenge_responses_in_dns(zones, fqdn_challenges):
+    """
+    Create the expected challenge response in dns
+    
+    @param zones:           dict of zones, where each zone has a list of fqdns
+                            as values
+    @type zones:            dict()
+    @param fqdn_challenges: dict of zones, containing challenge response
+                            (key) of zone 
+    @type fqdn_challenges:  dict()
+    @rtype:                 None
+    @exceptions             Can''t parse ddns key or
+                            DNS update failed for zone {} with rcode: {}
+    """
+    
+    if LE_ZONE_UPDATE_METHOD == 'zone_file':
+
+        for zone in zones.keys():
+             dest = str(Pathes.zone_file_root / zone / Pathes.zone_file_include_name)
+             lines = []
+             for fqdn in zones[zone]:
+                 sld('fqdn: {}'.format(fqdn))
+                 lines.append(str('_acme-challenge.{}.  IN TXT  \"{}\"\n'.
+                         format(fqdn,fqdn_challenges[fqdn].key)))
+             sli('Writing RRs: {}'.format(lines))
+             with open(dest, 'w') as file:
+                 file.writelines(lines)
+                 ##os.chmod(file.fileno(), Pathes.zone_tlsa_inc_mode)
+                 ##os.chown(file.fileno(), pathes.zone_tlsa_inc_uid, pathes.zone_tlsa_inc_gid)
+             updateZoneCache(zone)
+        updateSOAofUpdatedZones()
+    
+    elif LE_ZONE_UPDATE_METHOD == 'ddns':
+
+        ddns_keyring = _get_ddns_keyring()
+        
+        for zone in zones.keys():
+            the_update = update.Update( zone,
+                                        keyring=ddns_keyring,
+                                        keyalgorithm=HMAC_SHA256)
+            for fqdn in zones[zone]:
+                sld('fqdn: {}'.format(fqdn))
+                the_update.replace( '_acme-challenge.{}.'.format(fqdn),
+                                3600,
+                                'TXT',
+                                fqdn_challenges[fqdn].key)
+                sld('DNS update of RR: {}'.format('_acme-challenge.{}.  3600 TXT  \"{}\"'.
+                        format(fqdn,fqdn_challenges[fqdn].key)))
+            response = query.tcp(the_update,'127.0.0.1', timeout=10)
+            rc = response.rcode()
+            if rc != 0:
+                sle('DNS update failed for zone {} with rcode: {}'.
+                                        format(zone, rcode.to_text(rc)))
+                raise Exception('DNS update failed for zone {} with rcode: {}'.
+                                        format(zone, rcode.to_text(rc)))
+
+def delete_challenge_responses_in_dns(zones, fqdn_challenges):
+    """
+    Delete the challenge response in dns, created by
+                            create_challenge_responses_in_dns()
+    
+    @param zones:           dict of zones, where each zone has a list of fqdns
+                            as values
+    @type zones:            dict()
+    @param fqdn_challenges: dict of zones, containing challenge response
+                            (key) of zone 
+    @type fqdn_challenges:  dict()
+    @rtype:                 None
+    @exceptions             Can''t parse ddns key or
+                            DNS update failed for zone {} with rcode: {}
+    """
+    
+        
+    if LE_ZONE_UPDATE_METHOD == 'zone_file':
+
         for zone in zones.keys():
             dest = str(Pathes.zone_file_root / zone / Pathes.zone_file_include_name)
             with open(dest, 'w') as file:
                 file.writelines(('', ))
-                ##os.chmod(file.fileno(), Pathes.zone_tlsa_inc_mode)
-                ##os.chown(file.fileno(), pathes.zone_tlsa_inc_uid, pathes.zone_tlsa_inc_gid)
             updateZoneCache(zone)
         updateSOAofUpdatedZones()
     
-        if failed:
-            sle("{} fqdn(s) authorized, {} failed.".format(len(done), len(failed)))
-            sli("Authorized: {}".format(' '.join(done) or "N/A"))
-            sle("Failed: {}".format(' '.join(failed)))
-            return None
-        else:
-            sli("{} fqdn(s) authorized. Let's Encrypt!".format(len(done)))
-            return order
+    elif LE_ZONE_UPDATE_METHOD == 'ddns':
+
+        ddns_keyring = _get_ddns_keyring()
         
-    except IOError as e:
-        sle('A connection or service error occurred. Aborting.')
-        raise manuale_errors.AutomatoesError(e)
-    
+        for zone in zones.keys():
+            the_update = update.Update( zone,
+                                        keyring=ddns_keyring,
+                                        keyalgorithm=HMAC_SHA256)
+            for fqdn in zones[zone]:
+                the_update.delete( '_acme-challenge.{}.'.format(fqdn))
+            response = query.tcp(the_update,'127.0.0.1', timeout=10)
+            rc = response.rcode()
+            if rc != 0:
+                sle('DNS update delete failed for zone {} with rcode: {}'.
+                                        format(zone, rcode.to_text(rc)))
+                raise Exception('DNS update failed for zone {} with rcode: {}'.
+                                        format(zone, rcode.to_text(rc)))
