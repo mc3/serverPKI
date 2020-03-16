@@ -437,7 +437,7 @@ def create_challenge_responses_in_dns(zones, fqdn_challenges):
     elif LE_ZONE_UPDATE_METHOD == 'ddns':
         
         for zone in zones.keys():
-            the_update = ddns_updat(zone)
+            the_update = ddns_update(zone)
             for fqdn in zones[zone]:
                 sld('fqdn: {}'.format(fqdn))
                 the_update.replace( '_acme-challenge.{}.'.format(fqdn),
@@ -483,7 +483,7 @@ def delete_challenge_responses_in_dns(zones, fqdn_challenges):
     elif LE_ZONE_UPDATE_METHOD == 'ddns':
         
         for zone in zones.keys():
-            the_update = ddns_updat(zone)
+            the_update = ddns_update(zone)
             for fqdn in zones[zone]:
                 the_update.delete( '_acme-challenge.{}.'.format(fqdn))
             response = query.tcp(the_update,'127.0.0.1', timeout=10)
