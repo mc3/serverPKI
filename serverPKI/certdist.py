@@ -34,15 +34,16 @@ import subprocess
 from shutil import copy2
 from time import sleep
 
+from dns import query, update
 from paramiko import SSHClient, HostKeys, AutoAddPolicy
 
 from serverPKI.cert import Certificate
-from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME
+from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, LE_ZONE_UPDATE_METHOD
 from serverPKI.utils import options as opts
 from serverPKI.utils import sld, sli, sln, sle
 from serverPKI.utils import updateZoneCache, zone_and_FQDN_from_altnames
 from serverPKI.utils import updateSOAofUpdatedZones
-from serverPKI.utils import update_state_of_instance
+from serverPKI.utils import update_state_of_instance, ddns_update
 
 class MyException(Exception):
     pass
@@ -507,14 +508,42 @@ def delete_TLSA(cert_meta):
     """
 
     if Pathes.tlsa_dns_master == '':       # DNS master on local host
-        for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta): 
-            filename = fqdn + '.tlsa'
-            dest = str(Pathes.zone_file_root / zone / filename)
+        
+        if LE_ZONE_UPDATE_METHOD == 'zone_file':
 
-            #just open for write without writing, which makes file empty 
-            with open(dest, 'w') as fd: 
-                sli('Truncating {}'.format(dest))
-            updateZoneCache(zone)
+            for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta): 
+                filename = fqdn + '.tlsa'
+                dest = str(Pathes.zone_file_root / zone / filename)
+    
+                #just open for write without writing, which makes file empty 
+                with open(dest, 'w') as fd: 
+                    sli('Truncating {}'.format(dest))
+                updateZoneCache(zone)
+    
+        elif LE_ZONE_UPDATE_METHOD == 'ddns':
+
+            zones = {}
+            for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta):
+                if zone in zones:
+                    if fqdn not in zones[zone]: zones[zone].append(fqdn)
+                else:
+                    zones[zone] = [fqdn] 
+            for zone in zones:
+                the_update = ddns_update(zone)
+                for fqdn in zones[zone]:
+                    for prefix in cert_meta.tlsaprefixes.keys():
+                        tag = str(prefix.format(fqdn)).split(maxsplit=1)[0]
+                        sld('Deleting TLSA with tag {} an fqdn {} in zone {}'.
+                            format(tag, fqdn, zone))
+                        the_update.delete(tag)
+                response = query.tcp(the_update,'127.0.0.1', timeout=10)
+                rc = response.rcode()
+                if rc != 0:
+                    sle('DNS update delete failed for zone {} with rcode: {}'.
+                                        format(zone, response.rcode.to_text(rc)))
+                    raise Exception('DNS update failed for zone {} with rcode: {}'.
+                                        format(zone, response.rcode.to_text(rc)))
+        
 
     
 def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
@@ -536,20 +565,59 @@ def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
     sli('Distributing TLSA RRs for DANE.')
 
     if Pathes.tlsa_dns_master == '':       # DNS master on local host
-        for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta): 
-            filename = fqdn + '.tlsa'
-            dest = str(Pathes.zone_file_root / zone / filename)
-            sli('{} => {}'.format(filename, dest))
-            tlsa_lines = []
-            for prefix in cert_meta.tlsaprefixes.keys():
-                tlsa_lines.append(str(prefix.format(fqdn) +
-                                         ' ' +active_TLSA + '\n'))
-                if prepublished_TLSA:
+        
+        if LE_ZONE_UPDATE_METHOD == 'zone_file':
+
+            for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta): 
+                filename = fqdn + '.tlsa'
+                dest = str(Pathes.zone_file_root / zone / filename)
+                sli('{} => {}'.format(filename, dest))
+                tlsa_lines = []
+                for prefix in cert_meta.tlsaprefixes.keys():
                     tlsa_lines.append(str(prefix.format(fqdn) +
-                                         ' ' +prepublished_TLSA + '\n'))
-            with open(dest, 'w') as fd:
-                fd.writelines(tlsa_lines)
-            updateZoneCache(zone)
+                                             ' ' +active_TLSA + '\n'))
+                    if prepublished_TLSA:
+                        tlsa_lines.append(str(prefix.format(fqdn) +
+                                             ' ' +prepublished_TLSA + '\n'))
+                with open(dest, 'w') as fd:
+                    fd.writelines(tlsa_lines)
+                updateZoneCache(zone)
+    
+        
+        elif LE_ZONE_UPDATE_METHOD == 'ddns':
+    
+            zones = {}
+            for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta):
+                if zone in zones:
+                    if fqdn not in zones[zone]: zones[zone].append(fqdn)
+                else:
+                    zones[zone] = [fqdn] 
+            for zone in zones:
+                the_update = ddns_update(zone)
+                for fqdn in zones[zone]:
+                    for prefix in cert_meta.tlsaprefixes.keys():
+                        pf_with_fqdn = str(prefix.format(fqdn))
+                        fields = pf_with_fqdn.split(maxsplit=4)
+                        sld('Adding TLSA: {} {} {} {}'.
+                            format(fields[0], int(fields[1]), fields[3],
+                                            fields[4] + ' ' +active_TLSA ))
+                        the_update.add(fields[0], int(fields[1]), fields[3],
+                                            fields[4] + ' ' +active_TLSA )
+                        if prepublished_TLSA:
+                            sld('Adding TLSA: {} {} {} {}'.
+                                format(fields[0], int(fields[1]), fields[3],
+                                    fields[4] + ' ' +prepublished_TLSA ))
+                            the_update.add(fields[0], int(fields[1]), fields[3],
+                                    fields[4] + ' ' +prepublished_TLSA )
+    
+                response = query.tcp(the_update,'127.0.0.1', timeout=10)
+                rc = response.rcode()
+                if rc != 0:
+                    sle('DNS update add failed for zone {} with rcode: {}'.
+                                        format(zone, response.rcode.to_text(rc)))
+                    raise Exception('DNS update add failed for zone {} with rcode: {}'.
+                                        format(zone, response.rcode.to_text(rc)))
+
 
     else:                           # remote DNS master ( **INCOMPLETE**)
         sle('Remote DNS master server is currently not supported. Must be on same host as this script.')

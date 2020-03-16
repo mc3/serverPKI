@@ -36,6 +36,7 @@ import re
 import sys
 import time
 
+from dns import query, update
 import iso8601
 from cryptography.hazmat.primitives.hashes import SHA256
 
@@ -55,16 +56,13 @@ from automatoes import issue as manuale_issue
 from automatoes import cli as manuale_cli
 from automatoes import errors as manuale_errors
 
-from dns import query, update, tsigkeyring
-from dns.tsig import HMAC_SHA256
-
 #--------------- local imports --------------
 from serverPKI.cacert import create_CAcert_meta
 from serverPKI.config import (Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA,
                                 LE_ZONE_UPDATE_METHOD)
 from serverPKI.utils import sld, sli, sln, sle, options, update_certinstance
 from serverPKI.utils import zone_and_FQDN_from_altnames, updateSOAofUpdatedZones
-from serverPKI.utils import updateZoneCache, encrypt_key, print_order
+from serverPKI.utils import updateZoneCache, encrypt_key, print_order, ddns_update
 
 # --------------- manuale logging ----------------
 
@@ -403,28 +401,6 @@ def _authorize(cert_meta, account):
         sli("{} fqdn(s) authorized. Let's Encrypt!".format(len(done)))
         return order
 
-    
-ddns_keyring = None
-
-def _get_ddns_keyring():
-     global ddns_keyring
-     if ddns_keyring:
-        return ddns_keyring 
-     
-     key_name = secret = ''
-     with open(Pathes.ddns_key_file) as kf:
-         for line in kf:
-             key_name_match = re.search(r'key\s+"([-a-zA-Z]+)"', line, re.ASCII)
-             if key_name_match: key_name = key_name_match.group(1)
-             secret_match = re.search(r'secret\s+"([=/a-zA-Z0-9]+)"', line, re.ASCII)
-             if secret_match: secret = secret_match.group(1)
-     if not (key_name and secret):
-         raise Exception('Can''t parse ddns key file: {}{}'.
-             format('Bad key name ' if not key_name_match else '',
-                         'Bad secret' if not secret_match else ''))
-     else:
-         ddns_keyring = tsigkeyring.from_text({key_name: secret})
-         return ddns_keyring
 
 def create_challenge_responses_in_dns(zones, fqdn_challenges):
     """
@@ -459,13 +435,9 @@ def create_challenge_responses_in_dns(zones, fqdn_challenges):
         updateSOAofUpdatedZones()
     
     elif LE_ZONE_UPDATE_METHOD == 'ddns':
-
-        ddns_keyring = _get_ddns_keyring()
         
         for zone in zones.keys():
-            the_update = update.Update( zone,
-                                        keyring=ddns_keyring,
-                                        keyalgorithm=HMAC_SHA256)
+            the_update = ddns_updat(zone)
             for fqdn in zones[zone]:
                 sld('fqdn: {}'.format(fqdn))
                 the_update.replace( '_acme-challenge.{}.'.format(fqdn),
@@ -509,13 +481,9 @@ def delete_challenge_responses_in_dns(zones, fqdn_challenges):
         updateSOAofUpdatedZones()
     
     elif LE_ZONE_UPDATE_METHOD == 'ddns':
-
-        ddns_keyring = _get_ddns_keyring()
         
         for zone in zones.keys():
-            the_update = update.Update( zone,
-                                        keyring=ddns_keyring,
-                                        keyalgorithm=HMAC_SHA256)
+            the_update = ddns_updat(zone)
             for fqdn in zones[zone]:
                 the_update.delete( '_acme-challenge.{}.'.format(fqdn))
             response = query.tcp(the_update,'127.0.0.1', timeout=10)

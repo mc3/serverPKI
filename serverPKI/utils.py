@@ -31,6 +31,9 @@ import syslog
 
 from prettytable import PrettyTable
 
+from dns import query, update, tsigkeyring
+from dns.tsig import HMAC_SHA256
+
 from serverPKI.config import (Pathes, dbAccounts,
                                 SSH_CLIENT_USER_NAME, SYSLOG_FACILITY)
 from serverPKI import get_version
@@ -781,3 +784,44 @@ def decrypt_all_keys(db):
 def print_order(order):
     return('\turi: {}\n\ttype: {}\n\tcertificate_uri: {}\n\tcontents: {}'.
         format(order.uri, order.type, order.certificate_uri, order.contents))
+
+# ----------- dynamic DNS update setup ---------------
+
+ddns_keyring = None
+
+def _get_ddns_keyring():
+     global ddns_keyring
+     if ddns_keyring:
+        return ddns_keyring 
+     
+     key_name = secret = ''
+     with open(Pathes.ddns_key_file) as kf:
+         for line in kf:
+             key_name_match = re.search(r'key\s+"([-a-zA-Z]+)"', line, re.ASCII)
+             if key_name_match: key_name = key_name_match.group(1)
+             secret_match = re.search(r'secret\s+"([=/a-zA-Z0-9]+)"', line, re.ASCII)
+             if secret_match: secret = secret_match.group(1)
+     if not (key_name and secret):
+         raise Exception('Can''t parse ddns key file: {}{}'.
+             format('Bad key name ' if not key_name_match else '',
+                         'Bad secret' if not secret_match else ''))
+     else:
+         ddns_keyring = tsigkeyring.from_text({key_name: secret})
+         return ddns_keyring
+
+def ddns_update(zone):
+    """
+    Obtain a dynamic DNS update instance
+    
+    @param zone:            zone, in which the update should take place
+    @type zones:            string
+    @rtype:                 dns.update.Update instance
+    @exceptions             
+    """
+    
+    ddns_keyring = _get_ddns_keyring()
+        
+    return update.Update(   zone,
+                            keyring=ddns_keyring,
+                            keyalgorithm=HMAC_SHA256)
+    
