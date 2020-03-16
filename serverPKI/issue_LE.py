@@ -36,7 +36,7 @@ import re
 import sys
 import time
 
-from dns import query, update
+from dns import query, update, rdatatype
 import iso8601
 from cryptography.hazmat.primitives.hashes import SHA256
 
@@ -350,38 +350,38 @@ def _authorize(cert_meta, account):
         
     create_challenge_responses_in_dns(zones, fqdn_challenges)
         
-    try:
-        # Validate challenges
-        authorized_until = None
-        done, failed, pending = set(), set(), set()
-        sld('Waiting 10 seconds for dns propagation')
-        time.sleep(10)
-        for challenge in pending_challenges:
-            sld("{}: waiting for verification. Checking in 5 "
-                  "seconds.".format(challenge.domain))
-                    
-            response = acme.verify_order_challenge(challenge, 5, 5)
-            if response['status'] == "valid":
-                sld("{}: OK! Authorization lasts until {}.".format(
-                    challenge.domain, challenge.expires))
-                authorized_until = challenge.expires
-                done.add(challenge.domain)
-            elif response['status'] == 'invalid':
-                sle("{}: Challenge failed, because: {} ({})".format(
-                    challenge.domain,
-                    response['error']['detail'],
-                    response['error']['type'])
-                )
-                failed.add(challenge.domain)
-                return None # debug
-                break
-            else:
-                sli("{}: Pending!".format(challenge.domain))
-                pending.add(challenge.domain)
-                break
-    except IOError as e:
-        sle('A connection or service error occurred. Aborting.')
-        raise manuale_errors.AutomatoesError(e)
+    ##try:
+    # Validate challenges
+    authorized_until = None
+    done, failed, pending = set(), set(), set()
+    sld('Waiting 10 seconds for dns propagation')
+    time.sleep(10)
+    for challenge in pending_challenges:
+        sld("{}: waiting for verification. Checking in 5 "
+              "seconds.".format(challenge.domain))
+                
+        response = acme.verify_order_challenge(challenge, 5, 5)
+        sld('acme.verify_order_challenge returned "{}"'.format(response['status']))
+        if response['status'] == "valid":
+            sld("{}: OK! Authorization lasts until {}.".format(
+                challenge.domain, challenge.expires))
+            authorized_until = challenge.expires
+            done.add(challenge.domain)
+        elif response['status'] == 'invalid':
+            sle("{}: Challenge failed, because: {} ({})".format(
+                challenge.domain,
+                response['error']['detail'],
+                response['error']['type'])
+            )
+            failed.add(challenge.domain)
+            break
+        else:
+            sli("{}: Pending!".format(challenge.domain))
+            pending.add(challenge.domain)
+            break
+    ##except IOError as e:
+    ##    sle('A connection or service error occurred. Aborting.')
+    ##    raise manuale_errors.AutomatoesError(e)
         
     # remember new expiration date in DB
     if authorized_until:
@@ -442,7 +442,7 @@ def create_challenge_responses_in_dns(zones, fqdn_challenges):
                 sld('fqdn: {}'.format(fqdn))
                 the_update.replace( '_acme-challenge.{}.'.format(fqdn),
                                 3600,
-                                'TXT',
+                                rdatatype.from_text('TXT'),
                                 fqdn_challenges[fqdn].key)
                 sld('DNS update of RR: {}'.format('_acme-challenge.{}.  3600 TXT  \"{}\"'.
                         format(fqdn,fqdn_challenges[fqdn].key)))
@@ -485,7 +485,9 @@ def delete_challenge_responses_in_dns(zones, fqdn_challenges):
         for zone in zones.keys():
             the_update = ddns_update(zone)
             for fqdn in zones[zone]:
-                the_update.delete( '_acme-challenge.{}.'.format(fqdn))
+                the_update.delete(
+                            '_acme-challenge.{}.'.format(fqdn),
+                            rdatatype.from_text('TXT'))
             response = query.tcp(the_update,'127.0.0.1', timeout=10)
             rc = response.rcode()
             if rc != 0:
