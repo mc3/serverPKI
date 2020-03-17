@@ -36,7 +36,8 @@ import re
 import sys
 import time
 
-from dns import query, update, rdatatype
+import dns
+##from dns import query, rdatatype
 import iso8601
 from cryptography.hazmat.primitives.hashes import SHA256
 
@@ -337,7 +338,7 @@ def _authorize(cert_meta, account):
     for challenge in pending_challenges: 
         fqdn_challenges[challenge.domain] = challenge
     
-        # putting challenges into zone include fules for named server
+        # find zones by fqdn
         zones = {}
         sld('Calling zone_and_FQDN_from_altnames()')
         for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta):
@@ -353,35 +354,32 @@ def _authorize(cert_meta, account):
     ##try:
     # Validate challenges
     authorized_until = None
-    done, failed, pending = set(), set(), set()
-    sld('Waiting 10 seconds for dns propagation')
-    time.sleep(10)
     for challenge in pending_challenges:
-        sld("{}: waiting for verification. Checking in 5 "
+        sld("{}: waiting for verification..."
               "seconds.".format(challenge.domain))
                 
-        response = acme.verify_order_challenge(challenge, 5, 5)
-        sld('acme.verify_order_challenge returned "{}"'.format(response['status']))
+        # wait maximum 2 minutes
+        response = acme.verify_order_challenge(challenge, 10, 12)
+        sld('acme.verify_order_challenge returned "{}"'.
+                                                format(response['status']))
         if response['status'] == "valid":
             sld("{}: OK! Authorization lasts until {}.".format(
                 challenge.domain, challenge.expires))
             authorized_until = challenge.expires
-            done.add(challenge.domain)
         elif response['status'] == 'invalid':
             sle("{}: Challenge failed, because: {} ({})".format(
                 challenge.domain,
                 response['error']['detail'],
                 response['error']['type'])
             )
-            failed.add(challenge.domain)
+            # we need either all challenges or none: repeat with next cron cacle
             break
         else:
-            sli("{}: Pending!".format(challenge.domain))
-            pending.add(challenge.domain)
+            sln("{}: Challenge returned status {}".format(
+                                    challenge.domain,
+                                    response['status']))
+            # we need either all challenges or none: repeat with next cron cacle
             break
-    ##except IOError as e:
-    ##    sle('A connection or service error occurred. Aborting.')
-    ##    raise manuale_errors.AutomatoesError(e)
         
     # remember new expiration date in DB
     if authorized_until:
@@ -392,14 +390,8 @@ def _authorize(cert_meta, account):
         
     delete_challenge_responses_in_dns(zones, fqdn_challenges)
         
-    if failed:
-        sle("{} fqdn(s) authorized, {} failed.".format(len(done), len(failed)))
-        sli("Authorized: {}".format(' '.join(done) or "N/A"))
-        sle("Failed: {}".format(' '.join(failed)))
-        return None
-    else:
-        sli("{} fqdn(s) authorized. Let's Encrypt!".format(len(done)))
-        return order
+    sli("{} fqdn(s) authorized. Let's Encrypt!".format(len(done)))
+    return order
 
 
 def create_challenge_responses_in_dns(zones, fqdn_challenges):
@@ -436,17 +428,20 @@ def create_challenge_responses_in_dns(zones, fqdn_challenges):
     
     elif LE_ZONE_UPDATE_METHOD == 'ddns':
         
+        txt_datatape = dns.rdatatype.from_text('TXT')
         for zone in zones.keys():
             the_update = ddns_update(zone)
             for fqdn in zones[zone]:
-                sld('fqdn: {}'.format(fqdn))
-                the_update.replace( '_acme-challenge.{}.'.format(fqdn),
-                                3600,
-                                rdatatype.from_text('TXT'),
+                the_update.delete(  '_acme-challenge.{}.'.format(fqdn),
+                                txt_datatape)
+                the_update.add( '_acme-challenge.{}.'.format(fqdn),
+                                60,
+                                txt_datatape,
                                 fqdn_challenges[fqdn].key)
-                sld('DNS update of RR: {}'.format('_acme-challenge.{}.  3600 TXT  \"{}\"'.
+                sld('DNS update of RR: {}'.format('_acme-challenge.{}.  60 TXT  \"{}\"'.
                         format(fqdn,fqdn_challenges[fqdn].key)))
-            response = query.tcp(the_update,'127.0.0.1', timeout=10)
+            response = dns.query.tcp(the_update,'127.0.0.1', timeout=10)
+            sld('DNS update delete/add returned response: {}'.format(response))
             rc = response.rcode()
             if rc != 0:
                 sle('DNS update failed for zone {} with rcode: {}'.
@@ -482,13 +477,15 @@ def delete_challenge_responses_in_dns(zones, fqdn_challenges):
     
     elif LE_ZONE_UPDATE_METHOD == 'ddns':
         
+        txt_datatape = dns.rdatatype.from_text('TXT')
         for zone in zones.keys():
             the_update = ddns_update(zone)
             for fqdn in zones[zone]:
                 the_update.delete(
                             '_acme-challenge.{}.'.format(fqdn),
-                            rdatatype.from_text('TXT'))
-            response = query.tcp(the_update,'127.0.0.1', timeout=10)
+                            txt_datatape)
+            response = dns.query.tcp(the_update,'127.0.0.1', timeout=10)
+            sld('DNS update delete/add returned response: {}'.format(response))
             rc = response.rcode()
             if rc != 0:
                 sle('DNS update delete failed for zone {} with rcode: {}'.
