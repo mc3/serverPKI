@@ -34,7 +34,9 @@ import subprocess
 from shutil import copy2
 from time import sleep
 
-from dns import query, update
+from dns import rdatatype
+from dns import query as dns_query
+
 from paramiko import SSHClient, HostKeys, AutoAddPolicy
 
 from serverPKI.cert import Certificate
@@ -536,11 +538,11 @@ def delete_TLSA(cert_meta):
                         sld('Deleting TLSA with tag {} an fqdn {} in zone {}'.
                             format(tag, fqdn, zone))
                         the_update.delete(tag)
-                response = query.tcp(the_update,'127.0.0.1', timeout=10)
+                response = dns_query.tcp(the_update,'127.0.0.1', timeout=10)
                 rc = response.rcode()
                 if rc != 0:
-                    sle('DNS update delete failed for zone {} with rcode: {}'.
-                                        format(zone, response.rcode.to_text(rc)))
+                    sle('DNS update failed for zone {} with rcode: {}:\n{}'.
+                                        format(zone, rcode.to_text(rc), rcode))
                     raise Exception('DNS update failed for zone {} with rcode: {}'.
                                         format(zone, response.rcode.to_text(rc)))
         
@@ -586,6 +588,7 @@ def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
         
         elif LE_ZONE_UPDATE_METHOD == 'ddns':
     
+            tlsa_datatype = rdatatype.from_text('TLSA')
             zones = {}
             for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta):
                 if zone in zones:
@@ -598,23 +601,27 @@ def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
                     for prefix in cert_meta.tlsaprefixes.keys():
                         pf_with_fqdn = str(prefix.format(fqdn))
                         fields = pf_with_fqdn.split(maxsplit=4)
+                        sld('Deleting possible old TLSAs: {}'.
+                            format(fields[0]))
+                        the_update.delete(fields[0], tlsa_datatype)
+                        
                         sld('Adding TLSA: {} {} {} {}'.
                             format(fields[0], int(fields[1]), fields[3],
                                             fields[4] + ' ' +active_TLSA ))
                         the_update.add(fields[0], int(fields[1]), fields[3],
                                             fields[4] + ' ' +active_TLSA )
                         if prepublished_TLSA:
-                            sld('Adding TLSA: {} {} {} {}'.
+                            sld('Adding prepublish TLSA: {} {} {} {}'.
                                 format(fields[0], int(fields[1]), fields[3],
                                     fields[4] + ' ' +prepublished_TLSA ))
                             the_update.add(fields[0], int(fields[1]), fields[3],
                                     fields[4] + ' ' +prepublished_TLSA )
     
-                response = query.tcp(the_update,'127.0.0.1', timeout=10)
+                response = dns_query.tcp(the_update,'127.0.0.1', timeout=10)
                 rc = response.rcode()
                 if rc != 0:
-                    sle('DNS update add failed for zone {} with rcode: {}'.
-                                        format(zone, response.rcode.to_text(rc)))
+                    sle('DNS update failed for zone {} with rcode: {}:\n{}'.
+                                        format(zone, rcode.to_text(rc), rcode))
                     raise Exception('DNS update add failed for zone {} with rcode: {}'.
                                         format(zone, response.rcode.to_text(rc)))
 

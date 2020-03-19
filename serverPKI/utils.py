@@ -32,7 +32,7 @@ import syslog
 from prettytable import PrettyTable
 
 import dns
-from dns import tsigkeyring
+from dns import update, tsigkeyring, tsig
 
 from serverPKI.config import (Pathes, dbAccounts,
                                 SSH_CLIENT_USER_NAME, SYSLOG_FACILITY)
@@ -821,7 +821,7 @@ def ddns_update(zone):
     
     ddns_keyring = _get_ddns_keyring()
         
-    return dns.update.Update(   zone,
+    return update.Update(   zone,
                             keyring=ddns_keyring,
-                            keyalgorithm=dns.tsig.HMAC_SHA256)
+                            keyalgorithm=tsig.HMAC_SHA256)
     
