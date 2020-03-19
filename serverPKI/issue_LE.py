@@ -358,14 +358,13 @@ def _authorize(cert_meta, account):
     sli('Waiting 60 seconds for dns propagation')
     time.sleep(60)
     for challenge in pending_challenges:
-        sld("{}: waiting for verification...".format(challenge.domain))
-                
+
         # wait maximum 2 minutes
         sld('{} starting verification of {}'.
             format(datetime.datetime.utcnow().isoformat(), challenge.domain))
         response = acme.verify_order_challenge( challenge,
-                                                timeout=10,
-                                                retry_limit=12)
+                                                timeout=5,
+                                                retry_limit=5)
         sld('{} acme.verify_order_challenge returned "{}"'.
             format(datetime.datetime.utcnow().isoformat(), response['status']))
         if response['status'] == "valid":
