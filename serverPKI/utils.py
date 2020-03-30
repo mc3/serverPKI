@@ -36,7 +36,7 @@ from dns import update, tsigkeyring, tsig
 
 from serverPKI.config import (Pathes, dbAccounts,
                                 SSH_CLIENT_USER_NAME, SYSLOG_FACILITY)
-from serverPKI import get_version
+from serverPKI import get_version, get_schema_version
 
 
 #--------- globals ***DO WE NEED THIS?*** ----------
@@ -665,7 +665,11 @@ def get_revision(db):
         (schemaVersion, keysEncrypted) = result
         sld('SchemaVersion of DB is {}; Certkeys are {} encrypted.'.format(
                     schemaVersion, '' if keysEncrypted else 'not'))
-        return result
+        if schemaVersion != get_schema_version():
+            raise MyException('DB Schema version is {}, but {} is required. Can''t continue'.
+                        format(schemaVersion, get_schema_version()))
+        else:
+            return result
     raise MyException('?Unable to get DB SchemaVersion. Create table revision in DB!')
     return None
 

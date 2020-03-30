@@ -147,18 +147,22 @@ def issue_LE_cert(cert_meta):
     sli('Creating key (%d bits) and cert for %s %s' %
         (int(X509atts.bits), cert_meta.subject_type, cert_meta.name))
     
-    certificate_key = manuale_crypto.generate_rsa_key(X509atts.bits)
-    
-    # experimental elliptic key 
-    if False:
+    if cert_meta.encryption_algo == 'rsa':
+        certificate_key = manuale_crypto.generate_rsa_key(X509atts.bits)
+    elif cert_meta.encryption_algo == 'ec':
+        # experimental elliptic key 
         from cryptography.hazmat.primitives.asymmetric import ec
         from cryptography.hazmat.backends import default_backend
         crypto_backend = default_backend()
         certificate_key = ec.generate_private_key(ec.SECP384R1(), crypto_backend)
-    # end experimental elliptic key
+    else:
+        sle('Dual alogo key not yet supported')
+        return None
     
     order.key = manuale_crypto.export_private_key(certificate_key).decode('ascii')
-    csr = manuale_crypto.create_csr(certificate_key, alt_names, must_staple = True)
+    csr = manuale_crypto.create_csr(certificate_key,
+                                    alt_names,
+                                    must_staple = cert_meta.ocsp_must_staple)
     
     
     acme = AcmeV2(LE_SERVER, account)

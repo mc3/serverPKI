@@ -44,6 +44,8 @@ q_all_cert_meta = """
     c.disabled AS c_disabled,
     c.type AS c_type,
     c.authorized_until AS authorized_until,
+    c.encryption_algo AS encryption_algo,
+    c.ocsp_must_staple AS ocsp_must_staple,
     s2.name AS alt_name,
     s.tlsaprefix AS tlsaprefix,
     d.fqdn AS dist_host,
@@ -201,13 +203,17 @@ class Certificate(object):
                     self.disabled = row['c_disabled']
                     self.authorized_until = row['authorized_until']
                     self.subject_type = row['subject_type']
-                    sld('----------- {}\t{}\t{}\t{}\t{}\t{}'.format(
+                    self.encryption_algo = row['encryption_algo']
+                    self.ocsp_must_staple = row['ocsp_must_staple']
+                    sld('----------- {}\t{}\t{}\t{}\t{}\t{}\t{}'.format(
                              self.cert_id,
                              self.name,
                              self.cert_type,
                              self.disabled,
                              self.authorized_until,
-                             self.subject_type)
+                             self.subject_type,
+                             self.encryption_algo,
+                             self.ocsp_must_staple)
                     )
                 if row['alt_name']: self.altnames.append(row['alt_name'])
                 if row['tlsaprefix']: self.tlsaprefixes[row['tlsaprefix']] = 1
