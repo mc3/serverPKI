@@ -19,7 +19,7 @@ ALTER TABLE Certificates
 
 -- SELECT * FROM add_cert('myserver.at.do.main', 'server','LE', 'rsa', false, NULL, NULL, NULL, NULL, NULL, NULL);
 -- V3: 2 more attributes in Certificates
-DROP FUNCTION add_cert
+DROP FUNCTION IF EXISTS add_cert;
 CREATE FUNCTION add_cert(the_name citext, the_subject_type dd.subject_type, the_cert_type dd.cert_type, the_encryption_algo dd.cert_encryption_algo, must_staple BOOLEAN, the_altname citext, the_tlsa_name citext, the_tlsa_port dd.port_number, the_disthost_name citext, the_jail citext, the_place citext) RETURNS text
     LANGUAGE plpgsql
     AS $$
