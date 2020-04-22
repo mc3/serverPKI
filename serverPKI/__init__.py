@@ -20,7 +20,7 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 __version__ = (0, 9, 6)
-__schema_version__ = 3
+__schema_version__ = 4
 __author__ = "Axel Rau <Axel.Rau@Chaos1.DE>"
 __licence__ = "Apache License V2.0"
 
