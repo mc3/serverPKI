@@ -85,7 +85,7 @@ def consolidate_cert(cert_meta):
     """
     Consolidate cert targets of one cert meta.
     This means cert and key files of instance in state "deployed"
-    are freshly created.
+    are redistributes.
     
     @param cert_meta:   Cert meta
     @type cert_meta:    cert.Certificate instance
@@ -110,15 +110,13 @@ def consolidate_cert(cert_meta):
     try:
         deployCerts({cert_meta.name: cert_meta},
                     instance_id=deployed_id,
-                    consolidate=True,
-                    allowed_states=('deployed', ))
+                     allowed_states=('deployed', ))
     except MyException:
         pass
     return
 
 def deployCerts(certs,
                 instance_id=None,
-                consolidate=False,
                 allowed_states=('issued', )):
 
     """
@@ -130,8 +128,6 @@ def deployCerts(certs,
                             value = serverPKI.cert.Certificate instance
     @param instance_id:     optional id of specific instance
     @type instance_id:      int
-    @param consolidate      Prevent from distribution of TLSA and updating of state.
-    @type consolidate       bool
     @param allowed_states   states, required for ditribution (default=('issued',)).
     @type allowed_states    tuple of strings
     @rtype:                 bool, false if error found
@@ -264,7 +260,7 @@ def deployCerts(certs,
             
         sli('')
         
-        if consolidate:
+        if opts.sync_disk:      # skip TLSA stuff if doing consolidate
             continue
         
         if not opts.no_TLSA:
