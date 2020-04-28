@@ -62,7 +62,24 @@ ps_delete = None
 to_be_deleted = set()
 to_be_mailed = []
 
-#---------------  public functions  --------------
+# ------------------- public ENUMS ------------------
+from enum import Enum, unique, auto
+@unique
+class Action(Enum):
+    issue = auto()
+    prepublish = auto()
+    distribute = auto()
+    expire = auto()
+    archive = auto()
+    delete = auto()
+
+
+ma = Action.distribute
+
+
+
+# #---------------  public functions  --------------
+
 
 def scheduleCerts(db, cert_names):
 
@@ -100,15 +117,15 @@ def scheduleCerts(db, cert_names):
         distribute_tlsa_rrs(cert_meta, active_TLSA, prepublishing_TLSA)
         update_state_of_instance(cert_meta.db, new_i.id, 'prepublished')
             
-    def distribute(cert_meta, id, state):
+    def distribute(cert_meta, inst_id, state):
         if opts.check_only:
-            sld('Would distribute {}.'.format(id))
+            sld('Would distribute {}.'.format(inst_id))
             return
         sli('Distributing {}:{}'.
-                                format(cert_meta.name, id))
+            format(cert_meta.name, inst_id))
         cm_dict = {cert_meta.name: cert_meta}
         try:
-            deployCerts(cm_dict, id, allowed_states=(state, ))
+            deployCerts(cm_dict, inst_id, allowed_states=(state,))
         except Exception:
             sln('Skipping distribution of cert {} because {} [{}]'.format(
                                             cert_meta.name,

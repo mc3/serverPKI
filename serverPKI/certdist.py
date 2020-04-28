@@ -65,7 +65,7 @@ def export_instance(db):
 
     cert_meta = Certificate(db, '', serial=opts.cert_serial)
     result = cert_meta.instance(instance_id=opts.cert_serial)
-    (id, state, cert, key, tlsa, cacert) = result
+    (inst_id, state, cert, key, tlsa, cacert, algo) = result
 
     cert_path = Pathes.work / 'cert-{}.pem'.format(opts.cert_serial)
     with open(str(cert_path), 'w') as fde:
@@ -76,8 +76,8 @@ def export_instance(db):
         fde.write(key)
     key_path.chmod(0o400)
     
-    sli('Cert and key exported to {} and {}'.
-                                        format(str(cert_path), str(key_path)))
+    sli('Cert and {} key for {} exported to {} and {}'.
+                    format(algo, cert_meta.name, str(cert_path), str(key_path)))
     return True
 
 
@@ -85,7 +85,7 @@ def consolidate_cert(cert_meta):
     """
     Consolidate cert targets of one cert meta.
     This means cert and key files of instance in state "deployed"
-    are redistributes.
+    are redistributed.
     
     @param cert_meta:   Cert meta
     @type cert_meta:    cert.Certificate instance
@@ -98,9 +98,9 @@ def consolidate_cert(cert_meta):
     sld('consolidate_cert: inst_list = {}'.format(inst_list))
     if not inst_list: return
     
-    for id, state in inst_list:
+    for inst_id, state in inst_list:
         if state == 'deployed':
-            deployed_id = id
+            deployed_id = inst_id
 
     if not deployed_id:
         sli('consolidate_cert: No instance of {} in state "deployed"'.format(
@@ -109,25 +109,25 @@ def consolidate_cert(cert_meta):
     
     try:
         deployCerts({cert_meta.name: cert_meta},
-                    instance_id=deployed_id,
-                     allowed_states=('deployed', ))
+            instance_ids=(deployed_id,),
+            allowed_states=('deployed', ))
     except MyException:
         pass
     return
 
 def deployCerts(certs,
-                instance_id=None,
-                allowed_states=('issued', )):
-
+                instance_ids=None,
+                allowed_states=('issued',)):
     """
-    Deploy a list of (certificate. key and TLSA file, using sftp).
+    Deploy a list of (certificates. keys and TLSA files, using paramiko/sftp).
     Restart service at target host and reload nameserver.
+    May add TLSA RR to DNS fqdn.
     
     @param certs:           list of certificate meta data instances
     @type certs:            dict with key = cert name and 
                             value = serverPKI.cert.Certificate instance
-    @param instance_id:     optional id of specific instance
-    @type instance_id:      int
+    @param instance_ids:    optional list of ids of specific instances
+    @type instance_ids:     list of int or None
     @param allowed_states   states, required for ditribution (default=('issued',)).
     @type allowed_states    tuple of strings
     @rtype:                 bool, false if error found
@@ -136,8 +136,8 @@ def deployCerts(certs,
     """
 
     error_found = False
-        
     limit_hosts = False
+
     only_host = []
     if opts.only_host: only_host = opts.only_host
     if len(only_host) > 0: limit_hosts = True
@@ -151,129 +151,132 @@ def deployCerts(certs,
     for cert in certs.values():
          
         if len(cert.disthosts) == 0: continue
-        
-        result = cert.instance(instance_id)
-        if not result:
-            sli('No valid cerificate for {} in DB - create it first'.format(
-                                                                    cert.name))
-            if instance_id: # let caller handle this error, if only one cert
-                raise MyException('No valid cerificate for {} in DB - '
-                                        'create it first'.format(cert.name))
-                
-            else: continue
-        my_instance_id, state, cert_text, key_text, TLSA_text, cacert_text = result
-        
-        if state not in allowed_states:
-            sli('No recent valid certificate for {} in state'
-                    ' "{}" in DB - not distributed or consolidated.'.format(
-                                                cert.name, allowed_states))
-            if instance_id: # let caller handle this error, if only one cert
-                raise MyException('No recent valid certificate for "{}" in state'
-                    ' "{}" in DB - not distributed or consolidated.'.format(
-                                                cert.name, should_be_state))
-            else: continue
-            
-        host_omitted = False
-        
-        for fqdn,dh in cert.disthosts.items():
-        
-            if fqdn in skip_host:
-                host_omitted = True
-                continue
-            if limit_hosts and (fqdn not in only_host):
-                host_omitted = True
-                continue
-            dest_path = PurePath('/')
-            
-            sld('{}: {}'.format(cert.name, fqdn))
-            
-            for jail in ( dh['jails'].keys() or ('',) ):   # jail is empty if no jails
-            
-                if '/' in jail:
-                    sle('"/" in jail name "{}" not allowed with subject {}.'.format(jail, cert.name))
-                    error_found = True
-                    return False
 
-                jailroot = dh['jailroot'] if jail != '' else '' # may also be empty
-                dest_path = PurePath('/', jailroot, jail)
-                sld('{}: {}: {}'.format(cert.name, fqdn, dest_path))                
-    
-                the_jail = dh['jails'][jail]
-                
-                if len(the_jail['places']) == 0:
-                    sle('{} subject has no place attribute.'.format(cert.name))
-                    error_found = True
-                    return False
-                    
-                for place in the_jail['places'].values():
-                
-                    sld('Handling jail "{}" and place {}'.format(jail, place.name))
-                                   
-                    fd_key = StringIO(key_text)
-                    fd_cert = StringIO(cert_text)
-                
-                    key_file_name = key_name(cert.name, cert.subject_type)
-                    cert_file_name = cert_name(cert.name, cert.subject_type)
-                    
-                    pcp = place.cert_path
-                    if '{}' in pcp:     # we have a home directory named like the subject
-                        pcp = pcp.format(cert.name)
-                    # make sure pcb does not start with '/', which would ignore dest_path:
-                    if PurePath(pcp).is_absolute():
-                        dest_dir = PurePath(dest_path, PurePath(pcp).relative_to('/'))
-                    else:
-                        dest_dir = PurePath(dest_path, PurePath(pcp))
+        the_instances = []
 
-                    sld('Handling fqdn {} and dest_dir "{}" in deployCerts'.format(
-                                                        fqdn, dest_dir))
-                
-                    if place.key_path:
-                        key_dest_dir = PurePath(dest_path, place.key_path)
-                        distribute_cert(fd_key, fqdn, key_dest_dir, key_file_name, place, None)
-                    
-                    elif place.cert_file_type == 'separate':
-                        distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
-                        if cert.cert_type == 'LE':
-                            chain_file_name = cert_cacert_chain_name(cert.name, cert.subject_type)
-                            fd_chain = StringIO(cert_text + cacert_text)
-                            distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
-                    
-                    elif place.cert_file_type == 'combine key':
-                        cert_file_name = key_cert_name(cert.name, cert.subject_type)
-                        fd_cert = StringIO(key_text + cert_text)
-                        if cert.cert_type == 'LE':
-                            chain_file_name = key_cert_cacert_chain_name(cert.name, cert.subject_type)
-                            fd_chain = StringIO(key_text + cert_text + cacert_text)
-                            distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
-                    
-                    elif place.cert_file_type == 'combine both':
-                        cert_file_name = key_cert_cacert_name(cert.name, cert.subject_type)
-                        fd_cert = StringIO(key_text + cert_text + cacert_text)
-                
-                    elif place.cert_file_type == 'combine cacert':
-                        cert_file_name = cert_cacert_name(cert.name, cert.subject_type)
-                        fd_cert = StringIO(cert_text + cacert_text)
-                        distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
-                    
-                    # this may be redundant in case of LE, where the cert was in chained file
-                    distribute_cert(fd_cert, fqdn, dest_dir, cert_file_name, place, jail)
+        insts = instance_ids if instance_ids else [x for (x,y) in cert.active_instances()]
+        for i in insts:
+            result = cert.instance(i)
+            if result:
+                my_instance_id, state, cert_text, key_text, TLSA_text, cacert_text, encryption_algo = result
+                if state in allowed_states:
+                    the_instances.append(my_instance_id)
+
+        if len(the_instances) == 0:
+            etxt = 'No valid cerificate for {} in DB - create it first\n' \
+                   'States being considered are {}'. \
+                format(cert.name, [state for state in allowed_states])
+            sli(etxt)
+            if instance_ids:  # let caller handle this error, if we have explicit inst ids
+                raise MyException(etxt)
+            else: continue
+
+        # more than 1 member of the_instances only expected with cert.instance(i).encryption_algo == 'both'
+        for i in the_instances:
+            result = cert.instance(i)
+            my_instance_id, state, cert_text, key_text, TLSA_text, cacert_text, encryption_algo = result
+
+            host_omitted = False
+
+            for fqdn,dh in cert.disthosts.items():
+
+                if fqdn in skip_host:
+                    host_omitted = True
+                    continue
+                if limit_hosts and (fqdn not in only_host):
+                    host_omitted = True
+                    continue
+                dest_path = PurePath('/')
+
+                sld('{}: {}'.format(cert.name, fqdn))
+
+                for jail in ( dh['jails'].keys() or ('',) ):   # jail is empty if no jails
+
+                    if '/' in jail:
+                        sle('"/" in jail name "{}" not allowed with subject {}.'.format(jail, cert.name))
+                        error_found = True
+                        return False
+
+                    jailroot = dh['jailroot'] if jail != '' else '' # may also be empty
+                    dest_path = PurePath('/', jailroot, jail)
+                    sld('{}: {}: {}'.format(cert.name, fqdn, dest_path))
+
+                    the_jail = dh['jails'][jail]
+
+                    if len(the_jail['places']) == 0:
+                        sle('{} subject has no place attribute.'.format(cert.name))
+                        error_found = True
+                        return False
+
+                    for place in the_jail['places'].values():
+
+                        sld('Handling jail "{}" and place {}'.format(jail, place.name))
+
+                        fd_key = StringIO(key_text)
+                        fd_cert = StringIO(cert_text)
+
+                        key_file_name = key_name(cert.name, cert.subject_type, encryption_algo)
+                        cert_file_name = cert_name(cert.name, cert.subject_type, encryption_algo)
+
+                        pcp = place.cert_path
+                        if '{}' in pcp:     # we have a home directory named like the subject
+                            pcp = pcp.format(cert.name)
+                        # make sure pcb does not start with '/', which would ignore dest_path:
+                        if PurePath(pcp).is_absolute():
+                            dest_dir = PurePath(dest_path, PurePath(pcp).relative_to('/'))
+                        else:
+                            dest_dir = PurePath(dest_path, PurePath(pcp))
+
+                        sld('Handling fqdn {} and dest_dir "{}" in deployCerts'.format(
+                            fqdn, dest_dir))
+
+                        if place.key_path:
+                            key_dest_dir = PurePath(dest_path, place.key_path)
+                            distribute_cert(fd_key, fqdn, key_dest_dir, key_file_name, place, None)
+
+                        elif place.cert_file_type == 'separate':
+                            distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
+                            if cert.cert_type == 'LE':
+                                chain_file_name = cert_cacert_chain_name(cert.name, cert.subject_type, encryption_algo)
+                                fd_chain = StringIO(cert_text + cacert_text)
+                                distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
+
+                        elif place.cert_file_type == 'combine key':
+                            cert_file_name = key_cert_name(cert.name, cert.subject_type, encryption_algo)
+                            fd_cert = StringIO(key_text + cert_text)
+                            if cert.cert_type == 'LE':
+                                chain_file_name = key_cert_cacert_chain_name(cert.name, cert.subject_type, encryption_algo)
+                                fd_chain = StringIO(key_text + cert_text + cacert_text)
+                                distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
+
+                        elif place.cert_file_type == 'combine both':
+                            cert_file_name = key_cert_cacert_name(cert.name, cert.subject_type, encryption_algo)
+                            fd_cert = StringIO(key_text + cert_text + cacert_text)
+
+                        elif place.cert_file_type == 'combine cacert':
+                            cert_file_name = cert_cacert_name(cert.name, cert.subject_type, encryption_algo)
+                            fd_cert = StringIO(cert_text + cacert_text)
+                            distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
+
+                        # this may be redundant in case of LE, where the cert was in chained file
+                        distribute_cert(fd_cert, fqdn, dest_dir, cert_file_name, place, jail)
             
-        sli('')
-        
-        if opts.sync_disk:      # skip TLSA stuff if doing consolidate
-            continue
-        
-        if not opts.no_TLSA:
-            distribute_tlsa_rrs(cert, TLSA_text, None)
-        
-        if not host_omitted and not cert.subject_type == 'CA':
-            update_state_of_instance(cert.db, my_instance_id, 'deployed')
-        else:
-            sln('State of cert {} not promoted to DEPLOYED, '
-                'because hosts where limited or skipped'.format(
-                            cert.name))
-        # clear mail-sent-time if local cert.
-        if cert.cert_type == 'local': cert.update_authorized_until(None)
+            sli('')
+
+            if opts.sync_disk:      # skip TLSA stuff if doing consolidate
+                continue
+
+            if not opts.no_TLSA:
+                distribute_tlsa_rrs(cert, TLSA_text, None)
+
+            if not host_omitted and not cert.subject_type == 'CA':
+                update_state_of_instance(cert.db, my_instance_id, 'deployed')
+            else:
+                sln('State of cert {} not promoted to DEPLOYED, '
+                    'because hosts where limited or skipped'.format(
+                                cert.name))
+            # clear mail-sent-time if local cert.
+            if cert.cert_type == 'local': cert.update_authorized_until(None)
         
     updateSOAofUpdatedZones()
     return not error_found
@@ -429,26 +432,26 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
                     sli(remote_result_msg)
 
 
-def key_name(subject, subject_type):
-    return str('%s_%s_key.pem' % (subject, subject_type))
+def key_name(subject, subject_type, encryption_algo):
+    return str('%s_%s_%skey.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
 
-def cert_name(subject, subject_type):
-    return str('%s_%s_cert.pem' % (subject, subject_type))
+def cert_name(subject, subject_type, encryption_algo):
+    return str('%s_%s_%scert.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
 
-def cert_cacert_name(subject, subject_type):
-    return str('%s_%s_cert_cacert.pem' % (subject, subject_type))
+def cert_cacert_name(subject, subject_type, encryption_algo):
+    return str('%s_%s_%scert_cacert.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
 
-def cert_cacert_chain_name(subject, subject_type):
-    return str('%s_%s_cert_cacert_chain.pem' % (subject, subject_type))
+def cert_cacert_chain_name(subject, subject_type, encryption_algo):
+    return str('%s_%s_%scert_cacert_chain.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
 
-def key_cert_cacert_chain_name(subject, subject_type):
-    return str('%s_%s_key_cert_cacert_chain.pem' % (subject, subject_type))
+def key_cert_cacert_chain_name(subject, subject_type, encryption_algo):
+    return str('%s_%s_key_%scert_cacert_chain.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
 
-def key_cert_name(subject, subject_type):
-    return str('%s_%s_key_cert.pem' % (subject, subject_type))
+def key_cert_name(subject, subject_type, encryption_algo):
+    return str('%s_%s_key_%scert.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
 
-def key_cert_cacert_name(subject, subject_type):
-    return str('%s_%s_key_cert_cacert.pem' % (subject, subject_type))
+def key_cert_cacert_name(subject, subject_type, encryption_algo):
+    return str('%s_%s_key_%scert_cacert.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
 
 
 def consolidate_TLSA(cert_meta):
@@ -467,16 +470,16 @@ def consolidate_TLSA(cert_meta):
     inst_list = cert_meta.active_instances()
     if not inst_list: return
     
-    for id, state in inst_list:
+    for inst_id, state in inst_list:
         if state == 'prepublished':
             if not prepublished_id: 
-                prepublished_id = id
+                prepublished_id = inst_id
             else:
                 sln('consolidate_TLSA: More than one instance of {} in state'
                                 ' "prepublished"'.format(cert_meta.name))
         elif state == 'deployed':
             if not deployed_id: 
-                deployed_id = id
+                deployed_id = inst_id
             else:
                 sln('consolidate_TLSA: More than one instance of {} in state'
                                 ' "deployed"'.format(cert_meta.name))

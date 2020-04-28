@@ -53,6 +53,7 @@ class DbConnection(object):
             sle('Config error: dbAccounts must be "serverpki"')
             sys.exit(0)
         
+        self.lock = None
         self.conn = None
         self.sslcrtfile = None
         try:
@@ -84,12 +85,12 @@ class DbConnection(object):
         """
         if not self.conn:
             try:
-                if self.sslcrtfile == None:
+                if self.sslcrtfile:
                     self.conn = pg_open(host=self.host, port=self.port, user=self.user, database=self.database,
-                        sslmode="require")
+                                        sslmode="require", sslcrtfile=self.sslcrtfile, sslkeyfile=self.sslkeyfile)
                 else:
-                    self.conn = pg_open(host=self.host, port=self.port, user=self.user, database=self.database,
-                        sslmode="require", sslcrtfile=self.sslcrtfile, sslkeyfile=self.sslkeyfile)
+                     self.conn = pg_open(host=self.host, port=self.port, user=self.user, database=self.database,
+                                         sslmode="require")
                 self.conn.settings['search_path']=self.search_path
                 
             except:

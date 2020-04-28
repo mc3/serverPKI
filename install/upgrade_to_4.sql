@@ -1,4 +1,4 @@
--- upgrade_to_2.sql
+-- upgrade_to_4.sql
 
 START TRANSACTION; 
 

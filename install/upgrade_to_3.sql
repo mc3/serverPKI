@@ -1,8 +1,8 @@
--- upgrade_to_2.sql
+-- upgrade_to_3.sql
 
 SET search_path = dd, public, pg_catalog;
 -- requires PostgreSQL 12 if run in an transaction block (see above):
-ALTER TYPE cert_encryption_algo ADD VALUE 'both';
+ALTER TYPE cert_encryption_algo ADD VALUE 'rsa_plus_ec';
 
 START TRANSACTION; 
 

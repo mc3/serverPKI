@@ -21,22 +21,21 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 
 # Certificate class module
 
-#--------------- imported modules --------------
+# --------------- imported modules --------------
 import datetime
 from hashlib import sha256
 import logging
 import os
 import sys
 
-
-#--------------- local imports --------------
+# --------------- local imports --------------
 from serverPKI.config import Pathes, X509atts, LE_SERVER
 
 from serverPKI.utils import sld, sli, sln, sle, options, decrypt_key
 from serverPKI.issue_LE import issue_LE_cert
 from serverPKI.issue_local import issue_local_cert
 
-#---------------  prepared SQL queries for class Certificate  --------------
+# ---------------  prepared SQL queries for class Certificate  --------------
 
 q_all_cert_meta = """
  SELECT s1.type AS subject_type,
@@ -75,7 +74,7 @@ q_all_cert_meta = """
 """
 
 q_recent_instance = """
-    SELECT ci.id, ci.state, ci.cert, ci.key, ci.hash, ca.cert
+    SELECT ci.id, ci.state, ci.cert, ci.key, ci.hash, ca.cert, ci.encryption_algo
         FROM CertInstances ci, CertInstances ca
         WHERE
             ci.certificate = $1::INT AND
@@ -86,7 +85,7 @@ q_recent_instance = """
         LIMIT 1
 """
 q_specific_instance = """
-    SELECT ci.id, ci.state, ci.cert, ci.key, ci.hash, ca.cert
+    SELECT ci.id, ci.state, ci.cert, ci.key, ci.hash, ca.cert, ci.encryption_algo
         FROM CertInstances ci, CertInstances ca
         WHERE
             ci.id = $1::INT AND
@@ -132,7 +131,7 @@ ps_active_instances = None
 ps_update_authorized_until = None
 ps_fqdn_from_serial = None
 
-        
+
 def fqdn_from_serial(db, serial):
     """
     Obtain cert subject name from instance serial
@@ -146,7 +145,7 @@ def fqdn_from_serial(db, serial):
     """
 
     global ps_fqdn_from_serial
-    
+
     if not ps_fqdn_from_serial:
         ps_fqdn_from_serial = db.prepare(q_fqdn_from_serial)
 
@@ -155,15 +154,16 @@ def fqdn_from_serial(db, serial):
     sle('Serial {} not found.'.format(serial))
     sys.exit(1)
 
-#--------------- public class Certificate --------------
+
+# --------------- public class Certificate --------------
+
 
 class Certificate(object):
     """
     Certificate meta data class.
     In memory representation of DB backed meta information.
     """
-    
-    
+
     def __init__(self, db, name, serial=None):
         """
         Create a certificate meta data instance
@@ -179,9 +179,9 @@ class Certificate(object):
         """
 
         global ps_all_cert_meta
-        
+
         self.db = db
-        
+
         if serial:
             self.name = fqdn_from_serial(db, serial)
         else:
@@ -192,7 +192,7 @@ class Certificate(object):
         self.disthosts = {}
 
         self.cert_id = None
-        
+
         with self.db.xact(isolation='SERIALIZABLE', mode='READ ONLY'):
             if not ps_all_cert_meta:
                 ps_all_cert_meta = db.prepare(q_all_cert_meta)
@@ -206,84 +206,85 @@ class Certificate(object):
                     self.encryption_algo = row['encryption_algo']
                     self.ocsp_must_staple = row['ocsp_must_staple']
                     sld('----------- {}\t{}\t{}\t{}\t{}\t{}\t{}'.format(
-                             self.cert_id,
-                             self.name,
-                             self.cert_type,
-                             self.disabled,
-                             self.authorized_until,
-                             self.subject_type,
-                             self.encryption_algo,
-                             self.ocsp_must_staple)
+                        self.cert_id,
+                        self.name,
+                        self.cert_type,
+                        self.disabled,
+                        self.authorized_until,
+                        self.subject_type,
+                        self.encryption_algo,
+                        self.ocsp_must_staple)
                     )
                 if row['alt_name']: self.altnames.append(row['alt_name'])
                 if row['tlsaprefix']: self.tlsaprefixes[row['tlsaprefix']] = 1
-                
+
                 # crate a tree from rows:  dh1... -> jl1... -> pl1..., )
-                
+
                 if row['dist_host']:
                     if row['dist_host'] in self.disthosts:
                         dh = self.disthosts[row['dist_host']]
                     else:
-                        dh = {'jails':{}}
+                        dh = {'jails': {}}
                         self.disthosts[row['dist_host']] = dh
                         jr = ''
                         if row['jailroot']: jr = row['jailroot']
                         self.disthosts[row['dist_host']]['jailroot'] = jr
-                        
+
                     if row['jail']:
                         if row['jail'] == '':
                             raise Exception('Empty jail name of disthost {} in DB - '
-                                        'Jail names must not be empty'.format(row['dist_host']))
+                                            'Jail names must not be empty'.format(row['dist_host']))
                         jail_name = row['jail']
                     else:
                         jail_name = ''
-                    
+
                     if jail_name in dh['jails']:
                         jl = dh['jails'][jail_name]
                     else:
-                        jl = {'places':{}}
+                        jl = {'places': {}}
                         dh['jails'][jail_name] = jl
-                    
+
                     if row['place']:
                         if row['place'] not in jl['places']:
                             p = Place(
-                                name = row['place'],
-                                cert_file_type = row['cert_file_type'],
-                                cert_path = row['cert_path'],
-                                key_path = row['key_path'],
-                                uid = row['uid'],
-                                gid = row['gid'],
-                                mode = row['mode'],
-                                chownboth = row['chownboth'],
-                                pglink = row['pglink'],
-                                reload_command = row['reload_command']
+                                name=row['place'],
+                                cert_file_type=row['cert_file_type'],
+                                cert_path=row['cert_path'],
+                                key_path=row['key_path'],
+                                uid=row['uid'],
+                                gid=row['gid'],
+                                mode=row['mode'],
+                                chownboth=row['chownboth'],
+                                pglink=row['pglink'],
+                                reload_command=row['reload_command']
                             )
                             jl['places'][row['place']] = p
                     else:
                         sln('Missing Place in Disthost {}'.format(row['dist_host']))
-                
+
                 sld('altname:{}\tdisthost:{}\tjail:{}\tplace:{}'.format(
                     row['alt_name'] if row['alt_name'] else '',
                     row['dist_host'] if row['dist_host'] else '',
                     row['jail'] if row['jail'] else '',
                     row['place'] if row['place'] else '')
                 )
-        sld('tlsaprefixes of {}: {}'.format( self.name, self.tlsaprefixes))
-    
+        sld('tlsaprefixes of {}: {}'.format(self.name, self.tlsaprefixes))
+
     def instance(self, instance_id=None):
         """
-        Return certificate, key, TLSA hash and CA certificate of specific
-        instance or most recent instance, which is valid today
+        Return instance id, state, certificate, key, TLSA hash, instance id of CA certificate and encryption algo
+        of specific instance or most recent instance, which is valid today
     
         @param instance_id  id of specific instance id
         @type  instance_id  int
         @rtype:             Tuple of int + 5 strings
-                            (id, state, cert, key, TLSA hash and CA cert) or None
+                            (instance_id, state, certificate, key, TLSA hash, instance_id of CAcert and encryption_algo)
+                            (instance_ids are INTs, others atr STRINGs) or None
         @exceptions:        none
         """
-        
+
         global ps_recent_instance, ps_specific_instance
-        
+
         if instance_id:
             if not ps_specific_instance:
                 ps_specific_instance = self.db.prepare(q_specific_instance)
@@ -293,20 +294,21 @@ class Certificate(object):
                 ps_recent_instance = self.db.prepare(q_recent_instance)
             result = ps_recent_instance.first(self.cert_id)
         if result:
-            (instance_id, state, cert_pem, key_pem, TLSA, cacert_pem) = result
+            (instance_id, state, cert_pem, key_pem, TLSA, cacert_pem, encryption_algo) = result
             sld('Hash of selected Certinstance is {}'.format(TLSA))
-            
-            if self.subject_type == 'CA':   # do not return key of CA cert
+
+            if self.subject_type == 'CA':  # do not return key of CA cert
                 return (
                     instance_id,
                     state,
                     cert_pem.decode('ascii'),
                     '',
                     TLSA,
-                    cacert_pem.decode('ascii'))
+                    cacert_pem.decode('ascii'),
+                    encryption_algo)
             else:
                 the_key_pem = decrypt_key(key_pem)
-                if not the_key_pem:         # keys stored in cleartext in db 
+                if not the_key_pem:  # keys stored in cleartext in db
                     the_key_pem = key_pem
                 return (
                     instance_id,
@@ -314,23 +316,23 @@ class Certificate(object):
                     cert_pem.decode('ascii'),
                     the_key_pem.decode('ascii'),
                     TLSA,
-                    cacert_pem.decode('ascii'))
-    
-    
+                    cacert_pem.decode('ascii'),
+                    encryption_algo)
+
     def active_instances(self):
-    
+
         """
         Return dictionary of active cert instances
+        Active means cert is valid now.
     
-        @rtype:             Dictionary with:
-                            key: instance id (int)
-                            value: state (string)
+        @rtype:             List of 2-tupels:
+                            (instance id (int), state (string))
                             
         @exceptions:        none
         """
-    
+
         global ps_active_instances
-        
+
         if not ps_active_instances:
             ps_active_instances = self.db.prepare(q_active_instances)
         l = []
@@ -340,7 +342,6 @@ class Certificate(object):
         if len(l) > 2:
             sln('More than 2 active instances for {}'.format(self.name))
         return l
-        
 
     def TLSA_hash(self, instance_id):
         """
@@ -350,7 +351,7 @@ class Certificate(object):
         @exceptions:        none
         """
         global ps_tlsa_of_instance
-        
+
         if not ps_tlsa_of_instance:
             ps_tlsa_of_instance = self.db.prepare(q_tlsa_of_instance)
 
@@ -360,10 +361,11 @@ class Certificate(object):
             sle('cert.TLSA_hash called with noneexistant id'.format(instance_id))
             return None
         sld('TLSA_hash: ps_tlsa_of_instance returned {}'.format(rv))
-        if isinstance(rv,str):
+        if isinstance(rv, str):
             return rv
-        else: return rv[0]
-        
+        else:
+            return rv[0]
+
     def create_instance(self):
         """
         Issue a new certificate instance and store it
@@ -372,13 +374,15 @@ class Certificate(object):
         @rtype:             bool, true if success
         @exceptions:        AssertionError
         """
-        
+
         with self.db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
-            if self.cert_type == 'LE': return issue_LE_cert(self)
-            elif self.cert_type == 'local': return issue_local_cert(self)
-            else: raise AssertionError
-        
-    
+            if self.cert_type == 'LE':
+                return issue_LE_cert(self)
+            elif self.cert_type == 'local':
+                return issue_local_cert(self)
+            else:
+                raise AssertionError
+
     def update_authorized_until(self, until):
         """
         Update authorized_until of current Certificates instance.
@@ -389,22 +393,22 @@ class Certificate(object):
         @exceptions:        none
         """
         global ps_update_authorized_until
-        
+
         # resetting of authorized_until allowd only by local certs
         assert until or self.cert_type == 'local', \
             'update_authorized_until {} called for {}'.format(until, self.name)
-            
+
         if not ps_update_authorized_until:
             ps_update_authorized_until = self.db.prepare(q_update_authorized_until)
-    
+
         (updates) = ps_update_authorized_until.first(
-                    self.cert_id,
-                    until
+            self.cert_id,
+            until
         )
         return updates
 
 
-#--------------- class Place --------------
+# --------------- class Place --------------
 
 class Place(object):
     """
@@ -413,18 +417,17 @@ class Place(object):
     It may be re-used at multiple target hosts.
     Backed up in DB table Places'
     """
-    
-    def __init__(self,  name = None,
-                        cert_file_type = None,
-                        cert_path = None,
-                        key_path = None,
-                        uid = None,
-                        gid = None,
-                        mode = None,
-                        chownboth = None,
-                        pglink = None,
-                        reload_command = None ):
-                        
+
+    def __init__(self, name=None,
+                 cert_file_type=None,
+                 cert_path=None,
+                 key_path=None,
+                 uid=None,
+                 gid=None,
+                 mode=None,
+                 chownboth=None,
+                 pglink=None,
+                 reload_command=None):
         self.name = name
         self.cert_file_type = cert_file_type
         self.cert_path = cert_path
@@ -435,5 +438,3 @@ class Place(object):
         self.chownBoth = chownboth
         self.pgLink = pglink
         self.reload_command = reload_command
-
-

@@ -393,7 +393,9 @@ q_update_instance = """
             hash = $4,
             cacert = $7,
             not_before = $5::TIMESTAMP,
-            not_after = $6::TIMESTAMP
+            not_after = $6::TIMESTAMP,
+            encryption_algo = $8,
+            ocsp_must_staple = $9
         WHERE id = $1
 """
 q_update_state_of_instance = """
@@ -436,8 +438,16 @@ def insert_certinstance(db, certificate_id):
     return certinstance_id
 
 
-def update_certinstance(db, certinstance_id, cert_pem, key_pem, TLSA_hash,
-                                                    not_before, not_after, cacert_id):
+def update_certinstance(db,
+                        certinstance_id,
+                        cert_pem,
+                        key_pem,
+                        TLSA_hash,
+                        not_before,
+                        not_after,
+                        cacert_id,
+                        encryption_algo = 'rsa',
+                        ocsp_must_staple = False):
     
     global ps_update_instance
 
@@ -451,7 +461,9 @@ def update_certinstance(db, certinstance_id, cert_pem, key_pem, TLSA_hash,
                 TLSA_hash,
                 not_before,
                 not_after,
-                cacert_id
+                cacert_id,
+                encryption_algo,
+                ocsp_must_staple
     )
     return updates
 
