@@ -128,9 +128,6 @@ def issue_LE_cert(cert_meta):
     except:
         sle('Problem with Lets Encrypt account data at {}'.
             format(Pathes.le_account))
-    order = _authorize(cert_meta, account)
-    if not order:
-        return None
 
     if cert_meta.encryption_algo == 'rsa_plus_ec':
         encryption_algos = ('rsa', 'ec')
@@ -141,7 +138,7 @@ def issue_LE_cert(cert_meta):
 
     for encryption_algo in encryption_algos:
 
-        result = _issue_cert_for_one_algo(encryption_algo, cert_meta, order, account)
+        result = _issue_cert_for_one_algo(encryption_algo, cert_meta, account)
         if not result:
             return None
         else:
@@ -166,7 +163,7 @@ def issue_LE_cert(cert_meta):
             certificate.fingerprint(SHA256())).decode('ascii').upper()
 
         sli('Certificate issued for {} . Valid until {}'.format(cert_meta.name, not_valid_after.isoformat()))
-        sli('Hash is: {}'.format(tlsa_hash))
+        sli('Hash is: {}, algo is {}'.format(tlsa_hash, result['Algo']))
 
         if not ps_insert_LE_instance:
             ps_insert_LE_instance = cert_meta.db.prepare(q_insert_LE_instance)
@@ -200,7 +197,7 @@ ps_query_LE_intermediate = None
 
 # --------------- private functions --------------
 
-def _issue_cert_for_one_algo(encryption_algo, cert_meta, order, account):
+def _issue_cert_for_one_algo(encryption_algo, cert_meta, account):
 
     alt_names = [cert_meta.name, ]
     if len(cert_meta.altnames) > 0:
@@ -210,6 +207,10 @@ def _issue_cert_for_one_algo(encryption_algo, cert_meta, order, account):
         'rsa {} bits'.format(int(X509atts.bits)) if encryption_algo == 'rsa' else 'ec',
         cert_meta.subject_type,
         cert_meta.name))
+
+    order = _authorize(cert_meta, account)
+    if not order:
+        return None
 
     if encryption_algo == 'rsa':
         certificate_key = manuale_crypto.generate_rsa_key(X509atts.bits)
