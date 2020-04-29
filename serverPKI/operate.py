@@ -45,9 +45,6 @@ from automatoes.register import register
 
 def execute_from_command_line():
 
-    import pydevd_pycharm
-    pydevd_pycharm.settrace('axels-imac.in.chaos1.de', port=4711, stdoutToServer=True, stderrToServer=True)
-
 
     all_cert_names = []
     our_cert_names = []
