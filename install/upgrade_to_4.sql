@@ -9,6 +9,9 @@ ALTER TABLE CertInstances
                                         DEFAULT false
                                         NOT NULL;
 
-UPDATE Revision SET schemaVersion=4 WHERE id=1;
+ALTER TABLE CertInstances
+    ADD UNIQUE (hash);
+    
+    UPDATE Revision SET schemaVersion=4 WHERE id=1;
 
 COMMIT;
