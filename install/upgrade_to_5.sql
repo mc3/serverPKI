@@ -55,6 +55,7 @@ CREATE VIEW inst AS
     s.name,
     c.type,
     i.state,
+    i.ocsp_must_staple,
     i.not_before,
     i.not_after,
     d.encryption_algo,
