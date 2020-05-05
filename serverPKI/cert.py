@@ -72,6 +72,38 @@ q_all_cert_meta = """
   WHERE s1.name = $1
   ORDER BY s1.name, s2.name, d.fqdn;
 """
+q_specific_instance = """
+    SELECT ci.id, ci.state, ci.ocsp_must_staple, ci.not_before, ci.not_after, ca.cert AS ca_cert, d.encryption_algo, d.cert, d.key, d.hash
+        FROM CertInstances ci, CertInstances ca, CertKeyData d
+        WHERE
+            ci.id = $1::INT AND
+            ci.CAcert = ca.id AND
+            d.certinstance = $1::INT
+"""
+
+q_active_instances = """
+    SELECT ci.id, ci.state
+        FROM CertInstances ci
+        WHERE
+            ci.certificate = $1::INT AND
+            ci.not_before <= LOCALTIMESTAMP AND
+            ci.not_after >= LOCALTIMESTAMP
+        ORDER BY ci.id DESC
+"""
+
+q_store_instance = """
+    INSERT INTO CertInstances 
+            (certificate, state, ocsp_must_staple, not_before, not_after, cacert)
+        VALUES ($1::INTEGER, $2, $3::BOOLEAN, $4::TIMESTAMP, $5::TIMESTAMP, $6::INTEGER)
+        RETURNING id::int
+"""
+
+q_store_certkeydata = """
+    INSERT INTO CertKeyData 
+            (certinstance, encryption_algo, cert, key, hash)
+        VALUES ($1::INTEGER, $2, $3, $4, $5)
+        RETURNING id::int
+"""
 
 q_recent_instance = """
     SELECT ci.id, ci.state, ci.cert, ci.key, ci.hash, ca.cert, ci.encryption_algo
@@ -84,22 +116,19 @@ q_recent_instance = """
         ORDER BY ci.id DESC
         LIMIT 1
 """
-q_specific_instance = """
-    SELECT ci.id, ci.state, ci.cert, ci.key, ci.hash, ca.cert, ci.encryption_algo
-        FROM CertInstances ci, CertInstances ca
+
+q_cert_key_data = """
+    SELECT d.encryption_algo,d.cert,d.key,d.hash
+        FROM certkeydata union distinct 
         WHERE
-            ci.id = $1::INT AND
-            ci.CAcert = ca.id
+            d.certinstance = $1::INT
 """
 
-q_active_instances = """
-    SELECT ci.id, ci.state
-        FROM CertInstances ci
+q_instance_id_from_hash = """
+    SELECT ck.certinstance
+        FROM certkeydata ck 
         WHERE
-            ci.certificate = $1::INT AND
-            ci.not_before <= LOCALTIMESTAMP AND
-            ci.not_after >= LOCALTIMESTAMP
-        ORDER BY ci.id DESC
+            ck.hash = $1
 """
 
 q_tlsa_of_instance = """
@@ -124,10 +153,14 @@ SELECT s.name::TEXT
 """
 
 ps_all_cert_meta = None
-ps_recent_instance = None
 ps_specific_instance = None
+ps_store_instance = None
+ps_store_certkeydata = None
+ps_recent_instance = None
 ps_tlsa_of_instance = None
 ps_active_instances = None
+ps_cert_key_data = None
+ps_instance_id_from_hash = None
 ps_update_authorized_until = None
 ps_fqdn_from_serial = None
 
@@ -272,15 +305,14 @@ class Certificate(object):
 
     def instance(self, instance_id=None):
         """
-        Return instance id, state, certificate, key, TLSA hash, instance id of CA certificate and encryption algo
-        of specific instance or most recent instance, which is valid today
-    
-        @param instance_id  id of specific instance id
+        Return instance id, state, ocsp_must_staple, CA certificate plus list of certkeydata with:
+        certificate, key, TLSA hash and encryption algo of specific instance
+
+        @param instance_id  id of specific instance
         @type  instance_id  int
-        @rtype:             Tuple of int + 5 strings
-                            (instance_id, state, certificate, key, TLSA hash, instance_id of CAcert and encryption_algo)
-                            (instance_ids are INTs, others atr STRINGs) or None
-        @exceptions:        none
+        @rtype:             dict with keys id, state, ocsp_ms, ca_cert, certkeydata
+                            certkeydata is a list of dicts with the keys: allgo, cert, key and hash
+        @exceptions:        AssertionError if instance missing
         """
 
         global ps_recent_instance, ps_specific_instance
@@ -288,36 +320,109 @@ class Certificate(object):
         if instance_id:
             if not ps_specific_instance:
                 ps_specific_instance = self.db.prepare(q_specific_instance)
-            result = ps_specific_instance.first(instance_id)
+            rows = ps_specific_instance(instance_id)
         else:
             if not ps_recent_instance:
                 ps_recent_instance = self.db.prepare(q_recent_instance)
-            result = ps_recent_instance.first(self.cert_id)
-        if result:
-            (instance_id, state, cert_pem, key_pem, TLSA, cacert_pem, encryption_algo) = result
-            sld('Hash of selected Certinstance is {}'.format(TLSA))
+            rows = ps_recent_instance(self.cert_id)
 
-            if self.subject_type == 'CA':  # do not return key of CA cert
-                return (
-                    instance_id,
-                    state,
-                    cert_pem.decode('ascii'),
-                    '',
-                    TLSA,
-                    cacert_pem.decode('ascii'),
-                    encryption_algo)
-            else:
-                the_key_pem = decrypt_key(key_pem)
-                if not the_key_pem:  # keys stored in cleartext in db
-                    the_key_pem = key_pem
-                return (
-                    instance_id,
-                    state,
-                    cert_pem.decode('ascii'),
-                    the_key_pem.decode('ascii'),
-                    TLSA,
-                    cacert_pem.decode('ascii'),
-                    encryption_algo)
+        if not rows:
+            AssertionError('Cert.instance: Instance id {} does not exist'.format(instance_id)))
+
+        rd = {}
+        rd['certkeydata'] = []
+        first = True
+        for row in rows
+            if first:
+                rd['id'] = row['id']
+                rd['state'] = row['state']
+                rd['ocsp_ms'] = row['ocsp_must_staple']
+                rd['ca_cert'] = row['ca_cert']          ####FIXME###
+                rd['not_before'] = row['not_before']
+                rd['not_after'] = row['not_after']
+                first = False
+            d['algo'] = row['encryption_algo']
+            d['cert'] = row['cert']
+            d['key'] = row['key']
+            d['hash'] = row['hash']
+
+            rd['certkeydata'].append(d)
+
+        sld('Hashes of selected Certinstance are {}'.format([d['hash'] for d in rd['certkeydata']]))
+
+        if self.subject_type == 'CA':       # do not return key of CA cert
+            assert len(rd['certkeydata'] == 1)
+            rd['certkeydata'][0]['key'] = None,
+        return rd
+
+    def cert_key_data(self, instance_id):
+        """
+         Return list of dicts of encryption algo, certificate, key, TLSA hash of specific instance
+
+         @param instance_id  id of specific instance
+         @type  instance_id  int
+         @rtype:             List of dicts with keys: algo, cert, key, hash or None
+                             Values are strings
+         @exceptions:        none
+         """
+
+        global ps_cert_key_data
+
+        if not ps_cert_key_data:
+            ps_cert_key_data = self.db.prepare(q_cert_key_data)
+
+        d = {}              # return dict
+        rows = ps_cert_key_data(self.instance_id)
+        for row in rows:
+            d['algo'] = row['encryption_algo']
+            d['cert'] = row['cert']
+            d['key'] = row['key']
+            d['hash'] = row['hash']
+        return d
+
+
+    def store_instance(self, d):
+
+        """
+        Store instance and related cert key data in DB backend.
+
+        @param d    data, describing instance to be stored in DB
+        @type  d    DICT with keys: state, ocsp_ms, not_before, not_after, ca_cert_id and
+                    list of dicts with certkeydata with keys: algo, cert, key, hash
+
+        @rtype:     id of new instance (INTEGER)
+        @exceptions:none
+        """
+        global ps_store_instance, ps_store_certkeydata
+
+        if not ps_store_instance:
+            ps_store_instance = self.db.prepare(q_store_instance)
+        if not ps_store_certkeydata:
+            ps_store_certkeydata = self.db.prepare(q_store_certkeydata)
+
+        (instance_id) = ps_store_instance(
+            self.cert_id,
+            d['state'],
+            d['ocsp_ms'],
+            d['not_before'],
+            d['not_after'],
+            d['ca_cert_id'] )
+        if not instance_id:
+            AssertionError('Cert.store_instance: INSERT of instance failed')
+
+        for ckd in d['certkeydata']:
+            ckd_id = ps_store_certkeydata(
+                instance_id,
+                ckd['algo'],
+                ckd['cert'],
+                ckd['key'],
+                ckd['hash']
+            )
+            if not ckd_id:
+                AssertionError('Cert.store_instance: INSERT of certkeydata failed')
+
+        return instance_id
+
 
     def active_instances(self):
 
