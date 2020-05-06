@@ -608,32 +608,6 @@ def read_db_encryption_key(db):
         db_encryption_in_use = True
     return True
 
-def encrypt_key(the_binary_cert_key):
-    global db_encryption_key, db_encryption_in_use
-    
-    if not db_encryption_in_use:
-        return None
-    encryption_type = BestAvailableEncryption(db_encryption_key)
-    key_pem = the_binary_cert_key.private_bytes(
-                                    Encoding.PEM,
-                                    PrivateFormat.TraditionalOpenSSL,
-                                    encryption_type)
-    return key_pem
-
-
-def decrypt_key(encrypted_key_bytes):
-    global db_encryption_key, db_encryption_in_use
-    
-    if not db_encryption_in_use:
-        return None
-
-    decrypted_key = load_pem_private_key(
-                        encrypted_key_bytes,
-                        password=db_encryption_key,
-                        backend=default_backend())
-    key_pem = decrypted_key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
-    return key_pem
-
 
 
 q_select_revision = """
