@@ -38,6 +38,8 @@ from cryptography.x509.oid import NameOID
 
 #--------------- local imports --------------
 from serverPKI.config import Pathes, X509atts
+from serverPKI.cert import Certificate
+from serverPKI.certinstance import CertInstance, CertKeyStore
 from serverPKI.cacert import get_cacert_and_key
 from serverPKI.utils import sld, sli, sln, sle, options, encrypt_key
 from serverPKI.utils import insert_certinstance, update_certinstance
@@ -90,13 +92,6 @@ def issue_local_cert(cert_meta):
         key_size=int(X509atts.bits),
         backend=default_backend()
     )
-    # convert it to storage format
-    key_pem = encrypt_key(key)
-    if not key_pem: # no encryption of keys in DB in use
-        key_pem = key.private_bytes(
-             encoding=serialization.Encoding.PEM,
-             format=serialization.PrivateFormat.TraditionalOpenSSL,
-             encryption_algorithm=serialization.NoEncryption())
 
     builder = x509.CertificateBuilder()
     builder = builder.subject_name(x509.Name([
@@ -195,21 +190,16 @@ def issue_local_cert(cert_meta):
                     instance_serial,
                     not_valid_after.isoformat())
     )
-    tlsa_hash = binascii.hexlify(
-        cert.fingerprint(hashes.SHA256())).decode('ascii').upper()
-    
-    
-    (updates) = update_certinstance(
-                cert_meta.db,
-                instance_serial,
-                cert_pem,
-                key_pem,
-                tlsa_hash,
-                not_valid_before,
-                not_valid_after,
-                cacert_id
-    )
-    if updates != 1:
-        raise DBStoreException('?Failed to store certificate in DB')
 
-    return instance_serial
+    ci = CertInstance( cert_meta = cert_meta,
+                       state = 'issued',
+                       ocsp_ms = cert_meta.ocsp_must_staple,
+                       not_before = not_valid_before,
+                       not_after = not_valid_after,
+                       ca_cert = cacert)
+
+    ci.store_cert_key(algo = 'rsa',
+                       cert = cert,
+                       key = key)
+
+    return ci

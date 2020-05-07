@@ -64,7 +64,7 @@ def export_instance(db):
     """
 
     cert_meta = Certificate(db, '', serial=opts.cert_serial)
-    result = cert_meta.instance(instance_id=opts.cert_serial)
+    result = cert_meta.instance(instance_id=opts.cert_serial,**FIXME**)
     (inst_id, state, cert, key, tlsa, cacert, algo) = result
 
     cert_path = Pathes.work / 'cert-{}.pem'.format(opts.cert_serial)

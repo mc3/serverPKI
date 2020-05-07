@@ -174,9 +174,9 @@ class CertInstance(object):
 
         cks = CertKeyStore(
                     cert_instance=self,
-                    algo=row['encryption_algo'],
-                    cert=row['cert'],
-                    key=row['key'])
+                    algo=algo,
+                    cert=cert,
+                    key=key)
         self.cks[algo] = cks
 
 
@@ -197,8 +197,8 @@ q_hash = """
         WHERE
             id = $1
 """
-q_store_certkeydata = None
-q_hash = None
+ps_store_certkeydata = None
+ps_hash = None
 
 # ---------------------------- class CertKeyStore (CKS) ---------------------------
 
@@ -241,60 +241,81 @@ class CertKeyStore(object):
         @exceptions:
         """
 
+        global ps_store_certkeydata
+        
         if not cert_instance:
             AssertionError('CertKeyStore: Argument cert_instance missing')
         self.ci = cert_instance
         self.algo = algo
         self.row_id = row_id
         if self.row_id:             # cert and key come from DB
-            the_key = decrypt_key(key)
-            if not the_key:         # keys stored in cleartext in db
-                the_key = key
-            self.key = the_key.decode('ascii')
-            self.cert =  cert.decode('ascii')
+            self._key = key         # self._key holds (encrypted) binary PEM format (=DB storage format)
+            self._cert = cert       # self-_cert holds binary PEM format (=DB storage format)
             self.hash = hash
         else:                       # new cert has been issued
-            if not key or not isinstance(key, RSAPrivateKey or not isinstance(key, EllipticCurvePrivateKey):
-                AssertionError('CertKeyStore: Argument id is omitted and arument key'
+            if not key or ( not isinstance(key, RSAPrivateKey) and not isinstance(key, EllipticCurvePrivateKey)):
+                AssertionError('CertKeyStore: Argument row_id is omitted and arument key'
                                'is not a RSAPrivateKey or EllipticCurvePrivateKey instance')
-            self.key = self.encrypt_key(key)
             if not cert or not isinstance(cert, x509.Certificate):
                 AssertionError('CertKeyStore: Argument id is omitted and arument cert'
                                'is not a x509.Certificate instance')
-            self.cert = cert.public_bytes(Encoding.PEM)
+            self._cert = cert.public_bytes(Encoding.PEM)
+            self._key = self.encrypt_key(key)
             self.hash = binascii.hexlify(
                                     cert.fingerprint(SHA256())).decode('ascii').upper()
+            
+            if not ps_store_certkeydata:
+                ps_store_certkeydata = self.cm.db.prepare(q_store_certkeydata)
+            self.row_id = ps_store_certkeydata( self.ci.row_id,
+                                                self.algo,
+                                                self._cert,
+                                                self._key,
+                                                self.hash)
+            if not self.row_id:
+                sle('Could not store new cert in DB')
+    
+                                                
+    @property
+    def key(self):
+        if self.ci.cm.cert_type == 'CA':
+            return None
+        else:
+            clear_key = self.decrypt_key(self._key)
+            return clear_key.decode('ascii')
+            
+    @property
+    def cert(self):
+        return self._cert.decode('ascii')
+    
 
-    def encrypt_key(self, the_binary_cert_key):
+    def key_to_PEM(self, key):                      # serialize a key to PEM format
+        return key.private_bytes(
+            encoding=Encoding.PEM,
+            format=PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=NoEncryption())
+
+    def encrypt_key(self, the_binary_cert_key):     # serialize and encrypt a private key
         global db_encryption_key, db_encryption_in_use
 
         if not db_encryption_in_use:
-            return None
-        encryption_type = BestAvailableEncryption(db_encryption_key)
-
-        key_pem = the_binary_cert_key.private_bytes(
-            Encoding.PEM,
-            PrivateFormat.TraditionalOpenSSL,
-            encryption_type)
+            return self.key_to_PEM(the_binary_cert_key)
+        else:
+            encryption_type = BestAvailableEncryption(db_encryption_key)
+            key_pem = the_binary_cert_key.private_bytes(
+                Encoding.PEM,
+                PrivateFormat.TraditionalOpenSSL,
+                encryption_type)
         return key_pem
 
-
-    def decrypt_key(self, encrypted_key_bytes):
+    def decrypt_key(self, encrypted_key_bytes):     # load and decrypt a private key
         global db_encryption_key, db_encryption_in_use
 
         if not db_encryption_in_use:
-            return None
-
-        decrypted_key = load_pem_private_key(
-            encrypted_key_bytes,
-            password=db_encryption_key,
-            backend=default_backend())
-        key_pem = decrypted_key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
+            return encrypted_key_bytes
+        else:
+            decrypted_key = load_pem_private_key(
+                encrypted_key_bytes,
+                password=db_encryption_key,
+                backend=default_backend())
+            key_pem = decrypted_key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
         return key_pem
-
-    """
-    if self.subject_type == 'CA':       # do not return key of CA cert
-        assert len(rd['certkeydata'] == 1)
-        rd['certkeydata'][0]['key'] = None,
-    return rd
-    """

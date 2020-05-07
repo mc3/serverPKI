@@ -303,6 +303,8 @@ class Certificate(object):
                 )
         sld('tlsaprefixes of {}: {}'.format(self.name, self.tlsaprefixes))
 
+    def
+
     def instance(self, instance_id=None):
         """
         Return instance id, state, ocsp_must_staple, CA certificate plus list of certkeydata with:
@@ -471,7 +473,7 @@ class Certificate(object):
         else:
             return rv[0]
 
-    def create_instance(self):
+    def issue(self):
         """
         Issue a new certificate instance and store it
         in the DB table certinstances.
