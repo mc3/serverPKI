@@ -28,7 +28,11 @@ import logging
 import os
 import sys
 
+from enum import Enum
+
 # --------------- local imports --------------
+from serverPKI.certinstance import CertInstance
+
 from serverPKI.config import Pathes, X509atts, LE_SERVER
 
 from serverPKI.utils import sld, sli, sln, sle, options, decrypt_key
@@ -72,6 +76,13 @@ q_all_cert_meta = """
   WHERE s1.name = $1
   ORDER BY s1.name, s2.name, d.fqdn;
 """
+q_instances = """
+SELECT id
+    FROM certinstances
+    WHERE certificate = $1::INT
+    ORDER BY id DESC;
+"""
+
 q_specific_instance = """
     SELECT ci.id, ci.state, ci.ocsp_must_staple, ci.not_before, ci.not_after, ca.cert AS ca_cert, d.encryption_algo, d.cert, d.key, d.hash
         FROM CertInstances ci, CertInstances ca, CertKeyData d
@@ -153,6 +164,8 @@ SELECT s.name::TEXT
 """
 
 ps_all_cert_meta = None
+ps_instances = None
+
 ps_specific_instance = None
 ps_store_instance = None
 ps_store_certkeydata = None
@@ -184,18 +197,46 @@ def fqdn_from_serial(db, serial):
 
     result = ps_fqdn_from_serial.first(serial)
     if result: return result
-    sle('Serial {} not found.'.format(serial))
+    sle('No cert meta found for serial {}.'.format(serial))
     sys.exit(1)
 
+# ------------------------ ENUMs -------------------------
+# EncryptionAlgorithm
+
+class EncAlgo(Enum):
+    RSA = "rsa"
+    EC = "ec"
+    RSA_PLUS_EC_ = "rsa_plus_ec"
 
 # --------------- public class Certificate --------------
 
+cert_metas = {}                 # This dict ensures that we have only one instance per certificate meta
 
-class Certificate(object):
+class Certificate(type):
     """
-    Certificate meta data class.
+     Certificate meta data class.
     In memory representation of DB backed meta information.
     """
+    def __new__(cls, db, name, serial=None):
+        """
+            Ensure that we create only one instance per row in certificates
+            From https://stackoverflow.com/questions/50883923/
+            how-to-make-a-class-which-disallows-duplicate-instances-returning-an-existing-i
+        """
+        def _get_name(cls, db, name, serial):
+            if serial:
+                return fqdn_from_serial(db, serial)
+            return name
+
+        def __call__(cls, *args, **kwargs):
+            the_name = cls._get_name(*args, **kwargs)
+            if not hasattr(cls, '_cert_metas'):
+                cls._cert_metas = {}
+            if the_name in cls._cert_metas:
+                return cls._cert_metas[the_name]    # return existing instance
+            inst = super().__call__(*args, **kwargs)
+            cls._cert_metas[the_name] = inst
+            return inst                             # return new instance
 
     def __init__(self, db, name, serial=None):
         """
@@ -211,27 +252,26 @@ class Certificate(object):
         @exceptions:
         """
 
-        global ps_all_cert_meta
+        global ps_all_cert_meta, ps_instances
+
+
+        cert_metas[the_name] = self         # store new instance
 
         self.db = db
-
-        if serial:
-            self.name = fqdn_from_serial(db, serial)
-        else:
-            self.name = name
+        self.name = the_name
 
         self.altnames = []
         self.tlsaprefixes = {}
         self.disthosts = {}
 
-        self.cert_id = None
+        self.row_id = None
 
         with self.db.xact(isolation='SERIALIZABLE', mode='READ ONLY'):
             if not ps_all_cert_meta:
                 ps_all_cert_meta = db.prepare(q_all_cert_meta)
             for row in ps_all_cert_meta(self.name):
-                if not self.cert_id:
-                    self.cert_id = row['c_id']
+                if not self.row_id:
+                    self.row_id = row['c_id']
                     self.cert_type = row['c_type']
                     self.disabled = row['c_disabled']
                     self.authorized_until = row['authorized_until']
@@ -239,7 +279,7 @@ class Certificate(object):
                     self.encryption_algo = row['encryption_algo']
                     self.ocsp_must_staple = row['ocsp_must_staple']
                     sld('----------- {}\t{}\t{}\t{}\t{}\t{}\t{}'.format(
-                        self.cert_id,
+                        self.row_id,
                         self.name,
                         self.cert_type,
                         self.disabled,
@@ -303,127 +343,40 @@ class Certificate(object):
                 )
         sld('tlsaprefixes of {}: {}'.format(self.name, self.tlsaprefixes))
 
-    def
+        if not ps_instances:
+            ps_instances = db.prepare(q_instances)
 
-    def instance(self, instance_id=None):
+        self.cert_instances = []
+        for row in ps_instances(self.row_id):
+            ci = CertInstance(row_id = row['id'], cert_meta = self)
+            self.cert_instances.append(ci)
+
+    def save_instance(self, ci):
         """
-        Return instance id, state, ocsp_must_staple, CA certificate plus list of certkeydata with:
-        certificate, key, TLSA hash and encryption algo of specific instance
-
-        @param instance_id  id of specific instance
-        @type  instance_id  int
-        @rtype:             dict with keys id, state, ocsp_ms, ca_cert, certkeydata
-                            certkeydata is a list of dicts with the keys: allgo, cert, key and hash
-        @exceptions:        AssertionError if instance missing
+        Save a new instance of CertInstance in DB backend and store it in self.cert_instances
+        :param  ci  the CertInstance instance to save
+        :return:
         """
+        if ci._save():
+            self.cert_instances.append(ci)
 
-        global ps_recent_instance, ps_specific_instance
-
-        if instance_id:
-            if not ps_specific_instance:
-                ps_specific_instance = self.db.prepare(q_specific_instance)
-            rows = ps_specific_instance(instance_id)
-        else:
-            if not ps_recent_instance:
-                ps_recent_instance = self.db.prepare(q_recent_instance)
-            rows = ps_recent_instance(self.cert_id)
-
-        if not rows:
-            AssertionError('Cert.instance: Instance id {} does not exist'.format(instance_id)))
-
-        rd = {}
-        rd['certkeydata'] = []
-        first = True
-        for row in rows
-            if first:
-                rd['id'] = row['id']
-                rd['state'] = row['state']
-                rd['ocsp_ms'] = row['ocsp_must_staple']
-                rd['ca_cert'] = row['ca_cert']          ####FIXME###
-                rd['not_before'] = row['not_before']
-                rd['not_after'] = row['not_after']
-                first = False
-            d['algo'] = row['encryption_algo']
-            d['cert'] = row['cert']
-            d['key'] = row['key']
-            d['hash'] = row['hash']
-
-            rd['certkeydata'].append(d)
-
-        sld('Hashes of selected Certinstance are {}'.format([d['hash'] for d in rd['certkeydata']]))
-
-        if self.subject_type == 'CA':       # do not return key of CA cert
-            assert len(rd['certkeydata'] == 1)
-            rd['certkeydata'][0]['key'] = None,
-        return rd
-
-    def cert_key_data(self, instance_id):
+    def delete_instance(self, ci):
         """
-         Return list of dicts of encryption algo, certificate, key, TLSA hash of specific instance
-
-         @param instance_id  id of specific instance
-         @type  instance_id  int
-         @rtype:             List of dicts with keys: algo, cert, key, hash or None
-                             Values are strings
-         @exceptions:        none
-         """
-
-        global ps_cert_key_data
-
-        if not ps_cert_key_data:
-            ps_cert_key_data = self.db.prepare(q_cert_key_data)
-
-        d = {}              # return dict
-        rows = ps_cert_key_data(self.instance_id)
-        for row in rows:
-            d['algo'] = row['encryption_algo']
-            d['cert'] = row['cert']
-            d['key'] = row['key']
-            d['hash'] = row['hash']
-        return d
-
-
-    def store_instance(self, d):
-
+        Delete an instance of CertInstance and its DB backup
+        :param ci: The instance to delete
+        :return:
         """
-        Store instance and related cert key data in DB backend.
+        if ci._delete:
+            if ci in self.cert_instances:
+                self.cert_instances.remove(ci)
 
-        @param d    data, describing instance to be stored in DB
-        @type  d    DICT with keys: state, ocsp_ms, not_before, not_after, ca_cert_id and
-                    list of dicts with certkeydata with keys: algo, cert, key, hash
+    def most_recent_instance(self):
+        return self.cert_instances[-1]
 
-        @rtype:     id of new instance (INTEGER)
-        @exceptions:none
-        """
-        global ps_store_instance, ps_store_certkeydata
-
-        if not ps_store_instance:
-            ps_store_instance = self.db.prepare(q_store_instance)
-        if not ps_store_certkeydata:
-            ps_store_certkeydata = self.db.prepare(q_store_certkeydata)
-
-        (instance_id) = ps_store_instance(
-            self.cert_id,
-            d['state'],
-            d['ocsp_ms'],
-            d['not_before'],
-            d['not_after'],
-            d['ca_cert_id'] )
-        if not instance_id:
-            AssertionError('Cert.store_instance: INSERT of instance failed')
-
-        for ckd in d['certkeydata']:
-            ckd_id = ps_store_certkeydata(
-                instance_id,
-                ckd['algo'],
-                ckd['cert'],
-                ckd['key'],
-                ckd['hash']
-            )
-            if not ckd_id:
-                AssertionError('Cert.store_instance: INSERT of certkeydata failed')
-
-        return instance_id
+    def most_recent_active_instance(self):
+        for ci in reversed(self.cert_instances):
+            if ci.active:
+                return ci
 
 
     def active_instances(self):
@@ -434,16 +387,13 @@ class Certificate(object):
     
         @rtype:             List of 2-tupels:
                             (instance id (int), state (string))
-                            
         @exceptions:        none
         """
-
-        global ps_active_instances
 
         if not ps_active_instances:
             ps_active_instances = self.db.prepare(q_active_instances)
         l = []
-        rows = ps_active_instances(self.cert_id)
+        rows = ps_active_instances(self.row_id)
         for row in rows:
             l.append((row['id'], row['state']))
         if len(l) > 2:
@@ -481,14 +431,16 @@ class Certificate(object):
         @rtype:             bool, true if success
         @exceptions:        AssertionError
         """
-
+        new_instance = CertInstance(cert_meta = self, ocsp_ms = self.ocsp_must_staple)
         with self.db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
             if self.cert_type == 'LE':
-                return issue_LE_cert(self)
+                result = issue_LE_cert(new_instance)
             elif self.cert_type == 'local':
-                return issue_local_cert(self)
+                result = issue_local_cert(new_instance)
             else:
                 raise AssertionError
+        if result:
+            self.save_instance(new_instance)
 
     def update_authorized_until(self, until):
         """
@@ -509,7 +461,7 @@ class Certificate(object):
             ps_update_authorized_until = self.db.prepare(q_update_authorized_until)
 
         (updates) = ps_update_authorized_until.first(
-            self.cert_id,
+            self.row_id,
             until
         )
         return updates

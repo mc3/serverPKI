@@ -168,7 +168,7 @@ def issue_LE_cert(cert_meta):
         if not ps_insert_LE_instance:
             ps_insert_LE_instance = cert_meta.db.prepare(q_insert_LE_instance)
         (instance_id) = ps_insert_LE_instance.first(
-            cert_meta.cert_id,
+            cert_meta.row_id,
             cert_pem,
             key_pem,
             tlsa_hash,

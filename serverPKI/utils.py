@@ -288,7 +288,7 @@ def check_actions():
 def shortDateTime(dt):
     return str('{:%Y-%m-%d %H:%M}'.format(dt))
 
-#-------------------------  DNS server functions ----------------------------
+#-------------------------  DNS server functions (now obsoleted by ddns) ----------------------------
 
 zone_cache = {}
 

@@ -157,7 +157,7 @@ def execute_from_command_line():
         if opts.create:
             sli('Creating certificates.')
             for c in our_certs.values():
-                if c.create_instance():
+                if c.issue():
                     continue
                 sle('Stopped due to error')
                 sys.exit(1)

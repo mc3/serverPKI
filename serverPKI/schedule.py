@@ -287,7 +287,7 @@ def _find_to_be_deleted(cert_meta):
         ps_query_state_and_dates = cert_meta.db.prepare(q_query_state_and_dates)
     
     surviving = set()
-    rows = ps_query_state_and_dates(cert_meta.cert_id)
+    rows = ps_query_state_and_dates(cert_meta.row_id)
     
     if len(rows) == 0: return None
     for row in rows:

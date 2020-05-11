@@ -123,3 +123,9 @@ class DbConnection(object):
         """
         self.lock.release()
 
+
+class DBStoreException(Exception):
+    """
+    Generic exception for INSERT or UPDATE opertions
+    """
+    pass

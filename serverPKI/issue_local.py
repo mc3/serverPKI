@@ -47,9 +47,6 @@ from serverPKI.utils import insert_certinstance, update_certinstance
 
 #--------------- classes --------------
 
-class DBStoreException(Exception):
-    pass
-
 class KeyCertException(Exception):
     pass
 
@@ -75,7 +72,7 @@ def issue_local_cert(cert_meta):
     
     (cacert, cakey, cacert_id) = get_cacert_and_key(cert_meta.db)
     
-    instance_serial = insert_certinstance(cert_meta.db, cert_meta.cert_id)
+    instance_serial = insert_certinstance(cert_meta.db, cert_meta.row_id)
     if not instance_serial:
         raise DBStoreException('?Failed to store new Cerificate in the DB' )
     else:
