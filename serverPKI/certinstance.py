@@ -42,7 +42,7 @@ from cryptography import x509
 # --------------- local imports --------------
 from serverPKI.cert import Certificate, EncAlgo
 from serverPKI.config import Pathes, X509atts, LE_SERVER
-from serverPKI.db import DBStoreException
+from serverPKI.db import DbConnection, DBStoreException
 from serverPKI.utils import sld, sli, sln, sle, db_encryption_key, db_encryption_in_use
 
 
@@ -50,7 +50,7 @@ from serverPKI.utils import sld, sli, sln, sle, db_encryption_key, db_encryption
 
 q_load_instance = """
     SELECT ci.id, ci.certificate AS cm_id, ci.state, ci.ocsp_must_staple, ci.not_before, ci.not_after,
-                    ca.cert AS ca_cert, d.id AS ckd_id, d.encryption_algo, d.cert, d.key, d.hash
+                    ca.cert AS ca_cert_ci, d.id AS ckd_id, d.encryption_algo, d.cert, d.key, d.hash
         FROM CertInstances ci, CertInstances ca, CertKeyData d
         WHERE
             ci.id = $1::INT AND
@@ -82,7 +82,7 @@ class CertInstance(object):
                  ocsp_ms: bool,
                  not_before: datetime.datetime,
                  not_after: datetime.datetime,
-                 ca_cert: 'CertInstance',
+                 ca_cert_ci: 'CertInstance',
                  cert_key_stores: dict):
         """
         Load or create a certificate meta data instance (CI), which may be incomplete and may be updated later
@@ -100,8 +100,8 @@ class CertInstance(object):
         @type not_before:       datetime.datetime
         @param not_after:       Cert expiration date
         @type not_after:        datetime.datetime
-        param ca_cert:          Cert meta instance of issuer CA cert
-        @type ca_cert:          CertInstance
+        param ca_cert_ci:       Cert meta instance of issuer CA cert
+        @type ca_cert_ci:       CertInstance
         @param cert_key_stores: List of CKS, holding certs and keys of this CI
         @type cert_key_stores:  dict, with algo as key and CertKeyStore instance as value
         @rtype:                 CertInstance instance
@@ -116,11 +116,11 @@ class CertInstance(object):
         if not ps_load_instance:
             ps_load_instance = self.cm.db.prepare(q_load_instance)
 
-        self.state = state
-        self.ocsp_ms = ocsp_ms if ocsp_ms else 'reserved'
+        self.state = state if state else 'reserved'
+        self.ocsp_ms = ocsp_ms if ocsp_ms else cert_meta.ocsp_must_staple
         self.not_before = not_before
         self.not_after = not_after
-        self.ca_cert = ca_cert
+        self.ca_cert_ci = ca_cert_ci
         self.cks = cert_key_stores
         if row_id:
             self.row_id = row_id
@@ -136,7 +136,7 @@ class CertInstance(object):
                     self.ocsp_ms = row['ocsp_must_staple']
                     self.not_before = row['not_before']
                     self.not_after = row['not_after']
-                    self.ca_cert = CertInstance(row['ca_cert']
+                    self.ca_cert_ci = CertInstance(row['ca_cert']
                     sld('Loading CertInstance row_id={}, state={}, ocsp_ms={}, not_before={}, not_after={}'
                         .format(self.row_id, self.state, self.ocsp_ms,
                                 self.not_before.isoformat(), self.not_after.isoformat()))
@@ -164,13 +164,13 @@ class CertInstance(object):
                                         self.ocsp_ms,
                                         self.not_before,
                                         self.not_after,self,
-                                        ca_cert.row_id)
+                                        self.ca_cert_ci.row_id)
 
 
     def store_cert_key(self,
-                       algo=None,
-                       cert=None,
-                       key=None):
+                       algo: str='rsa',
+                       cert: x509.Certificate,
+                       key: bytes):
         """
         Store a new certificate in a CertKeyStore instance and in the backend
         :param algo:    encryption algorythm (one of 'rsa' or 'ec'
@@ -194,6 +194,7 @@ class CertInstance(object):
         self.cks[algo] = cks
         return cks
 
+    @property
     def active(self):
         """
         Return True is this CertKeyStore's certificate is valid today
@@ -205,6 +206,15 @@ class CertInstance(object):
         else:
             return False
 
+    @property
+    def the_cert_key_store(self):
+        """
+        Return the CertKeyStore if only one exists, otherwise None
+        :return: CertKeyStore instance or None
+        """
+        ckslist = self.cks.values
+        if len(ckslist == 1):
+            return ckslist[0]
 
 # ---------------  prepared SQL queries for class CertKeyStore  --------------
 
@@ -245,7 +255,8 @@ class CertKeyStore(object):
     Cert key data store class class.
     In-memory representation of DB backend CertKeyData.
     """
-    def hash_from_cert(cert: x509.Certificate):
+    @staticmethod
+    def hash_from_cert(cls, cert: x509.Certificate):
         """
         return TLSA suitable hash from cryptography.x509.Certificate instance
         :return: the hash as str
@@ -253,7 +264,8 @@ class CertKeyStore(object):
         return binascii.hexlify(
             cert.fingerprint(SHA256())).decode('ascii').upper()
 
-    def certinstance_from_cert(cert: x509.Certificate):
+    @staticmethod
+    def certinstance_from_cert(cls, cert: x509.Certificate):
         """
         return the CertInstance from a (loaded) cert
         :return: CertInstance or None
@@ -343,6 +355,14 @@ class CertKeyStore(object):
         else:
             clear_key = self._decrypt_key(self._key)
             return clear_key.decode('ascii')
+
+    @property
+    def key_for_ca(self) -> bytes:
+        """
+        Return the decrypted key as PEM formated text
+        :return: string or None if this CertKeyStore stores a CA cert
+        """
+        return self.key
 
     @property
     def cert(self) -> str:

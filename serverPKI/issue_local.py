@@ -70,7 +70,7 @@ def issue_local_cert(cert_meta):
     @exceptions:        DBStoreException
     """
     
-    (cacert, cakey, cacert_id) = get_cacert_and_key(cert_meta.db)
+    (cacert, cakey, cacert_ci) = get_cacert_and_key(cert_meta.db)
     
     instance_serial = insert_certinstance(cert_meta.db, cert_meta.row_id)
     if not instance_serial:
@@ -193,7 +193,7 @@ def issue_local_cert(cert_meta):
                        ocsp_ms = cert_meta.ocsp_must_staple,
                        not_before = not_valid_before,
                        not_after = not_valid_after,
-                       ca_cert = cacert)
+                       ca_cert_ci = cacert)
 
     ci.store_cert_key(algo = 'rsa',
                        cert = cert,

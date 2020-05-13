@@ -27,14 +27,14 @@ from hashlib import sha256
 import logging
 import os
 import sys
-
 from enum import Enum
 
+from postgresql import driver as db_conn
 # --------------- local imports --------------
 from serverPKI.certinstance import CertInstance
 
 from serverPKI.config import Pathes, X509atts, LE_SERVER
-
+from serverPKI.db import DbConnection
 from serverPKI.utils import sld, sli, sln, sle, options, decrypt_key
 from serverPKI.issue_LE import issue_LE_cert
 from serverPKI.issue_local import issue_local_cert
@@ -92,14 +92,15 @@ q_specific_instance = """
             d.certinstance = $1::INT
 """
 
-q_active_instances = """
-    SELECT ci.id, ci.state
-        FROM CertInstances ci
-        WHERE
-            ci.certificate = $1::INT AND
-            ci.not_before <= LOCALTIMESTAMP AND
-            ci.not_after >= LOCALTIMESTAMP
-        ORDER BY ci.id DESC
+q_insert_cacert = """
+    INSERT INTO Certificates(type)
+        VALUES ($1)
+        RETURNING id::int
+"""
+q_insert_cacert_subject = """
+    INSERT INTO Subjects(type, name, isAltName, certificate)
+        VALUES ($1, $2, FALSE, $3)
+        RETURNING id::int
 """
 
 q_store_instance = """
@@ -165,8 +166,10 @@ SELECT s.name::TEXT
 
 ps_all_cert_meta = None
 ps_instances = None
-
 ps_specific_instance = None
+ps_insert_cacert = None
+ps_insert_cacert_subject = None
+
 ps_store_instance = None
 ps_store_certkeydata = None
 ps_recent_instance = None
@@ -177,55 +180,59 @@ ps_instance_id_from_hash = None
 ps_update_authorized_until = None
 ps_fqdn_from_serial = None
 
+# ------------- public functions --------------
 
-def fqdn_from_serial(db, serial):
-    """
-    Obtain cert subject name from instance serial
-    
-    @param db:      Opened database handle
-    @type db:    
-    @param serial:  instance serial
-    @type serial:   integer
-    @rtype:         name as string
-    @exceptions:
-    """
-
-    global ps_fqdn_from_serial
-
-    if not ps_fqdn_from_serial:
-        ps_fqdn_from_serial = db.prepare(q_fqdn_from_serial)
-
-    result = ps_fqdn_from_serial.first(serial)
-    if result: return result
-    sle('No cert meta found for serial {}.'.format(serial))
-    sys.exit(1)
 
 # ------------------------ ENUMs -------------------------
 # EncryptionAlgorithm
+
 
 class EncAlgo(Enum):
     RSA = "rsa"
     EC = "ec"
     RSA_PLUS_EC_ = "rsa_plus_ec"
 
-# --------------- public class Certificate --------------
 
-cert_metas = {}                 # This dict ensures that we have only one instance per certificate meta
+class Subject_type(Enum):
+    CA = 'CA'
+    CLIENT = 'client'
+    SERVER = 'server'
+
+    @classmethod
+    def values(cls):
+
+class Cert_type(Enum):
+    LE = 'LE'
+    LOCAL = 'local'
+        dl = Cert_type.__members__.values()
+
+class Cert_state(Enum):
+    RESERVED = 'reserved'
+    ISSUED = 'issued'
+    PREPUBLISHED = 'prepublished'
+    DEPLOYED = 'deployed'
+    REVOKED = 'revoked'
+    EXPIRED = 'expired'
+    ARCHIVED = 'archived'
+
+
+
+# --------------- public class Certificate --------------
 
 class Certificate(type):
     """
-     Certificate meta data class.
-    In memory representation of DB backed meta information.
+    Certificate meta data class.
+    In-memory representation of DB backed meta information.
     """
-    def __new__(cls, db, name, serial=None):
+    def __new__(cls, db: db_conn, name: str, serial: int):
         """
             Ensure that we create only one instance per row in certificates
             From https://stackoverflow.com/questions/50883923/
             how-to-make-a-class-which-disallows-duplicate-instances-returning-an-existing-i
         """
-        def _get_name(cls, db, name, serial):
+        def _get_name(cls, db: db_conn, name: str, serial: int):
             if serial:
-                return fqdn_from_serial(db, serial)
+                return Certificate._fqdn_from_serial(db, serial)
             return name
 
         def __call__(cls, *args, **kwargs):
@@ -238,7 +245,59 @@ class Certificate(type):
             cls._cert_metas[the_name] = inst
             return inst                             # return new instance
 
-    def __init__(self, db, name, serial=None):
+    @staticmethod
+    def _fqdn_from_serial(db: db_conn, serial: int):
+        """
+        Obtain cert subject name from instance serial
+
+        @param db:      Opened database handle
+        @type db:
+        @param serial:  instance serial
+        @type serial:   integer
+        @rtype:         name as string
+        @exceptions:
+        """
+
+        global ps_fqdn_from_serial
+
+        if not ps_fqdn_from_serial:
+            ps_fqdn_from_serial = db.prepare(q_fqdn_from_serial)
+
+        result = ps_fqdn_from_serial.first(serial)
+        if result: return result
+        sle('No cert meta found for serial {}.'.format(serial))
+        sys.exit(1)
+
+    @staticmethod
+    def CA_cert_meta(db: db_conn, cert_type: Cert_type, name: str):
+        """
+        Return cert instance by subject name, inserting rows in certificates, subjects and certinstances if required
+        :param db:          opened database connection
+        :param cert_type:   Cert_type
+        :param name:        subject name of certificate
+        :return:            Certificate instance
+        """
+
+        global ps_insert_cacert, ps_insert_cacert_subject
+
+        cm = Certificate(db, name)
+        if cm.row_id and cacert.cert_type == cert_type:
+            return cm
+        if not ps_insert_cacert:
+            ps_insert_cacert = db.prepare(q_insert_cacert)
+        certificates_row_id = ps_insert_cacert(cert_type)
+        if not certificates_row_id:
+            AssertionError('CA_cert_meta: ps_insert_cacert failed')
+        if not ps_insert_cacert_subject:
+            ps_insert_cacert_subject = db.prepare(q_insert_cacert_subject)
+        subjects_row_id = ps_insert_cacert_subject('CA', name, certificates_row_id)
+        if not subjects_row_id:
+            AssertionError('CA_cert_meta: ps_insert_cacert_subject failed')
+        cm = Certificate(db, name)
+        if cm.row_id and cacert.cert_type == cert_type:
+            return cm
+
+    def __init__(self, db: db_conn, name: str, serial: int):
         """
         Create a certificate meta data instance
     
@@ -254,11 +313,8 @@ class Certificate(type):
 
         global ps_all_cert_meta, ps_instances
 
-
-        cert_metas[the_name] = self         # store new instance
-
         self.db = db
-        self.name = the_name
+        self.name = name
 
         self.altnames = []
         self.tlsaprefixes = {}
@@ -351,7 +407,24 @@ class Certificate(type):
             ci = CertInstance(row_id = row['id'], cert_meta = self)
             self.cert_instances.append(ci)
 
-    def save_instance(self, ci):
+    def create_instance(self,
+                        state: str='reserved',
+                        ocsp_ms: bool=False,
+                        not_before: datetime.datetime,
+                        not_after: datetime.datetime,
+                        ca_cert_ci: CertInstance,
+                        cert_key_stores: dict={})
+        ci = CertInstance(cert_meta = self,
+                     state = state,
+                     ocsp_ms = ocsp_ms,
+                     not_before = not_before,
+                     not_after = not_after,
+                     ca_cert_ci = ca_cert_ci,
+                     cert_key_stores = cert_key_stores
+        )
+        return ci
+
+    def save_instance(self, ci: CertInstance):
         """
         Save a new instance of CertInstance in DB backend and store it in self.cert_instances
         :param  ci  the CertInstance instance to save
@@ -360,7 +433,7 @@ class Certificate(type):
         if ci._save():
             self.cert_instances.append(ci)
 
-    def delete_instance(self, ci):
+    def delete_instance(self, ci: CertInstance):
         """
         Delete an instance of CertInstance and its DB backup
         :param ci: The instance to delete
@@ -370,35 +443,39 @@ class Certificate(type):
             if ci in self.cert_instances:
                 self.cert_instances.remove(ci)
 
-    def most_recent_instance(self):
+    @property
+    def in_db(self):
+        """
+        Returns true if the cert meta has rows in the db.
+        Returns None, if this cert meta has not yet been saved in the db.
+        :return: bool
+        """
+        if self.row_id:
+            return True
+
+    @property
+    def most_recent_instance(self) -> CertInstance:
         return self.cert_instances[-1]
 
+    @property
     def most_recent_active_instance(self):
         for ci in reversed(self.cert_instances):
             if ci.active:
                 return ci
 
-
-    def active_instances(self):
-
+    def active_instances(self) ->dict:
         """
-        Return dictionary of active cert instances
-        Active means cert is valid now.
-    
-        @rtype:             List of 2-tupels:
-                            (instance id (int), state (string))
-        @exceptions:        none
-        """
+        Return dict with active instances as values.
+        Active means: Valid today.
+        :return: dict with state as key and ci as value
+         """
+        ret_dict = {}
 
-        if not ps_active_instances:
-            ps_active_instances = self.db.prepare(q_active_instances)
-        l = []
-        rows = ps_active_instances(self.row_id)
-        for row in rows:
-            l.append((row['id'], row['state']))
-        if len(l) > 2:
-            sln('More than 2 active instances for {}'.format(self.name))
-        return l
+        for ci in (self.cert_instances):
+            if ci.active:
+                ret_dict[ci.state] = ci
+
+        return ret_dict
 
     def TLSA_hash(self, instance_id):
         """
@@ -423,7 +500,7 @@ class Certificate(type):
         else:
             return rv[0]
 
-    def issue(self):
+    def issue(self) -> bool:
         """
         Issue a new certificate instance and store it
         in the DB table certinstances.
@@ -433,16 +510,18 @@ class Certificate(type):
         """
         new_instance = CertInstance(cert_meta = self, ocsp_ms = self.ocsp_must_staple)
         with self.db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
-            if self.cert_type == 'LE':
+            if self.cert_type == Cert_type.LE:
                 result = issue_LE_cert(new_instance)
-            elif self.cert_type == 'local':
+            elif self.cert_type ==  Cert_type.LOCAL:
                 result = issue_local_cert(new_instance)
             else:
                 raise AssertionError
         if result:
             self.save_instance(new_instance)
+            return True
+        return False
 
-    def update_authorized_until(self, until):
+    def update_authorized_until(self, until: datetime.datetime):
         """
         Update authorized_until of current Certificates instance.
 

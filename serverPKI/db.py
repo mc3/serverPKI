@@ -19,11 +19,10 @@ You should have received a copy of the GNU General Public License
 along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-
 # database primitives module
 
 
-#--------------- imported modules --------------
+# --------------- imported modules --------------
 
 import sys
 
@@ -32,13 +31,15 @@ from postgresql import open as pg_open
 from postgresql import alock
 from postgresql import exceptions
 
-#--------------- local imports --------------
+# --------------- local imports --------------
 import serverPKI.config as conf
 from serverPKI.utils import sld, sli, sln, sle
 
-#--------------- db classes --------------
+
+# --------------- db classes --------------
 class DbConnection(object):
     'dbConnection'
+
     def __init__(self, service):
         """
         Create a DbConnection instance
@@ -52,29 +53,29 @@ class DbConnection(object):
         if service not in ('serverpki'):
             sle('Config error: dbAccounts must be "serverpki"')
             sys.exit(0)
-        
+
         self.lock = None
         self.conn = None
         self.sslcrtfile = None
         try:
-            self.host           = conf.dbAccounts[service]['dbHost']
-            self.port           = conf.dbAccounts[service]['dbPort']
-            self.user           = conf.dbAccounts[service]['dbUser']
-            self.database       = conf.dbAccounts[service]['dbDatabase']
-            self.search_path    = conf.dbAccounts[service]['dbSearchPath']
-            
-            self.dsn = str('host='+self.host+', port='+self.port+
-                ', user='+self.user+', database='+self.database+', sslmode='+'"require"')
-            
-            if 'dbCert' in conf.dbAccounts[service]:            
+            self.host = conf.dbAccounts[service]['dbHost']
+            self.port = conf.dbAccounts[service]['dbPort']
+            self.user = conf.dbAccounts[service]['dbUser']
+            self.database = conf.dbAccounts[service]['dbDatabase']
+            self.search_path = conf.dbAccounts[service]['dbSearchPath']
+
+            self.dsn = str('host=' + self.host + ', port=' + self.port +
+                           ', user=' + self.user + ', database=' + self.database + ', sslmode=' + '"require"')
+
+            if 'dbCert' in conf.dbAccounts[service]:
                 self.sslcrtfile = conf.dbAccounts[service]['dbCert']
                 self.sslkeyfile = conf.dbAccounts[service]['dbCertKey']
                 self.dsn = self.dsn + str(', sslcrtfile={}, sslkeyfile={}'.format(self.sslcrtfile, self.sslkeyfile))
         except:
             sle('Config error: Missing or wrong keyword in dbAccounts.\n' +
-                                    'Must be dbHost, dbPort, dbUser, dbDatabase and dbSearchPath.')
+                'Must be dbHost, dbPort, dbUser, dbDatabase and dbSearchPath.')
             sys.exit(1)
-    
+
     def open(self):
         """
         Open the connection to the DB server
@@ -89,16 +90,16 @@ class DbConnection(object):
                     self.conn = pg_open(host=self.host, port=self.port, user=self.user, database=self.database,
                                         sslmode="require", sslcrtfile=self.sslcrtfile, sslkeyfile=self.sslkeyfile)
                 else:
-                     self.conn = pg_open(host=self.host, port=self.port, user=self.user, database=self.database,
-                                         sslmode="require")
-                self.conn.settings['search_path']=self.search_path
-                
+                    self.conn = pg_open(host=self.host, port=self.port, user=self.user, database=self.database,
+                                        sslmode="require")
+                self.conn.settings['search_path'] = self.search_path
+
             except:
-                sle('Unable to connect to database %s' % ( self.dsn ))
+                sle('Unable to connect to database %s' % (self.dsn))
                 sys.exit(1)
-        
+
         return self.conn
-    
+
     def acquire_lock(self, locking_code):
         """
         Try to obtain an advisory lock in the DB, but do not block if lock
@@ -111,10 +112,10 @@ class DbConnection(object):
         if not self.conn:
             self.open()
         self.lock = alock.ExclusiveLock(self.conn, (0, locking_code))
-        if not self.lock.acquire(blocking = False):
+        if not self.lock.acquire(blocking=False):
             return False
         return True
-    
+
     def unlock(self):
         """
         Release an advisary lock, if one there.
