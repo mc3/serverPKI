@@ -23,12 +23,8 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 
 
 #--------------- imported modules --------------
-import binascii
 import datetime
-import logging
-from pathlib import Path
-import os
-import sys
+from secrets import randbits
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
@@ -41,20 +37,13 @@ from serverPKI.config import Pathes, X509atts
 from serverPKI.cert import Certificate
 from serverPKI.certinstance import CertInstance, CertKeyStore
 from serverPKI.cacert import get_cacert_and_key
-from serverPKI.utils import sld, sli, sln, sle, options, encrypt_key
-from serverPKI.utils import insert_certinstance, update_certinstance
+from serverPKI.utils import sld, sli, sln, sle, options
 
 
-#--------------- classes --------------
-
-class KeyCertException(Exception):
-    pass
-
-        
 #--------------- public functions --------------
 
     
-def issue_local_cert(cert_meta):
+def issue_local_cert(cert_meta: Certificate):
     """
     Ask local CA to issue a certificate.
     Will ask for a passphrase to access the CA key.
@@ -71,18 +60,13 @@ def issue_local_cert(cert_meta):
     """
     
     (cacert, cakey, cacert_ci) = get_cacert_and_key(cert_meta.db)
-    
-    instance_serial = insert_certinstance(cert_meta.db, cert_meta.row_id)
-    if not instance_serial:
-        raise DBStoreException('?Failed to store new Cerificate in the DB' )
-    else:
-        sld('Serial of new certificate is {}'.format(instance_serial))    
 
     sli('Creating key ({} bits) and cert for {} {}'.format(
             int(X509atts.bits),
             cert_meta.subject_type,
             cert_meta.name)
     )
+    serial = int(randbits(16))
     # Generate our key
     key = rsa.generate_private_key(
         public_exponent=65537,
@@ -104,7 +88,7 @@ def issue_local_cert(cert_meta):
                                                     days=X509atts.lifetime)
     builder = builder.not_valid_before(not_valid_before)
     builder = builder.not_valid_after(not_valid_after)
-    builder = builder.serial_number(int(instance_serial))
+    builder = builder.serial_number(serial)
     
     public_key = key.public_key()
     builder = builder.public_key(public_key)
@@ -178,25 +162,19 @@ def issue_local_cert(cert_meta):
         private_key=cakey, algorithm=hashes.SHA384(),
         backend=default_backend()
     )
-    
-    # convert our cert to PEM format to store in DB backend for safe keeping.
-    cert_pem = cert.public_bytes(serialization.Encoding.PEM)
+    ci = cert_meta.create_instance(state='issued',
+                                   not_before=not_valid_before,
+                                   not_valid_after=not_valid_after,
+                                   ca_cert_ci=cacert_ci
+                                   )
+    ci.store_cert_key(cert=cert, key=key)
+    ci.save()
+
     sli('Certificate for {} {}, serial {}, valid until {} created.'.format(
                     cert_meta.subject_type,
                     cert_meta.name,
-                    instance_serial,
+                    serial,
                     not_valid_after.isoformat())
     )
-
-    ci = CertInstance( cert_meta = cert_meta,
-                       state = 'issued',
-                       ocsp_ms = cert_meta.ocsp_must_staple,
-                       not_before = not_valid_before,
-                       not_after = not_valid_after,
-                       ca_cert_ci = cacert)
-
-    ci.store_cert_key(algo = 'rsa',
-                       cert = cert,
-                       key = key)
 
     return ci

@@ -129,7 +129,7 @@ def get_cacert_and_key(db: db_conn):
         # do we have a historical CA cert on disk?
         if Pathes.ca_cert.exists() and Pathes.ca_key.exists:
             sli('Using CA key at {}'.format(Pathes.ca_key))
-            sli('Will be stored in DB'))
+            sli('Will be stored in DB')
             with Path.open(Pathes.ca_cert, 'rb') as f:
                 cacert_pem = f.read()
             cacert = x509.load_pem_x509_certificate(cacert_pem, default_backend())
@@ -197,7 +197,7 @@ def create_local_ca_cert(db: db_conn,
 
             # Various details about who we are. For a self-signed certificate the
             # subject and issuer are always the same.
-            serial_number = randbits(32
+            serial_number = randbits(32)
             name_dict = X509atts.names
             subject = issuer = x509.Name([
                 x509.NameAttribute(NameOID.COUNTRY_NAME, name_dict['C']),
