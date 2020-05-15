@@ -374,98 +374,10 @@ def updateSOAofUpdatedZones():
     
     zone_cache = {}
  
- 
-#---------------  prepared SQL queries for create/update/renew _local_instance  --------------
-
-# insert a cert instance. cacert references new row to respect referential
-# integrity constraint if inserting first row into table.
-q_insert_instance = """
-    INSERT INTO CertInstances (certificate, state, cert, key, hash, cacert)
-        VALUES ($1::INTEGER, 'reserved', '', '', '', 
-                                        (SELECT id FROM certinstances LIMIT 1))
-        RETURNING id::int
-"""
-q_update_instance = """
-    UPDATE CertInstances 
-        SET state = 'issued',
-            cert = $2,
-            key = $3, 
-            hash = $4,
-            cacert = $7,
-            not_before = $5::TIMESTAMP,
-            not_after = $6::TIMESTAMP,
-            encryption_algo = $8,
-            ocsp_must_staple = $9
-        WHERE id = $1
-"""
-q_update_state_of_instance = """
-    UPDATE CertInstances 
-        SET state = $2
-        WHERE id = $1
-"""
-
-
-q_names_to_be_renewed = """
-    SELECT S.name, I.state, I.not_before, I.not_after
-        FROM subjects S, certificates C, certinstances I
-        WHERE
-            I.state IN ('deployed', 'issued') AND
-            I.certificate = c.id AND
-            c.type = 'local' AND
-            c.disabled = FALSE AND
-            S.type != 'CA' AND
-            S.certificate = c.id AND
-            S.isaltname = FALSE;
-"""
 q_certs_for_printing_insert = "INSERT INTO print_certs VALUES($1)"
 
-ps_insert_instance = None
-ps_update_instance = None
-ps_update_state_of_instance = None
 ps_names_to_be_renewed = None
 ps_certs_for_printing_insert = None
-
-def insert_certinstance(db, certificate_id):
-    
-    global ps_insert_instance
-    
-    if not ps_insert_instance:
-        db.execute("PREPARE q_insert_instance(integer) AS " + q_insert_instance)
-        ps_insert_instance = db.statement_from_id('q_insert_instance')
-    certinstance_id = ps_insert_instance.first(
-                certificate_id
-    )
-    return certinstance_id
-
-
-def update_certinstance(db,
-                        certinstance_id,
-                        cert_pem,
-                        key_pem,
-                        TLSA_hash,
-                        not_before,
-                        not_after,
-                        cacert_id,
-                        encryption_algo = 'rsa',
-                        ocsp_must_staple = False):
-    
-    global ps_update_instance
-
-    if not ps_update_instance:
-        ps_update_instance = db.prepare(q_update_instance)
-
-    (updates) = ps_update_instance.first(
-                certinstance_id,
-                cert_pem,
-                key_pem,
-                TLSA_hash,
-                not_before,
-                not_after,
-                cacert_id,
-                encryption_algo,
-                ocsp_must_staple
-    )
-    return updates
 
 def update_state_of_instance(db, certinstance_id, state):
     

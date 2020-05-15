@@ -65,15 +65,8 @@ def execute_from_command_line():
     db = pe.open()
     
     read_db_encryption_key(db)
-    
-    row_list = db.query("""
-        SELECT name from Subjects
-            WHERE isAltName = FALSE
-            ORDER BY name""",)
-    
-    
-    for (name,) in row_list:
-        all_cert_names.append(name)
+
+    all_cert_names = Certificate.names(db)
     
     sli('{} certificates in configuration'.format(len(all_cert_names)))
     
@@ -130,7 +123,7 @@ def execute_from_command_line():
                     sle("{} not in configuration. Can't be excluded".format(i))
                     error = True
             if not error:
-                cert_name_set -= set(cert_to_be_excluded)
+                cert_name_set -= set(opts.cert_to_be_excluded)
     
     if error:
         sle('Stopped due to command line errors')

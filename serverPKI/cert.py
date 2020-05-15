@@ -297,6 +297,22 @@ class Certificate(type):
         if cm.row_id and cacert.cert_type == cert_type:
             return cm
 
+    @staticmethod
+    def names(db: db_conn) -> list():
+        """
+        Obtain list of cert names
+        :param db:  opened database connection
+        :return:    list of all cert names in db
+        """
+        names = []
+        row_list = db.query("""
+            SELECT name from Subjects
+                WHERE isAltName = FALSE
+                ORDER BY name""", )
+        for (name,) in row_list:
+            names.append(name)
+        return names
+
     def __init__(self, db: db_conn, name: str, serial: int):
         """
         Create a certificate meta data instance
