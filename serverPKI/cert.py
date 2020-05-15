@@ -447,17 +447,19 @@ class Certificate(type):
         :return:
         """
         if ci._save():
-            self.cert_instances.append(ci)
+            if ci not in self.cert_instances:
+                self.cert_instances.append(ci)
 
-    def delete_instance(self, ci: CertInstance):
+    def delete_instance(self, ci: CertInstance) -> int:
         """
         Delete an instance of CertInstance and its DB backup
         :param ci: The instance to delete
         :return:
         """
-        if ci._delete:
-            if ci in self.cert_instances:
-                self.cert_instances.remove(ci)
+        result = ci._delete:
+        if ci in self.cert_instances:
+            self.cert_instances.remove(ci)
+        return result
 
     @property
     def in_db(self):

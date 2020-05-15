@@ -29,7 +29,6 @@ from pathlib import Path
 from serverPKI.utils import options as opts
 
 from serverPKI.utils import get_name_string, options_set, check_actions
-from serverPKI.utils import updateSOAofUpdatedZones
 from serverPKI.utils import names_of_local_certs_to_be_renewed, print_certs
 
 from serverPKI.utils import options_set, check_actions, updateSOAofUpdatedZones

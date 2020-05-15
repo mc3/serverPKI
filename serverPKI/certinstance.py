@@ -57,6 +57,12 @@ q_load_instance = """
             ci.CAcert = ca.id AND
             d.certinstance = $1::INT
 """
+
+q_delete_instance = """
+    DELETE FROM Certinstances
+        WHERE id = $1
+"""
+
 q_store_instance = """
     INSERT INTO CertInstances
             (certificate, state, ocsp_must_staple, not_before, not_after, cacert)
@@ -65,11 +71,13 @@ q_store_instance = """
 """
 
 ps_load_instance = None
+ps_delete_instance = None
 ps_store_instance = None
 
 
 # ---------------------------- class CertInstance (CI)---------------------------
 
+@total_ordering
 class CertInstance(object):
     """
     Issued certificate instance class.
@@ -150,6 +158,47 @@ class CertInstance(object):
                 self.cks[row['encryption_algo']] = cks
                 sld('Algo and Hash of loaded CertKeyStore are {} {}'.format(row['algo'], row['hash']))
 
+                    def _save(self):
+                        """
+                        Store this instance of CertInstance in DB backend (must not exist in DB)
+                        :return:
+                        """
+                        global ps_store_instance
+
+                        if not ps_store_instance:
+                            ps_store_instance = self.cm.db.prepare(q_store_instance)
+                        self.row_id = ps_store_instance(self.cm.row_id,
+                                                        self.state,
+                                                        self.ocsp_ms,
+                                                        self.not_before,
+                                                        self.not_after, self,
+                                                        self.ca_cert_ci.row_id)
+
+    def __str__(self):
+        return str(self.row_id if self.row_id else self.cm.name + 'instance')
+
+    def __eq__(self, other):
+        return self.row_id == other.row_id
+
+    def __lt__(self, other):
+        return self.row_id < other.row_id
+
+    def __hash__(self):
+        return self.row_id
+
+
+    def _delete(self) -> int:
+        """
+        Delete this instance of CertInstance in DB backend and all its CertKeyStores (per cascaded delete)
+        :return:    Number of rows deleted
+        """
+        global ps_delete_instance
+
+        if not ps_delete_instance:
+            ps_delete_instance = self.cm.db.prepare(q_delete_instance)
+        if self.row_id:
+            return ps_delete_instance(self.cm.row_id)
+
     def _save(self):
         """
         Store this instance of CertInstance in DB backend (must not exist in DB)
@@ -165,7 +214,6 @@ class CertInstance(object):
                                         self.not_before,
                                         self.not_after,self,
                                         self.ca_cert_ci.row_id)
-
 
     def store_cert_key(self,
                        algo: str='rsa',
