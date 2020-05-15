@@ -27,7 +27,7 @@ import datetime
 from secrets import randbits
 
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives import, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography import x509
 from cryptography.x509.oid import NameOID
@@ -35,15 +35,15 @@ from cryptography.x509.oid import NameOID
 #--------------- local imports --------------
 from serverPKI.config import Pathes, X509atts
 from serverPKI.cert import Certificate
-from serverPKI.certinstance import CertInstance, CertKeyStore
+from serverPKI.certinstance import CertInstance
 from serverPKI.cacert import get_cacert_and_key
-from serverPKI.utils import sld, sli, sln, sle, options
+from serverPKI.utils import sld, sli, sln, sle
 
 
 #--------------- public functions --------------
 
     
-def issue_local_cert(cert_meta: Certificate):
+def issue_local_cert(cert_meta: Certificate) -> CertInstance:
     """
     Ask local CA to issue a certificate.
     Will ask for a passphrase to access the CA key.
@@ -53,10 +53,8 @@ def issue_local_cert(cert_meta: Certificate):
     Additional Certinstances may also be inserted if the local CA cert
     changes.
     
-    @param cert_meta:   Cert meta instance to issue an certificate for
-    @type cert_meta:    Cert meta instance
-    @rtype:             cert instance id in DB of new cert or None
-    @exceptions:        DBStoreException
+    :param cert_meta:   Cert meta instance to issue an certificate for
+    :rtype:             cert instance id in DB of new cert or None
     """
     
     (cacert, cakey, cacert_ci) = get_cacert_and_key(cert_meta.db)

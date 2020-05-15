@@ -269,7 +269,7 @@ class Certificate(type):
         sys.exit(1)
 
     @staticmethod
-    def CA_cert_meta(db: db_conn, cert_type: Cert_type, name: str):
+    def ca_cert_meta(db: db_conn, cert_type: Cert_type, name: str):
         """
         Return cert instance by subject name, inserting rows in certificates, subjects and certinstances if required
         :param db:          opened database connection
@@ -281,7 +281,7 @@ class Certificate(type):
         global ps_insert_cacert, ps_insert_cacert_subject
 
         cm = Certificate(db, name)
-        if cm.row_id and cacert.cert_type == cert_type:
+        if cm.row_id and cm.cert_type == cert_type:
             return cm
         if not ps_insert_cacert:
             ps_insert_cacert = db.prepare(q_insert_cacert)

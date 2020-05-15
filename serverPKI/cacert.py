@@ -197,7 +197,7 @@ def create_local_ca_cert(db: db_conn,
 
             # Various details about who we are. For a self-signed certificate the
             # subject and issuer are always the same.
-            serial_number = randbits(32)
+            serial = randbits(32)
             name_dict = X509atts.names
             subject = issuer = x509.Name([
                 x509.NameAttribute(NameOID.COUNTRY_NAME, name_dict['C']),
@@ -206,11 +206,11 @@ def create_local_ca_cert(db: db_conn,
                 x509.NameAttribute(NameOID.COMMON_NAME, name_dict['CN']),
             ])
 
-            not_valid_after = datetime.datetime.utcnow() + datetime.timedelta(
+            not_after = datetime.datetime.utcnow() + datetime.timedelta(
                                                             days=LOCAL_CA_LIFETIME)
-            not_valid_before = datetime.datetime.utcnow() - datetime.timedelta(
+            not_before = datetime.datetime.utcnow() - datetime.timedelta(
                                                             days=1)
-            ci = cm.create_instance(not_before = not_valid_before, not_after = not_valid_after)
+            ci = cm.create_instance(not_before = not_before, not_after = not_after)
 
             ski = x509.SubjectKeyIdentifier.from_public_key(cakey.public_key())
 
@@ -220,12 +220,12 @@ def create_local_ca_cert(db: db_conn,
                 issuer
             ).public_key(
                 cakey.public_key()
-            ).serial_number
+            ).serial_number(serial
             ).not_valid_before(
-                not_valid_before
+                not_before
             ).not_valid_after(
                 # Our certificate will be valid for 10 days
-                not_valid_after
+                not_after
             ).add_extension(
             # CA and no intermediate CAs
                 x509.BasicConstraints(
@@ -251,9 +251,9 @@ def create_local_ca_cert(db: db_conn,
             ).sign(cakey, hashes.SHA512(), default_backend())
 
             sli('CA cert serial {} with {} bit key, valid until {} created.'.format(
-                            serial_number,
+                            serial,
                             LOCAL_CA_BITS,
-                            not_valid_after.isoformat()
+                            not_after.isoformat()
             ))
         ci.ca_cert_ci = ci
         ci.store_cert_key(algo = 'rsa', cert = cacert, key = cakey)
