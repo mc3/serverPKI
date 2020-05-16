@@ -495,7 +495,7 @@ class Certificate(type):
 
         return ret_dict
 
-    def TLSA_hash(self, instance_id):
+    def TLSA_hash(self, instance_id):  ##FIXME##
         """
         Return TLSA hash of instance, which is valid today and in prepublish state
 

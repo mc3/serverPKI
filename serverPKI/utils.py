@@ -179,28 +179,48 @@ SLI = syslog.LOG_INFO | SYSLOG_FACILITY
 SLN = syslog.LOG_NOTICE | SYSLOG_FACILITY
 SLE = syslog.LOG_ERR | SYSLOG_FACILITY
 
-def sld(msg):
+def sld(msg: str) -> None:
+    """
+    Log a debug message
+    :param msg: text to log, will be logged as "[text]"
+    :return:
+    """
     if not syslog_initialized:
         init_syslog()
     m = '['+msg.expandtabs()+']'
     syslog.syslog(SLD, m)
     if not options.quiet and options.debug: print(m)
 
-def sli(msg):
+def sli(msg: str) -> None:
+    """
+    Log an informal message
+    :param msg: text to log, will be logged as "[text]"
+    :return:
+    """
     if not syslog_initialized:
         init_syslog()
     m = '['+msg.expandtabs()+']'
     syslog.syslog(SLI, m)
     if not options.quiet and options.verbose: print(m)
 
-def sln(msg):
+def sln(msg: str) -> None:
+    """
+    Log a warning (=notice) message
+    :param msg: text to log, will be logged as "%text"
+    :return:
+    """
     if not syslog_initialized:
         init_syslog()
     m = '%'+msg.expandtabs()
     syslog.syslog(SLN, m)
     if not options.quiet: print(m)
 
-def sle(msg):
+def sle(msg: str) -> None:
+    """
+    Log an error message
+    :param msg: text to log, will be logged as "?text"
+    :return:
+    """
     if not syslog_initialized:
         init_syslog()
     m = '?'+msg.expandtabs()
