@@ -27,7 +27,7 @@ from hashlib import sha256
 import logging
 import os
 import sys
-from enum import Enum
+from typing import Optional, Dict
 
 from postgresql import driver as db_conn
 # --------------- local imports --------------
@@ -183,37 +183,44 @@ ps_fqdn_from_serial = None
 # ------------- public functions --------------
 
 
-# ------------------------ ENUMs -------------------------
-# EncryptionAlgorithm
+# ------------------------ Some string checking classes -------------------------
+# From: https://stackoverflow.com/questions/7255655/how-to-subclass-str-in-python?answertab=votes#tab-top
 
 
-class EncAlgo(Enum):
-    RSA = "rsa"
-    EC = "ec"
-    RSA_PLUS_EC_ = "rsa_plus_ec"
+class EncAlgo(str):
+    def __new__(cls, content):
+        assert content in ('rsa', 'ec', 'ec plus rsa')
+        return str.__new__(cls, content)
 
 
-class Subject_type(Enum):
-    CA = 'CA'
-    CLIENT = 'client'
-    SERVER = 'server'
+class EncAlgoCKS(str):
+    def __new__(cls, content):
+        assert content in ('rsa', 'ec')
+        return str.__new__(cls, content)
 
-    @classmethod
-    def values(cls):
 
-class Cert_type(Enum):
-    LE = 'LE'
-    LOCAL = 'local'
-        dl = Cert_type.__members__.values()
+class SubjectType(str):
+    def __new__(cls, content):
+        assert content in ('client', 'server')
+        return str.__new__(cls, content)
 
-class Cert_state(Enum):
-    RESERVED = 'reserved'
-    ISSUED = 'issued'
-    PREPUBLISHED = 'prepublished'
-    DEPLOYED = 'deployed'
-    REVOKED = 'revoked'
-    EXPIRED = 'expired'
-    ARCHIVED = 'archived'
+
+class CertType(str):
+    def __new__(cls, content):
+        assert content in ('LE', 'local')
+        return str.__new__(cls, content)
+
+
+class CertState(str):
+    def __new__(cls, content):
+        assert content in ('reserved', 'issued', 'prepublished', 'deployed', 'revoked', 'expired', 'archived')
+        return str.__new__(cls, content)
+
+
+class PlaceCertFileType(str):
+    def __new__(cls, content):
+        assert content in ('cert only', 'separate', 'combine key', 'combine cacert', 'combine both')
+        return str.__new__(cls, content)
 
 
 
@@ -227,8 +234,7 @@ class Certificate(type):
     def __new__(cls, db: db_conn, name: str, serial: int):
         """
             Ensure that we create only one instance per row in certificates
-            From https://stackoverflow.com/questions/50883923/
-            how-to-make-a-class-which-disallows-duplicate-instances-returning-an-existing-i
+            From https://stackoverflow.com/questions/50883923/how-to-make-a-class-which-disallows-duplicate-instances-returning-an-existing-i
         """
         def _get_name(cls, db: db_conn, name: str, serial: int):
             if serial:
@@ -269,7 +275,7 @@ class Certificate(type):
         sys.exit(1)
 
     @staticmethod
-    def ca_cert_meta(db: db_conn, cert_type: Cert_type, name: str):
+    def ca_cert_meta(db: db_conn, cert_type: CertType, name: str) -> Optional['Certificate']:
         """
         Return cert instance by subject name, inserting rows in certificates, subjects and certinstances if required
         :param db:          opened database connection
@@ -280,9 +286,9 @@ class Certificate(type):
 
         global ps_insert_cacert, ps_insert_cacert_subject
 
-        cm = Certificate(db, name)
-        if cm.row_id and cm.cert_type == cert_type:
-            return cm
+        cm = Certificate(db, name, serial=None)
+        if cm.row_id and cm.cert_type == cert_type:         # do we have a row in db and matches our CertType?
+            return cm                                       # yes, return existing meta instance
         if not ps_insert_cacert:
             ps_insert_cacert = db.prepare(q_insert_cacert)
         certificates_row_id = ps_insert_cacert(cert_type)
@@ -293,12 +299,12 @@ class Certificate(type):
         subjects_row_id = ps_insert_cacert_subject('CA', name, certificates_row_id)
         if not subjects_row_id:
             AssertionError('CA_cert_meta: ps_insert_cacert_subject failed')
-        cm = Certificate(db, name)
-        if cm.row_id and cacert.cert_type == cert_type:
+        cm = Certificate(db, name, serial=None)
+        if cm.row_id and cm.cert_type == cert_type:
             return cm
 
     @staticmethod
-    def names(db: db_conn) -> list():
+    def names(db: db_conn) -> [list]:
         """
         Obtain list of cert names
         :param db:  opened database connection
@@ -313,7 +319,7 @@ class Certificate(type):
             names.append(name)
         return names
 
-    def __init__(self, db: db_conn, name: str, serial: int):
+    def __init__(self, db: db_conn, name: str, serial: Optional[int]):
         """
         Create a certificate meta data instance
     
@@ -348,7 +354,7 @@ class Certificate(type):
                     self.disabled = row['c_disabled']
                     self.authorized_until = row['authorized_until']
                     self.subject_type = row['subject_type']
-                    self.encryption_algo = row['encryption_algo']
+                    self.encryption_algo = EncAlgo(row['encryption_algo'])
                     self.ocsp_must_staple = row['ocsp_must_staple']
                     sld('----------- {}\t{}\t{}\t{}\t{}\t{}\t{}'.format(
                         self.row_id,
@@ -424,20 +430,22 @@ class Certificate(type):
             self.cert_instances.append(ci)
 
     def create_instance(self,
-                        state: str='reserved',
-                        ocsp_ms: bool=False,
+                        state: Optional[CertState],
+                        ocsp_ms: Optional[bool],
                         not_before: datetime.datetime,
                         not_after: datetime.datetime,
                         ca_cert_ci: CertInstance,
-                        cert_key_stores: dict={})
+                        cert_key_stores: {}
+                        ):
+        the_state = CertState(state) if state else CertState('reserved')
+        the_ocsp_ms = ocsp_ms if ocsp_ms else False
         ci = CertInstance(cert_meta = self,
-                     state = state,
-                     ocsp_ms = ocsp_ms,
+                     state = the_state,
+                     ocsp_ms = the_ocsp_ms,
                      not_before = not_before,
                      not_after = not_after,
                      ca_cert_ci = ca_cert_ci,
-                     cert_key_stores = cert_key_stores
-        )
+                     cert_key_stores = cert_key_stores)
         return ci
 
     def save_instance(self, ci: CertInstance):
@@ -456,7 +464,7 @@ class Certificate(type):
         :param ci: The instance to delete
         :return:
         """
-        result = ci._delete:
+        result = ci._delete
         if ci in self.cert_instances:
             self.cert_instances.remove(ci)
         return result
@@ -495,28 +503,34 @@ class Certificate(type):
 
         return ret_dict
 
-    def TLSA_hash(self, instance_id):  ##FIXME##
+    def TLSA_hashes(self, cert_instance: Optional[CertInstance]) -> Optional[Dict[EncAlgoCKS, str]]:
         """
-        Return TLSA hash of instance, which is valid today and in prepublish state
-
-        @rtype:             string of TLSA hash
-        @exceptions:        none
+        Return TLSA hashes of instance, which is valid today and in prepublish state ##FIXME## prepublish state??
+        :param cert_instance: optional CertInstance, whose hashes to be returned.
+                                If None, hash of most recent active CertInstance is returned.
+                                ##FIXME## must returned CI in prepublish state??
+        :return: Dict with algo as key and hash as value
         """
-        global ps_tlsa_of_instance
-
-        if not ps_tlsa_of_instance:
-            ps_tlsa_of_instance = self.db.prepare(q_tlsa_of_instance)
-
-        sld('TLSA_hash: Called with {}'.format(instance_id))
-        rv = ps_tlsa_of_instance.first(instance_id)
-        if not rv:
-            sle('cert.TLSA_hash called with noneexistant id'.format(instance_id))
-            return None
-        sld('TLSA_hash: ps_tlsa_of_instance returned {}'.format(rv))
-        if isinstance(rv, str):
-            return rv
+        ci = None
+        if cert_instance:
+            assert cert_instance in self.cert_instances
+            ci = cert_instance
         else:
-            return rv[0]
+            for ci in reversed(self.cert_instances):
+                if ci.active:
+                    break
+        if not ci or not ci.active:
+            sle('Certificate.TLSA_hashes found no active instance for {} and cert_instance {}'.
+                format(self.name, cert_instance))
+            return
+
+        d = {}
+        for k in ci.cksd.keys():
+            d[ci.cksd[k].algo] = ci.cksd[k].hash
+            sld('Certificate.TLSA_hashes: Cert: {} Algo: {} and Hash: {}'.
+                format(self.name, ci.cksd[k].algo, ci.cksd[k].hash))
+
+        return d
 
     def issue(self) -> bool:
         """
@@ -526,11 +540,11 @@ class Certificate(type):
         @rtype:             bool, true if success
         @exceptions:        AssertionError
         """
-        new_instance = CertInstance(cert_meta = self, ocsp_ms = self.ocsp_must_staple)
+        new_instance = CertInstance(cert_meta=self, ocsp_ms=self.ocsp_must_staple)
         with self.db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
-            if self.cert_type == Cert_type.LE:
+            if self.cert_type == CertType('LE'):
                 result = issue_LE_cert(new_instance)
-            elif self.cert_type ==  Cert_type.LOCAL:
+            elif self.cert_type == CertType('local'):
                 result = issue_local_cert(new_instance)
             else:
                 raise AssertionError
@@ -574,7 +588,7 @@ class Place(object):
     Backed up in DB table Places'
     """
 
-    def __init__(self, name=None,
+    def __init__(self, name:str=None,
                  cert_file_type=None,
                  cert_path=None,
                  key_path=None,
@@ -584,6 +598,19 @@ class Place(object):
                  chownboth=None,
                  pglink=None,
                  reload_command=None):
+        """
+
+        :param name: Name of Place
+        :param cert_file_type:
+        :param cert_path:
+        :param key_path:
+        :param uid:
+        :param gid:
+        :param mode:
+        :param chownboth:
+        :param pglink:
+        :param reload_command:
+        """
         self.name = name
         self.cert_file_type = cert_file_type
         self.cert_path = cert_path

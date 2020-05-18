@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, date
 from email.mime.text import MIMEText
 import smtplib
 import sys
-from typing import Union, Optional
+from typing import Optional
 
 from functools import total_ordering
 from postgresql import driver as db_conn
@@ -37,7 +37,7 @@ from serverPKI.certinstance import CertInstance
 from serverPKI.certdist import deployCerts, distribute_tlsa_rrs
 from serverPKI.issue_LE import issue_LE_cert
 from serverPKI.utils import sld, sli, sln, sle
-from serverPKI.utils import shortDateTime, update_state_of_instance
+from serverPKI.utils import shortDateTime
 from serverPKI.utils import options as opts
 
 to_be_deleted = set()
