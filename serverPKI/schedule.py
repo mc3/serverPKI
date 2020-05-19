@@ -32,7 +32,7 @@ from postgresql import driver as db_conn
 from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, PRE_PUBLISH_TIMEDELTA
 from serverPKI.config import LOCAL_ISSUE_MAIL_TIMEDELTA
 from serverPKI.config import MAIL_RELAY, MAIL_SENDER, MAIL_RECIPIENT
-from serverPKI.cert import Certificate
+from serverPKI.cert import Certificate, CertState, CertType
 from serverPKI.certinstance import CertInstance
 from serverPKI.certdist import deployCerts, distribute_tlsa_rrs
 from serverPKI.issue_LE import issue_LE_cert
@@ -78,7 +78,7 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
         :param cm: cert meta
         :return: ci of new cert or None
         """
-        if cm.cert_type == 'local':
+        if cm.cert_type == CertType('local'):
             return None
         if opts.check_only:
             sld('Would issue {}.'.format(cm.name))
@@ -87,20 +87,26 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
             sli('Requesting issue from LE for {}'.format(cm.name))
             return issue_LE_cert(cm)
 
-    ##FIXME##: Needing loop over all CertKeyStores:
     def prepublish(cm: Certificate, active_ci: CertInstance, new_ci: CertInstance) -> None:
+        """
+        Prepublish cert hashes per TLSA RRs in DNS
+        :param cm: Our cert meta data instance
+        :param active_ci: CertInstance currently in use
+        :param new_ci: CertInstance just created but not yet deployed
+        :return:
+        """
         if opts.check_only:
             sld('Would prepublish {} {}.'.format(active_ci.row_id, new_ci.row_id))
             return
-        active_TLSA = cm.TLSA_hash(active_ci)
-        prepublishing_TLSA = cm.TLSA_hash(new_ci)
+        # collect hashes for all certs in all algos
+        hashes = tuple(cm.TLSA_hashes(active_ci).values()) + tuple(cm.TLSA_hashes(new_ci).values())
         sli('Prepublishing {}:{}:{}'.
-            format(cm.name, active_ci.row_id, new_ci))
-        distribute_tlsa_rrs(cm, active_TLSA, prepublishing_TLSA)  ##FIXME##
-        new_ci.state = 'prepublished'
+            format(cm.name, active_ci.row_id, new_ci.row_id))
+        distribute_tlsa_rrs(cm, hashes)
+        new_ci.state = CertState('prepublished')
         cm.save_instance(new_ci)
 
-    def distribute(cm, ci, state):
+    def distribute(cm: Certificate, ci: CertInstance, state: CertState):
         if opts.check_only:
             sld('Would distribute {}.'.format(ci.row_id))
             return

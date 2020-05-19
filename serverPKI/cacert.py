@@ -27,6 +27,7 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 import binascii
 import datetime
 import getpass
+from typing import Optional, Tuple
 import sys
 from pathlib import Path
 from secrets import randbits
@@ -41,7 +42,7 @@ from cryptography.hazmat.primitives import hashes
 from postgresql import driver as db_conn
 
 #--------------- local imports --------------
-from serverPKI.cert import Certificate
+from serverPKI.cert import Certificate, EncAlgoCKS
 from serverPKI.certinstance import CertInstance, CertKeyStore
 from serverPKI.config import Pathes, X509atts, LE_SERVER, SUBJECT_LOCAL_CA
 from serverPKI.config import LOCAL_CA_BITS, LOCAL_CA_LIFETIME
@@ -55,21 +56,21 @@ local_cacert = None
 local_cakey = None
 local_cacert_instance = None
 
-#--------------- classes --------------
+# --------------- classes --------------
+
 
 class DBStoreException(Exception):
     pass
 
-#--------------- public functions --------------
+# --------------- public functions --------------
 
-def issue_local_CAcert(db: db_conn):
+def issue_local_CAcert(db: db_conn) -> bool:
     """
     Issue a local CA cert and store it in DB.
-    
-    @param db:          open database connection
-    @type db:           serverPKI.db.DbConnection instance
-    @rtype:             Boolean, true if success 
+    :param db: Opened DB connection
+    :return: True, if CA cert created and stored in DB, False otherwise
     """
+
     sli('Creating local CA certificate.')
     try:
         with db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
@@ -77,38 +78,40 @@ def issue_local_CAcert(db: db_conn):
     except Exception as e:
         sle('Failed to create local CA cert, because: {}'.format(str(e)))
         return False
-        
     return True
 
 
-def get_cacert_and_key(db: db_conn):
+def get_cacert_and_key(db: db_conn) -> Tuple[x509.Certificate, rsa.RSAPrivateKeyWithSerialization, CertInstance]:
     """
     Return a valid local CA certificate and a loaded private key.
-    
+    Use globals local_cacert, local_cakey and local_cacert_instance if available
+
     If necessary, create a local CAcert or read a historical one from disk.
     Store it in DB, creating necessary rows in Subjects, Certificates
-    and Certinstances.
-    
-    @param db:          open database connection in readwrite transaction
-    @type db:           serverPKI.db.DbConnection instance
-    @rtype:             Tuple of cacert, cakey and cacert instance id 
-                            or tuple of None, None, None
-    @exceptions:
+    and Certinstances and store them in globals local_cacert, local_cakey and local_cacert_instance
+    Does exit(1) if CA key could not be loaded.
+    :param db:  Opened DB connection
+    :return: Tuple of cacert, cakey and cacert instance
     """
-    
+
     global local_cacert, local_cakey, local_cacert_instance
 
     if local_cacert and local_cakey and local_cacert_instance:
         return (local_cacert, local_cakey, local_cacert_instance)
 
     cm = Certificate(db, name=SUBJECT_LOCAL_CA)
-    ci = None
+    ci = cksd = cks = None
     if cm:
         ci = cm.most_recent_active_instance
     cks = None
     if ci:                                  # we have a active CA cert in db
-        cks = ci.the_cert_key_store         # return cks if ci has only one
-    if cks:                                 # multiple algo certs not supprted as CA cert
+        cksd = ci.the_cert_key_store
+    if cksd:
+        cks = cksd[EncAlgoCKS('rsa')]       # multiple algo certs not supprted as CA cert
+    if not cks:
+        sln('Missed cacert in db, where it should be: {} ci.rowid ={}, cks.row_is={}'.format(
+            ci.cm.name, ci.row_id, cks.row_id))
+    if cks:
         cacert_pem = cks.cert
         cakey_pem = cks.key_for_ca
         algo = cks.algo
@@ -144,13 +147,17 @@ def get_cacert_and_key(db: db_conn):
 
 
 def create_local_ca_cert(db: db_conn,
-                         cacert: x509.Certificate,
-                         cakey: rsa.RSAPrivateKeyWithSerialization) -> (x509.Certificate,rsa.RSAPrivateKey,CertInstance):
+                         cacert: Optional[x509.Certificate],
+                         cakey: Optional[rsa.RSAPrivateKeyWithSerialization]) -> Tuple[x509.Certificate,
+                                                                             rsa.RSAPrivateKeyWithSerialization,
+                                                                             CertInstance]:
     """
     Create a new local CA cert (use an existing one, if one in db)
+    Make it available in globals local_cacert, local_cakey and local_cacert_instance
+
     :param db:      Opened DB connection
-    :param cacert:
-    :param cakey:
+    :param cacert:  Optional existing CA cert
+    :param cakey:   Key for cacert, if this provided
     :return:        Tuple of cacert, cakey and cacert instance
     """
 
@@ -266,17 +273,14 @@ def create_local_ca_cert(db: db_conn,
 
 
 
-#--------------- load private key and query passphrase --------------
+# --------------- load private key and query passphrase --------------
 
-def _load_cakey(cakey_pem):
+def _load_cakey(cakey_pem: bytes) -> Optional[rsa.RSAPrivateKey]:
     """
-    Return a CA key instance. If it is encrypted, it will be decrypted
-    any needed passphrase queries from user.
-    
-    @param cakey_pem:   text form of CA key in PEM format
-    @type cakey_pem:    bytes
-    @rtype:             Instance of serialization.load_pem_private_key
-    @exceptions:
+
+    :param cakey_pem: The PEM encoded key data as bytes
+    :return:
+    :exceptions:    ValueError, TypeError
     """
 
     cakey = None

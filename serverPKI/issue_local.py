@@ -25,6 +25,7 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 #--------------- imported modules --------------
 import datetime
 from secrets import randbits
+from typing import Optional
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import, hashes
@@ -43,7 +44,7 @@ from serverPKI.utils import sld, sli, sln, sle
 #--------------- public functions --------------
 
     
-def issue_local_cert(cert_meta: Certificate) -> CertInstance:
+def issue_local_cert(cert_meta: Certificate) -> Optional[CertInstance]:
     """
     Ask local CA to issue a certificate.
     Will ask for a passphrase to access the CA key.

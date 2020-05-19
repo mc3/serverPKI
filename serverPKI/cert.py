@@ -319,18 +319,12 @@ class Certificate(type):
             names.append(name)
         return names
 
-    def __init__(self, db: db_conn, name: str, serial: Optional[int]):
+    def __init__(self, db: db_conn, name: str, serial: Optional[int]) -> 'Certificate':
         """
-        Create a certificate meta data instance
-    
-        @param db:          opened database connection
-        @type db:           serverPKI.db.DbConnection instance
-        @param name:        subject name of certificate, ignored, if serial present
-        @type name:         string
-        @param serial:      serial of instance, whose cert meta we are creating
-        @type serial:       integer
-        @rtype:             Certificate instance
-        @exceptions:
+        Create or load a certificate meta instance.
+        :param db: opened database connection
+        :param name: subject name of certificate, ignored, if serial present
+        :param serial: row_id of instance, whose cert meta we are creating
         """
 
         global ps_all_cert_meta, ps_instances
@@ -489,6 +483,7 @@ class Certificate(type):
             if ci.active:
                 return ci
 
+    @property
     def active_instances(self) ->dict:
         """
         Return dict with active instances as values.
@@ -532,6 +527,20 @@ class Certificate(type):
 
         return d
 
+    def cacert_PEM(self, ci: CertInstance) -> str:
+        """
+        Return the PEM encoded CA cert of an CertInstance
+        :param cacert_ci: CertInstance of which to return CA cert
+        :return: PEM encoded CA cert
+        """
+        cksd = ci.ca_cert_ci.cksd
+        if len(cksd) != 1:
+            sle('Not exactly one CertKeyStore for CA cert of {}, CA cert ci.ca_cert_ci.row_id={} - giving up.'.format(
+                self.name, ca_cert_ci.row_id))
+            sys.exit(1)
+        for k in cksd.keys():
+            return cksd[k].cert
+
     def issue(self) -> bool:
         """
         Issue a new certificate instance and store it
@@ -553,16 +562,15 @@ class Certificate(type):
             return True
         return False
 
-    def update_authorized_until(self, until: datetime.datetime):
+    def update_authorized_until(self, until: Optional[datetime.datetime]):
         """
-        Update authorized_until of current Certificates instance.
-
-        @param until:       date and time where LE authrization expires
-        @type until:        datetime.datetime instance
-        @rtype:             string of TLSA hash
-        @exceptions:        none
+        Update authorized_until of Certificate meta instance
+        :param until:
+        :return:
         """
         global ps_update_authorized_until
+
+        self.authorized_until = until
 
         # resetting of authorized_until allowd only by local certs
         assert until or self.cert_type == 'local', \
