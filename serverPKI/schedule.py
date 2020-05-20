@@ -26,7 +26,6 @@ import smtplib
 import sys
 from typing import Optional
 
-from functools import total_ordering
 from postgresql import driver as db_conn
 
 from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, PRE_PUBLISH_TIMEDELTA
@@ -74,7 +73,7 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
 
     def issue(cm: Certificate) -> Optional[CertInstance]:
         """
-        If cert type is 'LE', issue a be cert
+        If cert type is 'LE', issue a Letsencrypt cert
         :param cm: cert meta
         :return: ci of new cert or None
         """
@@ -114,7 +113,7 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
             format(cm.name, ci.row_id))
         cm_dict = {cm.name: cm}
         try:
-            deployCerts(cm_dict, ci, allowed_states=(state,))
+            deployCerts(cm_dict, (ci,), allowed_states=(state,))
         except Exception:
             sln('Skipping distribution of cert {} because {} [{}]'.format(
                 cm.name,
@@ -127,7 +126,7 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
             return
         sli('State transition from {} to EXPIRED of {}:{}'.
             format(ci.state, cm.name, ci.row_id))
-        ci.state = 'expired'
+        ci.state = CertState('expired')
         cm.save_instance(ci)
 
     def archive(cm, ci):
@@ -136,7 +135,7 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
             return
         sli('State transition from {} to ARCHIVED of {}:{}'.
             format(ci.state, cm.name, ci.row_id))
-        ci.state = 'archived'
+        ci.state = CertState('archived')
         cm.save_instance(ci)
 
     for cm in cert_metas:
@@ -158,21 +157,21 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
             continue
 
         for ci in surviving:
-            if ci.state == 'expired':
+            if ci.state == CertState(CertState('expired')):
                 archive(cm, ci)
                 continue
             if datetime.utcnow() >= (ci.not_after + timedelta(days=1)):
-                if ci.state != 'deployed':
+                if ci.state != CertState('deployed'):
                     expire(cm, ci)
                 continue
-            elif ci.state == 'issued':
+            elif ci.state == CertState('issued'):
                 issued_ci = ci
-            elif ci.state == 'prepublished':
+            elif ci.state == CertState('prepublished'):
                 prepublished_ci = ci
-            elif ci.state == 'deployed':
+            elif ci.state == CertState('deployed'):
                 deployed_ci = ci
             else:
-                assert (ci.state in ('issued', 'prepublished', 'deployed',))
+                assert (ci.state in (CertState('issued'), CertState('prepublished'), CertState('deployed'),))
 
         if deployed_ci and issued_ci:  # issued too old to replace deployed in future?
             if issued_ci.not_after < (deployed_ci.not_after +
@@ -198,16 +197,16 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
             sld('scheduleCerts: no deployed cert or deployed cert '
                 'expired {}'.format(str(deployed_ci)))
             if prepublished_ci:  # yes - distribute prepublished
-                distribute(cm, prepublished_ci.id, 'prepublished')
+                distribute(cm, prepublished_ci, CertState('prepublished'))
                 distributed = True
             elif issued_ci:  # or issued cert?
-                distribute(cm, issued_ci.id, 'issued')  # yes - distribute it
+                distribute(cm, issued_ci.id, CertState('issued'))  # yes - distribute it
                 distributed = True
             if deployed_ci:
                 expire(cm, deployed_ci)  # and expire deployed cert
             if not distributed:
-                id = issue(cm)
-                if id: distribute(cm, id, 'issued')
+                ci = issue(cm)
+                if ci: distribute(cm, ci, CertState('issued'))
             continue
 
         if cm.cert_type == 'local':
@@ -281,13 +280,13 @@ def _find_to_be_deleted(cm: Certificate) -> Optional[set]:
             cm.name)
         )
 
-        if ci.state in ('reserved', 'archived'):
+        if ci.state in (CertState('reserved'), CertState('archived')):
             to_be_deleted.add(ci)
         else:
             surviving.add(ci)
 
     sld('Before state loop: ' + str([i.__str__() for i in surviving]))
-    for state in ('issued', 'prepublished', 'deployed', 'expired',):
+    for state in (CertState('issued'), CertState('prepublished'), CertState('deployed'), CertState('expired')):
         ci_list = []
         for ci in surviving:
             if ci.state == state:
