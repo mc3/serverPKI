@@ -133,7 +133,7 @@ class CertInstance(object):
                     self.ocsp_ms = row['ocsp_must_staple']
                     self.not_before = row['not_before']
                     self.not_after = row['not_after']
-                    self.ca_cert_ci = 'CertInstance'(row_id=row['ca_cert'])  ##FIXME## CertInstance() during __init__() ???
+                    self.ca_cert_ci = CertInstance(row_id=row['ca_cert'])  ##FIXME## CertInstance() during __init__() ???
                     sld('Loading CertInstance row_id={}, state={}, ocsp_ms={}, not_before={}, not_after={}'
                         .format(self.row_id, self.state, self.ocsp_ms,
                                 self.not_before.isoformat(), self.not_after.isoformat()))
@@ -172,7 +172,7 @@ class CertInstance(object):
         if not ps_delete_instance:
             ps_delete_instance = self.cm.db.prepare(q_delete_instance)
         if self.row_id:
-            return ps_delete_instance(self.cm.row_id)
+            return ps_delete_instance(self.row_id)
 
     def _save(self):
         """
@@ -271,14 +271,14 @@ ps_update_certkeydata = None
 ps_hash = None
 
 # ---------------------------- class CertKeyStore (CKS) ---------------------------
-cert_key_stores = {}  # ensures that we have only one cert key store per hash
-
 
 class CertKeyStore(object):
     """
     Cert key data store class class.
     In-memory representation of DB backend CertKeyData.
     """
+
+    _cert_key_stores = {}  # ensures that we have only one cert key store per hash
 
     @staticmethod
     def hash_from_cert(cert: x509.Certificate):
@@ -290,14 +290,33 @@ class CertKeyStore(object):
             cert.fingerprint(SHA256())).decode('ascii').upper()
 
     @staticmethod
-    def certinstance_from_cert(cert: x509.Certificate):
+    def certinstance_from_cert(cert: x509.Certificate) -> Optional[CertInstance]:
         """
         return the CertInstance from a (loaded) cert
         :return: CertInstance or None
         """
         hash = CertKeyStore.hash_from_cert(cert)
-        if hash in cert_key_stores:
-            return cert_key_stores[hash].ci
+        if hash in CertKeyStore._cert_key_stores:
+            return CertKeyStore._cert_key_stores[hash].ci
+        else:
+            return None
+
+    @staticmethod
+    def ci_from_cert_and_name(db: db_conn, cert: x509.Certificate, name: str) -> Optional[CertInstance]:
+        """
+        Return CertInstance of a given cert and a cert meta name
+        :param db: opened database connection
+        :param cert: x509.Certificate istance
+        :param name: cert met name
+        :return: CertInstance or None
+        """
+
+        hash = CertKeyStore.hash_from_cert(cert)
+        cm = Certificate(db=db, name=name)
+        if not cm.row_id:                           # make shure cert meta has been loaded (with all dependant  ci,cks)
+            return None                             # No cert meta with that name
+        if hash in CertKeyStore._cert_key_stores:
+            return CertKeyStore._cert_key_stores[hash].ci
         else:
             return None
 

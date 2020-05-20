@@ -50,7 +50,7 @@ class DbConnection(object):
         @exceptions:        None, but does a exit(1) if connection can't be
                             established
         """
-        if service not in ('serverpki'):
+        if service not in ('serverpki',):
             sle('Config error: dbAccounts must be "serverpki"')
             sys.exit(0)
 

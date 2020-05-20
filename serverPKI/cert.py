@@ -223,7 +223,6 @@ class PlaceCertFileType(str):
         return str.__new__(cls, content)
 
 
-
 # --------------- public class Certificate --------------
 
 class Certificate(type):
@@ -344,10 +343,10 @@ class Certificate(type):
             for row in ps_all_cert_meta(self.name):
                 if not self.row_id:
                     self.row_id = row['c_id']
-                    self.cert_type = row['c_type']
+                    self.cert_type = CertType(row['c_type'])
                     self.disabled = row['c_disabled']
                     self.authorized_until = row['authorized_until']
-                    self.subject_type = row['subject_type']
+                    self.subject_type = SubjectType(row['subject_type'])
                     self.encryption_algo = EncAlgo(row['encryption_algo'])
                     self.ocsp_must_staple = row['ocsp_must_staple']
                     sld('----------- {}\t{}\t{}\t{}\t{}\t{}\t{}'.format(
@@ -429,10 +428,10 @@ class Certificate(type):
                         not_before: datetime.datetime,
                         not_after: datetime.datetime,
                         ca_cert_ci: CertInstance,
-                        cert_key_stores: {}
+                        cert_key_stores: Optional[dict]
                         ):
         the_state = CertState(state) if state else CertState('reserved')
-        the_ocsp_ms = ocsp_ms if ocsp_ms else False
+        the_ocsp_ms = ocsp_ms if ocsp_ms else self.ocsp_must_staple
         ci = CertInstance(cert_meta = self,
                      state = the_state,
                      ocsp_ms = the_ocsp_ms,

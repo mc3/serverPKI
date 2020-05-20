@@ -311,7 +311,7 @@ def _load_cakey(cakey_pem: bytes) -> Optional[rsa.RSAPrivateKey]:
 
 #--------------- function --------------
 
-def create_CAcert_meta(db: db_conn, cert_type: str, name: str) -> Certificate:
+def create_CAcert_meta(db: db_conn, cert_type: CertType, name: str) -> Certificate:
     """
     Lookup or create a CA cert meta in rows ceetificates and subjects
     :param db:          pened database connection in read/write transaction

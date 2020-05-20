@@ -161,7 +161,7 @@ def issue_local_cert(cert_meta: Certificate) -> Optional[CertInstance]:
         private_key=cakey, algorithm=hashes.SHA384(),
         backend=default_backend()
     )
-    ci = cert_meta.create_instance(state='issued',
+    ci = cert_meta.create_instance(state=CertState('issued'),
                                    not_before=not_valid_before,
                                    not_valid_after=not_valid_after,
                                    ca_cert_ci=cacert_ci

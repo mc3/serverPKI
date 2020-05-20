@@ -302,8 +302,8 @@ def ssh_connection(dest_host):
     except Exception:
         sln('Failed to connect to host {}, because {} [{}]'.
             format(dest_host,
-            sys.exc_info()[0].__name__,
-            str(sys.exc_info()[1])))
+                   sys.exc_info()[0].__name__,
+                   str(sys.exc_info()[1])))
         raise
     else:
         sld('Connected to host {}'.format(dest_host))
