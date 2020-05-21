@@ -50,7 +50,7 @@ import automatoes.acme as am
 
 am.__dict__['DEFAULT_HEADERS'] = {
     'User-Agent': "serverPKI {} (https://serverpki.readthedocs.io/en/latest/)".
-    format(get_version()),
+        format(get_version()),
 }
 
 from automatoes.acme import AcmeV2
@@ -69,6 +69,7 @@ from serverPKI.config import (Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA,
 from serverPKI.utils import sld, sli, sln, sle, options, update_certinstance
 from serverPKI.utils import zone_and_FQDN_from_altnames, updateSOAofUpdatedZones
 from serverPKI.utils import updateZoneCache, encrypt_key, print_order, ddns_update
+
 
 # --------------- manuale logging ----------------
 
@@ -143,14 +144,14 @@ def issue_LE_cert(cert_meta: Certificate) -> Optional[CertInstance]:
                                            ca_cert_ci=cacert_ci
                                            )
         cks = ci.store_cert_key(algo=result['Algo'],
-                          cert=result['Cert'],
-                          key=result['Key'])
+                                cert=result['Cert'],
+                                key=result['Key'])
 
         sli('Certificate issued for {} . Valid until {}'.format(
             cert_meta.name, result['Cert'].not_valid_after.isoformat()))
         sli('Hash is: {}, algo is {}'.format(cks.hash, result['Algo']))
 
-    ci._save()                  ##FIXME## also done in schedule
+    cert_meta.save_instance(ci)
     return ci
 
 
@@ -204,7 +205,7 @@ def _issue_cert_for_one_algo(encryption_algo: EncAlgoCKS, cert_meta: Certificate
             order.contents = final_order
 
             if final_order['status'] in ["processing", "valid"]:
-                 sld('{}/{}:  Order finalized. Certificate is being issued.'
+                sld('{}/{}:  Order finalized. Certificate is being issued.'
                     .format(cert_meta.name, encryption_algo))
             else:
                 sle("{}:  Order not ready or invalid after finalize. Giving up"
@@ -229,7 +230,8 @@ def _issue_cert_for_one_algo(encryption_algo: EncAlgoCKS, cert_meta: Certificate
 
     except manuale_errors.AcmeError as e:
         if '(type urn:acme:error:unauthorized, HTTP 403)' in str(e):
-            sle('LetsEncrypt lost authorization for {}/{} [DOWNLOAD]. Giving up'.format(cert_meta.name, encryption_algo))
+            sle('LetsEncrypt lost authorization for {}/{} [DOWNLOAD]. Giving up'.format(cert_meta.name,
+                                                                                        encryption_algo))
         else:
             sle("Connection or service request failed for {}/{}[DOWNLOAD]. Aborting.".
                 format(cert_meta.name, encryption_algo))
@@ -266,7 +268,7 @@ def _get_intermediate_instance(db: db_conn, int_cert: x509.Certificate) -> CertI
     ci = cm.create_instance(state=CertState('issued'),
                             not_before=int_cert.not_valid_before,
                             not_after=int_cert.not_valid_after)
-    ci.ca_cert_ci = ci                                  # CAs are issued by themselves
+    ci.ca_cert_ci = ci  # CAs are issued by themselves
     ci.store_cert_key(algo=EncAlgoCKS('rsa'), cert=int_cert, key=b'')  ##FIXME## might be ec in the future
     ci.save()
 

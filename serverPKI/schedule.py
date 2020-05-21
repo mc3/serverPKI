@@ -194,7 +194,7 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
         if (not deployed_ci) or \
                 (datetime.utcnow() >= deployed_ci.not_after - timedelta(days=1)):
             distributed = False
-            sld('scheduleCerts: no deployed cert or deployed cert '
+            sld('scheduleCerts: no deployed cert or deployed cert'
                 'expired {}'.format(str(deployed_ci)))
             if prepublished_ci:  # yes - distribute prepublished
                 distribute(cm, prepublished_ci, CertState('prepublished'))

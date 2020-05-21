@@ -25,7 +25,7 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 import binascii
 import datetime
 from functools import total_ordering
-from typing import Union, Optional, Dict, Tuple, Sequence
+from typing import Union, Optional, Dict
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
@@ -39,6 +39,8 @@ from cryptography.hazmat.primitives.serialization import (
     BestAvailableEncryption
 )
 from cryptography import x509
+
+from postgresql import driver as db_conn
 
 # --------------- local imports --------------
 from serverPKI.cert import Certificate, EncAlgo, EncAlgoCKS, CertState
@@ -92,7 +94,7 @@ class CertInstance(object):
                  not_before: datetime.datetime = None,
                  not_after: datetime.datetime = None,
                  ca_cert_ci: 'CertInstance' = None,
-                 cert_key_stores: Dict[EncAlgoCKS, 'CertKeyStore'] = None) -> 'CertInstance':
+                 cert_key_stores: Dict[EncAlgoCKS, 'CertKeyStore'] = {}):
         """
         Load or create a certificate instance (CI), which may be incomplete and may be updated later
         :param cert_meta: Our Certificate meta instance (required)
@@ -133,7 +135,8 @@ class CertInstance(object):
                     self.ocsp_ms = row['ocsp_must_staple']
                     self.not_before = row['not_before']
                     self.not_after = row['not_after']
-                    self.ca_cert_ci = CertInstance(row_id=row['ca_cert'])  ##FIXME## CertInstance() during __init__() ???
+                    self.ca_cert_ci = CertInstance(cert_meta, row_id=row[
+                        'ca_cert'])  # #FIXME# # CertInstance() during __init__() ???
                     sld('Loading CertInstance row_id={}, state={}, ocsp_ms={}, not_before={}, not_after={}'
                         .format(self.row_id, self.state, self.ocsp_ms,
                                 self.not_before.isoformat(), self.not_after.isoformat()))
@@ -173,6 +176,8 @@ class CertInstance(object):
             ps_delete_instance = self.cm.db.prepare(q_delete_instance)
         if self.row_id:
             return ps_delete_instance(self.row_id)
+        else:
+            return 0
 
     def _save(self):
         """
@@ -270,6 +275,7 @@ ps_store_certkeydata = None
 ps_update_certkeydata = None
 ps_hash = None
 
+
 # ---------------------------- class CertKeyStore (CKS) ---------------------------
 
 class CertKeyStore(object):
@@ -281,7 +287,7 @@ class CertKeyStore(object):
     _cert_key_stores = {}  # ensures that we have only one cert key store per hash
 
     @staticmethod
-    def hash_from_cert(cert: x509.Certificate):
+    def hash_from_cert(cert: x509.Certificate) -> str:
         """
         return TLSA suitable hash from cryptography.x509.Certificate instance
         :return: the hash as str
@@ -313,8 +319,8 @@ class CertKeyStore(object):
 
         hash = CertKeyStore.hash_from_cert(cert)
         cm = Certificate(db=db, name=name)
-        if not cm.row_id:                           # make shure cert meta has been loaded (with all dependant  ci,cks)
-            return None                             # No cert meta with that name
+        if not cm.row_id:  # make shure cert meta has been loaded (with all dependant  ci,cks)
+            return None  # No cert meta with that name
         if hash in CertKeyStore._cert_key_stores:
             return CertKeyStore._cert_key_stores[hash].ci
         else:
@@ -327,31 +333,16 @@ class CertKeyStore(object):
                  cert: Union[x509.Certificate, bytes],
                  key: Union[RSAPrivateKeyWithSerialization, bytes],
                  hash=None):
-
         """
-        Create a store for one cert/key pair
-
-        @param row_id:          id in DB, cert and key are in DB storage format (key encrypted)
-        @type row_id:           int
-        @param cert_instance:   parent CertInstance, required
-        @type cert_instance:    serverPKI.cert.CertInstance
-        @param algo:            cert encryption algo, one of 'ec' or 'rsa'  **FIXME** could be derived from key type
-        @type algo              str
-        @param cert:            Certificate data, if row_id present, binary PEM (db storage) format assumed
-        @type cert:             bytes or cryptography.x509.Certificate
-        @param key:             Key data, if row_id present,
-                                (possibly) encrypted binary PEM (db storage) format assumed,
+        Create a new CertKeyStore instance
+        :param row_id:          id in DB, cert and key are in DB storage format (key encrypted)
+        :param cert_instance:   parent CertInstance, required
+        :param algo:            cert encryption algo
+        :param cert:            Certificate data, binary PEM (db storage) format assumed,
+        :param key:             Key data, if row_id present,
+                                (possibly, [if encryption in use]) encrypted binary PEM (db storage) format assumed,
                                 else raw format
-                                (RSAPrivateKeyWithSerialization or bytes)
-        @type key:              bytes or
-                                either cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey or
-                                cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey
-        @param hash:            TLSA hash of certificate
-        @type hash:             str
-
-        @rtype:                 CertKeyStore instance
-
-        @exceptions:
+        :param hash:            sha256 hash of cert (TLSA hash format).
         """
 
         global ps_store_certkeydata
@@ -359,9 +350,9 @@ class CertKeyStore(object):
         if not cert_instance:
             AssertionError('CertKeyStore: Argument cert_instance missing')
         hash = CertKeyStore.hash_from_cert(cert)
-        if hash in cert_key_stores:
+        if hash in CertKeyStore._cert_key_stores:
             AssertionError('Attempt to create duplicate CertKeyStore for meta {}'.
-                           format(cert_key_stores[hash].ci.cm.name))
+                           format(CertKeyStore._cert_key_stores[hash].ci.cm.name))
         self.ci = cert_instance
         self.algo = EncAlgoCKS(algo)
         self.row_id = row_id
@@ -383,8 +374,8 @@ class CertKeyStore(object):
             self._save()
 
     def __del__(self):
-        if self.hash in cert_key_stores:
-            del cert_key_stores[hash]
+        if self.hash in CertKeyStore._cert_key_stores:
+            del CertKeyStore._cert_key_stores[hash]
         if self.algo in self.ci.cksd[self.algo]:
             del self.ci.cksd[self.algo]
 
@@ -406,7 +397,7 @@ class CertKeyStore(object):
         Return the decrypted key as bytes
         :return: string or None if this CertKeyStore stores a CA cert
         """
-        return self.key
+        return self._key
 
     @property
     def cert(self) -> str:
@@ -479,7 +470,7 @@ class CertKeyStore(object):
                 encryption_type)
         return key_pem
 
-    def _decrypt_key(self, encrypted_key_bytes):
+    def _decrypt_key(self, encrypted_key_bytes) -> bytes:
         """
         Load and decrypt a private key
         :param encrypted_key_bytes: encrypted key in binary PEM format
