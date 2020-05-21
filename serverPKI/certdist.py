@@ -115,7 +115,7 @@ def consolidate_cert(cert_meta):
     return
 
 def deployCerts(cert_metas: Dict[str, Certificate],
-                cert_instances: Optional[Tuple[CertInstance]],
+                cert_instances: Optional[Tuple[CertInstance]] = None,
                 allowed_states: Tuple[CertState]=(CertState('issued'),)) -> bool:
     """
     Deploy a list of (certificates. keys and TLSA RRs, using paramiko/sftp) and dyn DNS (or zone files).

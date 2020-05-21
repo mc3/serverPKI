@@ -412,8 +412,8 @@ def update_state_of_instance(db, certinstance_id, state):
     )
     return updates
 
-
-def names_of_local_certs_to_be_renewed(db, days, distribute=False):
+# FIXME #  convert to avoid query
+def names_of_local_certs_to_be_renewed(db: db_conn, days: int, distribute=False):
 
     global ps_names_to_be_renewed
 

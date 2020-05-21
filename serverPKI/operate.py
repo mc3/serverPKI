@@ -20,11 +20,13 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 # commandline interface module
 
 import sys
+from typing import List, Dict
+
 from paramiko import util
+from postgresql import driver as db_conn
 
 from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA, export_instance
 from serverPKI.config import LE_SERVER, LE_EMAIL, Pathes
-from pathlib import Path
 
 from serverPKI.utils import options as opts
 
@@ -48,9 +50,9 @@ def execute_from_command_line():
     pydevd_pycharm.settrace('axels-imac.in.chaos1.de', port=4711, stdoutToServer=True, stderrToServer=True)
 
 
-    all_cert_names = []
-    our_cert_names = []
-    our_certs = {}
+    all_cert_names: List[str, ...] = []
+    our_cert_names: List[str, ...] = []
+    our_certs: Dict[str, Certificate] = {}
     
     
     util.log_to_file('sftp.log')
@@ -61,7 +63,7 @@ def execute_from_command_line():
     check_actions()
      
     pe = dbc('serverpki')
-    db = pe.open()
+    db: db_conn = pe.open()
     
     read_db_encryption_key(db)
 
@@ -92,7 +94,7 @@ def execute_from_command_line():
         if not opts.create:
             opts.create = not opts.distribute
     
-    cert_name_set = set(our_cert_names)
+    cert_name_set: set = set(our_cert_names)
     
     error = False
     
