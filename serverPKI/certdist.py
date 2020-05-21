@@ -269,7 +269,8 @@ def deployCerts(cert_metas: Dict[str, Certificate],
                 distribute_tlsa_rrs(cert_meta, hashes)
 
             if not host_omitted and not cert_meta.subject_type == 'CA':
-                update_state_of_instance(cert_meta.db, ci, CertState('deployed'))
+                ci.state  CertState('deployed')
+                cert_meta.save_instance(ci)
             else:
                 sln('State of cert {} not promoted to DEPLOYED, '
                     'because hosts where limited or skipped'.format(

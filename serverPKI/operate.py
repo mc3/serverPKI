@@ -34,43 +34,40 @@ from serverPKI.utils import get_name_string, options_set, check_actions
 from serverPKI.utils import names_of_local_certs_to_be_renewed, print_certs
 
 from serverPKI.utils import options_set, check_actions, updateSOAofUpdatedZones
-from serverPKI.utils import read_db_encryption_key,encrypt_all_keys,decrypt_all_keys
+from serverPKI.utils import read_db_encryption_key, encrypt_all_keys, decrypt_all_keys
 
 from serverPKI.db import DbConnection as dbc
 from serverPKI.utils import sld, sli, sln, sle
 from serverPKI.cacert import issue_local_CAcert
 from serverPKI.cert import Certificate
 from serverPKI.schedule import scheduleCerts
-            
+
 from automatoes.register import register
 
-def execute_from_command_line():
 
+def execute_from_command_line():
     import pydevd_pycharm
     pydevd_pycharm.settrace('axels-imac.in.chaos1.de', port=4711, stdoutToServer=True, stderrToServer=True)
-
 
     all_cert_names: List[str, ...] = []
     our_cert_names: List[str, ...] = []
     our_certs: Dict[str, Certificate] = {}
-    
-    
+
     util.log_to_file('sftp.log')
-    
-    
+
     sli('operateCA [{}]started with options {}'.format(
-                        get_name_string(), options_set()))
+        get_name_string(), options_set()))
     check_actions()
-     
+
     pe = dbc('serverpki')
     db: db_conn = pe.open()
-    
+
     read_db_encryption_key(db)
 
     all_cert_names = Certificate.names(db)
-    
+
     sli('{} certificates in configuration'.format(len(all_cert_names)))
-    
+
     if opts.encrypt:
         if encrypt_all_keys(db):
             sys.exit(0)
@@ -83,7 +80,6 @@ def execute_from_command_line():
         if issue_local_CAcert(db):
             sys.exit(0)
         sys.exit(1)
-            
 
     if opts.all:
         our_cert_names = all_cert_names
@@ -93,11 +89,11 @@ def execute_from_command_line():
                                                             opts.distribute)
         if not opts.create:
             opts.create = not opts.distribute
-    
+
     cert_name_set: set = set(our_cert_names)
-    
+
     error = False
-    
+
     if opts.only_cert:
         error = False
         for i in opts.only_cert:
@@ -106,7 +102,7 @@ def execute_from_command_line():
                 error = True
         if not error:
             cert_name_set = set(opts.only_cert)
-    
+
     else:
         if opts.cert_to_be_included:
             error = False
@@ -116,7 +112,7 @@ def execute_from_command_line():
                     error = True
             if not error:
                 cert_name_set = set(opts.cert_to_be_included)
-        
+
         if opts.cert_to_be_excluded:
             error = False
             for i in opts.cert_to_be_excluded:
@@ -125,25 +121,25 @@ def execute_from_command_line():
                     error = True
             if not error:
                 cert_name_set -= set(opts.cert_to_be_excluded)
-    
+
     if error:
         sle('Stopped due to command line errors')
         sys.exit(1)
-    
+
     our_cert_names = sorted(list(cert_name_set))
-    
+
     for name in our_cert_names:
         c = Certificate(db, name)
         if c: our_certs[name] = c
-    
+
     if opts.check_only and not opts.schedule:
         sli('No syntax errors found in configuration.')
         ##sli('Selected certificates:\n\r{}'.format(our_cert_names))
         print_certs(db, our_cert_names)
         sys.exit(0)
-    
+
     sld('Selected certificates:\n\r{}'.format(our_cert_names))
-    
+
     if opts.schedule:
         sli('Scheduling actions.')
         scheduleCerts(db, our_cert_names)
@@ -158,27 +154,26 @@ def execute_from_command_line():
         if opts.distribute:
             sli('Distributing certificates.')
             deployCerts(our_certs)
-    
+
     if opts.sync_disk:
         for c in our_certs.values():
             consolidate_cert(c)
-    
+
     if opts.sync_tlsas:
         for c in our_certs.values():
             consolidate_TLSA(c)
         updateSOAofUpdatedZones()
-    
+
     if opts.remove_tlsas:
         for c in our_certs.values():
             delete_TLSA(c)
         updateSOAofUpdatedZones()
-    
+
     if opts.cert_serial:
         sli('Exporting certificate instance.')
         export_instance(db)
-    
+
     if opts.register:
         sli('Registering a new Let\'s Encrypt Account.\n With URI:{}\n'
-                ' and e-mail {}'.format(LE_SERVER, LE_EMAIL))
+            ' and e-mail {}'.format(LE_SERVER, LE_EMAIL))
         register(LE_SERVER, Pathes.le_account, LE_EMAIL, None)
-    
