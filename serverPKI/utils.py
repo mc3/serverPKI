@@ -22,18 +22,29 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 
 # --------------- imported modules --------------
 from datetime import datetime, timedelta
+from typing import List, Tuple, Optional
 import optparse
-from pathlib import Path
 import subprocess
 import re
 import sys
 import syslog
-
 from prettytable import PrettyTable
 
-import dns
+from cryptography.hazmat.primitives.serialization import (
+    KeySerializationEncryption, BestAvailableEncryption)
+from cryptography.hazmat.primitives.serialization import (
+    load_pem_private_key,
+    Encoding,
+    PrivateFormat,
+    NoEncryption,
+)
+from cryptography.hazmat.backends import default_backend
 from dns import update, tsigkeyring, tsig
+from serverPKI.config import X509atts
+from pathlib import Path
+from postgresql import driver as db_conn
 
+from serverPKI.cert import Certificate
 from serverPKI.config import (Pathes, dbAccounts,
                               SSH_CLIENT_USER_NAME, SYSLOG_FACILITY)
 from serverPKI import get_version, get_schema_version
@@ -242,11 +253,10 @@ def init_syslog():
 
 # --------------- utility functions -------------
 
-def options_set():
-    """ 
-    options_set - return string of options set on command line
-    
-    @rtype:      string of option names
+def options_set() -> str:
+    """
+    return string of options set on command line
+    :return: string of option names
     """
     opts_set = ''
     for opt, value in options.__dict__.items():
@@ -267,7 +277,12 @@ def options_set():
     return opts_set
 
 
-def check_actions():
+def check_actions() -> None:
+    """
+    Check consistency of command line options.
+    May issue error message and terminate program
+    :return:
+    """
     l = []
     if options.create: l.append('create')
     if options.decrypt: l.append('decrypt-keys')
@@ -312,7 +327,12 @@ def check_actions():
             sys.exit(1)
 
 
-def shortDateTime(dt):
+def shortDateTime(dt: datetime) -> str:
+    """
+    Return a string like '2020-05-24 12:15' from a datetime object.
+    :param dt: datetime.datetime
+    :return: str
+    """
     return str('{:%Y-%m-%d %H:%M}'.format(dt))
 
 
@@ -321,12 +341,11 @@ def shortDateTime(dt):
 zone_cache = {}
 
 
-def updateZoneCache(zone):
+def updateZoneCache(zone: str) -> None:
     """
-    Remember zone, which was modified for later incrementing of serial
-    
-    @param zone:        FQDN of zone
-    @type zone:         str
+    Add zone to zone cache for later updating of SOA serial if handling DNS via zone files
+    :param zone: name of zone (fqdn of domain)
+    :return:
     """
 
     global zone_cache
@@ -334,15 +353,11 @@ def updateZoneCache(zone):
     zone_cache[zone] = 1
 
 
-def zone_and_FQDN_from_altnames(cert_meta):
+def zone_and_FQDN_from_altnames(cert_meta: Certificate) -> List[Optional[Tuple[str, str]]]:
     """
     Retrieve zone and FQDN of TLSA RRs.
-    
-    @param cert_meta:          certificate meta data
-    @type cert_meta:           serverPKI.cert.Certificate
-    @rtype:                    List of tuples (may be empty) of strings
-    @rtype                     Each tuple contains: zone, FQDN
-    @exceptions:
+    :param cert_meta: certificate meta data instance
+    :return: List of tuples, each containing 2 strings: zone name and fqdn of TLSA RR
     """
     retval = []
     alt_names = [cert_meta.name, ]
@@ -360,7 +375,7 @@ def zone_and_FQDN_from_altnames(cert_meta):
     return retval
 
 
-def updateSOAofUpdatedZones():
+def updateSOAofUpdatedZones() -> None:
     """
     Update serial field of SOA of all modified zones and reloading them.
     serial format must be yyyymmddnn.
@@ -410,8 +425,20 @@ q_certs_for_printing_insert = "INSERT INTO print_certs VALUES($1)"
 ps_names_to_be_renewed = None
 ps_certs_for_printing_insert = None
 
+q_names_to_be_renewed = """
+    SELECT S.name, I.state, I.not_before, I.not_after
+        FROM subjects S, certificates C, certinstances I
+        WHERE
+            I.state IN ('deployed', 'issued') AND
+            I.certificate = c.id AND
+            c.type = 'local' AND
+            c.disabled = FALSE AND
+            S.type != 'CA' AND
+            S.certificate = c.id AND
+            S.isaltname = FALSE;
+"""
 
-# FIXME #  convert to avoid query
+
 def names_of_local_certs_to_be_renewed(db: db_conn, days: int, distribute=False):
     global ps_names_to_be_renewed
 
@@ -447,7 +474,13 @@ def names_of_local_certs_to_be_renewed(db: db_conn, days: int, distribute=False)
     return names_to_be_deployed
 
 
-def print_certs(db, names):
+def print_certs(db: db_conn, names) -> None:
+    """
+    Print list of certificates in nice formatting
+    :param db: opened DB connection
+    :param names: Names of certificates to print
+    :return:
+    """
     global ps_certs_for_printing_insert
 
     pt = PrettyTable()
@@ -491,18 +524,6 @@ def print_certs(db, names):
 
 db_encryption_key = None
 db_encryption_in_use = None
-
-from cryptography.hazmat.primitives.serialization import (
-    KeySerializationEncryption, BestAvailableEncryption)
-from cryptography.hazmat.primitives.serialization import (
-    load_pem_private_key,
-    Encoding,
-    PrivateFormat,
-    NoEncryption,
-)
-from serverPKI.config import X509atts
-from pathlib import Path
-from cryptography.hazmat.backends import default_backend
 
 
 def read_db_encryption_key(db):
@@ -568,7 +589,7 @@ ps_update_key = None
 ps_cacert = None
 
 
-def get_revision(db):
+def get_revision(db: db_conn):
     global ps_select_revision
 
     if not ps_select_revision:
@@ -584,10 +605,9 @@ def get_revision(db):
         else:
             return result
     raise MyException('?Unable to get DB SchemaVersion. Create table revision in DB!')
-    return None
 
 
-def set_revision(db, schemaVersion, keysEncrypted):
+def set_revision(db: db_conn, schemaVersion, keysEncrypted):
     global ps_update_revision
 
     if not ps_update_revision:
@@ -599,7 +619,7 @@ def set_revision(db, schemaVersion, keysEncrypted):
     return result
 
 
-def is_cacert(db, instance_id):
+def is_cacert(db: db_conn, instance_id):
     global ps_cacert
 
     if not ps_cacert:
@@ -611,7 +631,7 @@ def is_cacert(db, instance_id):
     return False
 
 
-def encrypt_all_keys(db):
+def encrypt_all_keys(db: db_conn):
     global db_encryption_in_use, db_encryption_key
     global ps_select_all_keys, ps_update_key
 
@@ -658,7 +678,7 @@ def encrypt_all_keys(db):
     return True
 
 
-def decrypt_all_keys(db):
+def decrypt_all_keys(db: db_conn):
     global db_encryption_in_use, db_encryption_key
     global ps_select_all_keys, ps_update_key
 
@@ -710,10 +730,14 @@ def print_order(order):
 
 # ----------- dynamic DNS update setup ---------------
 
-ddns_keyring = None
+ddns_keyring: tsigkeyring = None
 
 
-def _get_ddns_keyring():
+def _get_ddns_keyring() -> tsigkeyring:
+    """
+    Read ddns key and return a key ring for dynamic DNS update
+    :return: tsigkeyring
+    """
     global ddns_keyring
     if ddns_keyring:
         return ddns_keyring
@@ -734,14 +758,11 @@ def _get_ddns_keyring():
         return ddns_keyring
 
 
-def ddns_update(zone):
+def ddns_update(zone: str) -> update.Update:
     """
     Obtain a dynamic DNS update instance
-    
-    @param zone:            zone, in which the update should take place
-    @type zones:            string
-    @rtype:                 dns.update.Update instance
-    @exceptions             
+    :param zone: name of to update
+    :return: dns.update.Update instance
     """
 
     ddns_keyring = _get_ddns_keyring()
