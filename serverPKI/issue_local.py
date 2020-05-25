@@ -35,8 +35,7 @@ from cryptography.x509.oid import NameOID
 
 # --------------- local imports --------------
 from serverPKI.config import Pathes, X509atts
-from serverPKI.cert import Certificate, CertState
-from serverPKI.certinstance import CertInstance
+from serverPKI.cert import Certificate, CertInstance, CertState
 from serverPKI.cacert import get_cacert_and_key
 from serverPKI.utils import sld, sli, sln, sle
 

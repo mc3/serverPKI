@@ -2,5 +2,5 @@
 
 from pki import operate
 
-if __name__ == "__main__":
-    operate.execute_from_command_line()
+###if __name__ == "__main__":
+operate.execute_from_command_line()

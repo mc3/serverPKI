@@ -31,8 +31,7 @@ from postgresql import driver as db_conn
 from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, PRE_PUBLISH_TIMEDELTA
 from serverPKI.config import LOCAL_ISSUE_MAIL_TIMEDELTA
 from serverPKI.config import MAIL_RELAY, MAIL_SENDER, MAIL_RECIPIENT
-from serverPKI.cert import Certificate, CertState, CertType
-from serverPKI.certinstance import CertInstance
+from serverPKI.cert import Certificate, CertInstance, CertState, CertType
 from serverPKI.certdist import deployCerts, distribute_tlsa_rrs
 from serverPKI.issue_LE import issue_LE_cert
 from serverPKI.utils import sld, sli, sln, sle
@@ -153,7 +152,7 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
 
         if not surviving:
             ci = issue(cm)
-            if ci: distribute(cm, ci, 'issued')
+            if ci: distribute(cm, ci, CertState('issued'))
             continue
 
         for ci in surviving:

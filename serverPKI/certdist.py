@@ -37,14 +37,13 @@ from dns import query as dns_query
 from paramiko import SSHClient, HostKeys, AutoAddPolicy
 from postgresql import driver as db_conn
 
-from serverPKI.cert import Certificate, EncAlgoCKS, CertState, CertType, PlaceCertFileType, SubjectType
-from serverPKI.certinstance import CertInstance
+from serverPKI.cert import Certificate, CertInstance, EncAlgoCKS, CertState, CertType, PlaceCertFileType, SubjectType
 from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, LE_ZONE_UPDATE_METHOD
 from serverPKI.utils import options as opts
 from serverPKI.utils import sld, sli, sln, sle
 from serverPKI.utils import updateZoneCache, zone_and_FQDN_from_altnames
-from serverPKI.utils import updateSOAofUpdatedZones
-from serverPKI.utils import update_state_of_instance, ddns_update
+from serverPKI.utils import updateSOAofUpdatedZones, ddns_update
+
 
 class MyException(Exception):
     pass
@@ -269,7 +268,7 @@ def deployCerts(cert_metas: Dict[str, Certificate],
                 distribute_tlsa_rrs(cert_meta, hashes)
 
             if not host_omitted and not cert_meta.subject_type == 'CA':
-                ci.state  CertState('deployed')
+                ci.state = CertState('deployed')
                 cert_meta.save_instance(ci)
             else:
                 sln('State of cert {} not promoted to DEPLOYED, '

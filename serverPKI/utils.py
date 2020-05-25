@@ -338,7 +338,7 @@ def shortDateTime(dt: datetime) -> str:
 
 # -------------------------  DNS server functions (now mostly obsoleted by ddns) ----------------------------
 
-zone_cache = {}
+zone_cache: dict = {}
 
 
 def updateZoneCache(zone: str) -> None:

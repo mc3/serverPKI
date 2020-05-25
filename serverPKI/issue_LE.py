@@ -36,7 +36,6 @@ import time
 
 from dns import rdatatype
 from dns import query as dns_query
-from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.backends import default_backend
 from cryptography import x509
@@ -62,13 +61,12 @@ from automatoes import errors as manuale_errors
 
 # --------------- local imports --------------
 from serverPKI.cacert import create_CAcert_meta
-from serverPKI.cert import Certificate, EncAlgo, EncAlgoCKS, CertType, CertState
-from serverPKI.certinstance import CertInstance, CertKeyStore
+from serverPKI.cert import Certificate, CertInstance, CertKeyStore, EncAlgo, EncAlgoCKS, CertType, CertState
 from serverPKI.config import (Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA,
                               LE_ZONE_UPDATE_METHOD)
-from serverPKI.utils import sld, sli, sln, sle, options, update_certinstance
+from serverPKI.utils import sld, sli, sln, sle, options
 from serverPKI.utils import zone_and_FQDN_from_altnames, updateSOAofUpdatedZones
-from serverPKI.utils import updateZoneCache, encrypt_key, print_order, ddns_update
+from serverPKI.utils import updateZoneCache, print_order, ddns_update
 
 
 # --------------- manuale logging ----------------

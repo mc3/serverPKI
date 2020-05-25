@@ -25,21 +25,20 @@ from typing import List, Dict
 from paramiko import util
 from postgresql import driver as db_conn
 
-from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA, export_instance
-from serverPKI.config import LE_SERVER, LE_EMAIL, Pathes
-
-from serverPKI.utils import options as opts
-
-from serverPKI.utils import get_name_string, options_set, check_actions
-from serverPKI.utils import names_of_local_certs_to_be_renewed, print_certs
-
-from serverPKI.utils import options_set, check_actions, updateSOAofUpdatedZones
-from serverPKI.utils import read_db_encryption_key, encrypt_all_keys, decrypt_all_keys
-
-from serverPKI.db import DbConnection as dbc
-from serverPKI.utils import sld, sli, sln, sle
 from serverPKI.cacert import issue_local_CAcert
 from serverPKI.cert import Certificate
+from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA, export_instance
+from serverPKI.config import LE_SERVER, LE_EMAIL, Pathes
+from serverPKI.db import DbConnection as dbc
+from serverPKI.issue_LE import issue_LE_cert
+from serverPKI.issue_local import issue_local_cert
+
+from serverPKI.utils import options as opts
+from serverPKI.utils import get_name_string, options_set, check_actions
+from serverPKI.utils import names_of_local_certs_to_be_renewed, print_certs
+from serverPKI.utils import options_set, check_actions, updateSOAofUpdatedZones
+from serverPKI.utils import read_db_encryption_key, encrypt_all_keys, decrypt_all_keys
+from serverPKI.utils import sld, sli, sln, sle
 from serverPKI.schedule import scheduleCerts
 
 from automatoes.register import register
@@ -177,3 +176,31 @@ def execute_from_command_line():
         sli('Registering a new Let\'s Encrypt Account.\n With URI:{}\n'
             ' and e-mail {}'.format(LE_SERVER, LE_EMAIL))
         register(LE_SERVER, Pathes.le_account, LE_EMAIL, None)
+
+
+def issue(db: db_conn, cert_meta: Certificate) -> bool:
+    """
+    Issue a new certificate
+    :param db: opened database connection
+    :param cert_meta: cert meta data instance describing attributes of new certs
+    :return: True if success, False otherwise
+    :exceptions: May raise assertion error on corrupt DB contents
+    """
+    """
+    Issue a new certificate instance and store it
+    in the DB table certinstances.
+
+    @rtype:             bool, true if success
+    @exceptions:        AssertionError
+    """
+    with db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
+        if cert_meta.cert_type == CertType('LE'):
+            result = issue_LE_cert(cert_meta)
+        elif cert_meta.cert_type == CertType('local'):
+            result = issue_local_cert(cert_meta)
+        else:
+            raise AssertionError
+    if result:
+        return True
+    return False
+

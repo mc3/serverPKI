@@ -24,7 +24,6 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 
 # --------------- imported modules --------------
 
-import binascii
 import datetime
 import getpass
 from typing import Optional, Tuple
@@ -43,8 +42,7 @@ from cryptography.hazmat.primitives import hashes
 from postgresql import driver as db_conn
 
 # --------------- local imports --------------
-from serverPKI.cert import Certificate, EncAlgoCKS
-from serverPKI.certinstance import CertInstance, CertKeyStore
+from serverPKI.cert import Certificate, CertInstance, CertType, EncAlgoCKS
 from serverPKI.config import Pathes, X509atts, LE_SERVER, SUBJECT_LOCAL_CA
 from serverPKI.config import LOCAL_CA_BITS, LOCAL_CA_LIFETIME
 from serverPKI.utils import sld, sli, sln, sle
@@ -52,13 +50,12 @@ from serverPKI.utils import sld, sli, sln, sle
 # ----------------- globals --------------------
 
 # most recent local CA cert and key, used for issuence of new server/client certs
-local_cacert: x509.Certificate = None
-local_cakey: rsa.RSAPrivateKeyWithSerialization = None
-local_cacert_instance: CertInstance = None
+local_cacert: Optional[x509.Certificate] = None
+local_cakey: Optional[rsa.RSAPrivateKeyWithSerialization] = None
+local_cacert_instance: Optional[CertInstance] = None
 
 
 # --------------- classes --------------
-
 
 class DBStoreException(Exception):
     pass
@@ -99,7 +96,7 @@ def get_cacert_and_key(db: db_conn) -> Tuple[x509.Certificate, rsa.RSAPrivateKey
     global local_cacert, local_cakey, local_cacert_instance
 
     if local_cacert and local_cakey and local_cacert_instance:
-        return tuple(local_cacert, local_cakey, local_cacert_instance)
+        return (local_cacert, local_cakey, local_cacert_instance)
 
     cm = Certificate(db, name=SUBJECT_LOCAL_CA)
     ci = cksd = cks = None
