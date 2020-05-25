@@ -44,7 +44,6 @@ from serverPKI.config import X509atts
 from pathlib import Path
 from postgresql import driver as db_conn
 
-from serverPKI.cert import Certificate
 from serverPKI.config import (Pathes, dbAccounts,
                               SSH_CLIENT_USER_NAME, SYSLOG_FACILITY)
 from serverPKI import get_version, get_schema_version
@@ -351,28 +350,6 @@ def updateZoneCache(zone: str) -> None:
     global zone_cache
 
     zone_cache[zone] = 1
-
-
-def zone_and_FQDN_from_altnames(cert_meta: Certificate) -> List[Optional[Tuple[str, str]]]:
-    """
-    Retrieve zone and FQDN of TLSA RRs.
-    :param cert_meta: certificate meta data instance
-    :return: List of tuples, each containing 2 strings: zone name and fqdn of TLSA RR
-    """
-    retval = []
-    alt_names = [cert_meta.name, ]
-    if len(cert_meta.altnames) > 0:
-        alt_names.extend(cert_meta.altnames)
-
-    for fqdn in alt_names:
-        fqdn_tags = fqdn.split(sep='.')
-        for i in range(1, len(fqdn_tags) + 1):
-            zone = '.'.join(fqdn_tags[-i::])
-            if (Pathes.zone_file_root / zone).exists():
-                sld('{}'.format(str(Pathes.zone_file_root / zone)))
-                retval.append((zone, fqdn))
-                break
-    return retval
 
 
 def updateSOAofUpdatedZones() -> None:

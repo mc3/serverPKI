@@ -41,7 +41,6 @@ from serverPKI.cert import Certificate, CertInstance, EncAlgoCKS, CertState, Cer
 from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, LE_ZONE_UPDATE_METHOD
 from serverPKI.utils import options as opts
 from serverPKI.utils import sld, sli, sln, sle
-from serverPKI.utils import updateZoneCache, zone_and_FQDN_from_altnames
 from serverPKI.utils import updateSOAofUpdatedZones, ddns_update
 
 
@@ -507,7 +506,7 @@ def delete_TLSA(cert_meta: Certificate) -> None:
         
         if LE_ZONE_UPDATE_METHOD == 'zone_file':
 
-            for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta): 
+            for (zone, fqdn) in cert_meta.zone_and_FQDN_from_altnames():
                 filename = fqdn + '.tlsa'
                 dest = str(Pathes.zone_file_root / zone / filename)
     
@@ -519,7 +518,7 @@ def delete_TLSA(cert_meta: Certificate) -> None:
         elif LE_ZONE_UPDATE_METHOD == 'ddns':
 
             zones = {}
-            for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta):
+            for (zone, fqdn) in cert_meta.zone_and_FQDN_from_altnames():
                 if zone in zones:
                     if fqdn not in zones[zone]: zones[zone].append(fqdn)
                 else:

@@ -65,7 +65,7 @@ from serverPKI.cert import Certificate, CertInstance, CertKeyStore, EncAlgo, Enc
 from serverPKI.config import (Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA,
                               LE_ZONE_UPDATE_METHOD)
 from serverPKI.utils import sld, sli, sln, sle, options
-from serverPKI.utils import zone_and_FQDN_from_altnames, updateSOAofUpdatedZones
+from serverPKI.utils import updateSOAofUpdatedZones
 from serverPKI.utils import updateZoneCache, print_order, ddns_update
 
 
