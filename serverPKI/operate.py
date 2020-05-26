@@ -26,9 +26,9 @@ from paramiko import util
 from postgresql import driver as db_conn
 
 from serverPKI.cacert import issue_local_CAcert
-from serverPKI.cert import Certificate
+from serverPKI.cert import Certificate, CertType
 from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA, export_instance
-from serverPKI.config import LE_SERVER, LE_EMAIL, Pathes
+from serverPKI.config import LE_SERVER, LE_EMAIL, Pathes, SUBJECT_LOCAL_CA, SUBJECT_LE_CA
 from serverPKI.db import DbConnection as dbc
 from serverPKI.issue_LE import issue_LE_cert
 from serverPKI.issue_local import issue_local_cert
@@ -62,6 +62,8 @@ def execute_from_command_line():
     db: db_conn = pe.open()
 
     read_db_encryption_key(db)
+
+    preload_ca_cert_metas(db)
 
     all_cert_names = Certificate.names(db)
 
@@ -146,10 +148,17 @@ def execute_from_command_line():
         if opts.create:
             sli('Creating certificates.')
             for c in our_certs.values():
-                if c.issue():
-                    continue
+                if c.cert_type == CertType('LE'):
+                    if issue_LE_cert(c):
+                        continue
+                elif  c.cert_type == CertType('local'):
+                    if issue_local_cert(c):
+                        continue
+                else:
+                    raise AssertionError('Invalid CertType in {}'.format(c.name))
                 sle('Stopped due to error')
                 sys.exit(1)
+
         if opts.distribute:
             sli('Distributing certificates.')
             deployCerts(our_certs)
@@ -177,6 +186,18 @@ def execute_from_command_line():
             ' and e-mail {}'.format(LE_SERVER, LE_EMAIL))
         register(LE_SERVER, Pathes.le_account, LE_EMAIL, None)
 
+
+def preload_ca_cert_metas(db: db_conn) -> None:
+    """
+    Preload (or create, if required) the CA cert meta data instances,
+    to have their CIs handy for referencing them from other CIs
+    :param db: Opened DB connection
+    :return:
+    """
+    # make sure cert meta of CAs are loaded (for referencing them from CI).
+    for ca_name in (SUBJECT_LOCAL_CA, SUBJECT_LE_CA):
+        if not Certificate.ca_cert_meta(db, ca_name):
+            sys.exit(1)
 
 def issue(db: db_conn, cert_meta: Certificate) -> bool:
     """

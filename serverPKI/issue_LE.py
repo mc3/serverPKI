@@ -262,7 +262,7 @@ def _get_intermediate_instance(db: db_conn, int_cert: x509.Certificate) -> CertI
 
     # intermediate is not in DB - insert it
     # obtain our cert meta
-    cm = create_CAcert_meta(db=db, cert_type=CertType('LE'), name=SUBJECT_LE_CA)
+    cm = create_CAcert_meta(db=db, name=SUBJECT_LE_CA)
     ci = cm.create_instance(state=CertState('issued'),
                             not_before=int_cert.not_valid_before,
                             not_after=int_cert.not_valid_after)

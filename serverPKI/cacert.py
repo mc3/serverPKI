@@ -35,14 +35,14 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography import x509
-from cryptography.x509 import Certificate
-from cryptography.x509.oid import NameOID
+##from cryptography.x509 import Certificate
+##from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
 
 from postgresql import driver as db_conn
 
 # --------------- local imports --------------
-from serverPKI.cert import Certificate, CertInstance, CertType, EncAlgoCKS
+from serverPKI.cert import Certificate, CM, CertInstance, CertType, EncAlgoCKS
 from serverPKI.config import Pathes, X509atts, LE_SERVER, SUBJECT_LOCAL_CA
 from serverPKI.config import LOCAL_CA_BITS, LOCAL_CA_LIFETIME
 from serverPKI.utils import sld, sli, sln, sle
@@ -98,20 +98,20 @@ def get_cacert_and_key(db: db_conn) -> Tuple[x509.Certificate, rsa.RSAPrivateKey
     if local_cacert and local_cakey and local_cacert_instance:
         return (local_cacert, local_cakey, local_cacert_instance)
 
-    cm = Certificate(db, name=SUBJECT_LOCAL_CA)
+    cm = CM(db, name=SUBJECT_LOCAL_CA)
     ci = cksd = cks = None
     if cm:
         ci = cm.most_recent_active_instance
     cks = None
     if ci:  # we have a active CA cert in db
-        cksd = ci.the_cert_key_store
+        cksd = ci.cksd
     if cksd:
         cks = cksd[EncAlgoCKS('rsa')]  # multiple algo certs not supprted as CA cert
     if not cks:
         sln('Missed cacert in db, where it should be: {} ci.rowid ={}, cks.row_is={}'.format(
             ci.cm.name, ci.row_id, cks.row_id))
     if cks:
-        cacert_pem = cks.cert
+        cacert_pem = cks.cert_for_ca
         cakey_pem = cks.key_for_ca
         algo = cks.algo
         ##sld('cert:\d{}\nkey:\n{}'.format(cacert_pem.decode('utf-8'), cakey_pem.decode('utf-8')))
@@ -124,7 +124,7 @@ def get_cacert_and_key(db: db_conn) -> Tuple[x509.Certificate, rsa.RSAPrivateKey
             sle('Can''t create certificates without passphrase')
             exit(1)
         local_cacert, local_cakey, local_cacert_instance = cacert, cakey, ci
-        return tuple(cacert, cakey, ci)
+        return (cacert, cakey, ci)
     else:  # no usable CA cert in DB
         sli('No usable local CA cert in DB')
         sld('Missing or multiple cert key store in CertInstance of local CA')
@@ -163,7 +163,7 @@ def create_local_ca_cert(db: db_conn,
     global local_cacert, local_cakey, local_cacert_instance
 
     # create rows for cacert meta (in certificates and subjects)
-    cm = create_CAcert_meta(db, 'local', SUBJECT_LOCAL_CA)
+    cm = create_CAcert_meta(db, SUBJECT_LOCAL_CA)
     ci = cm.most_recent_active_instance()
     if not ci:  # no ca cert in db
         sli('Local CA cert not in DB or has expired, creating a new one')
@@ -206,10 +206,10 @@ def create_local_ca_cert(db: db_conn,
             serial = randbits(32)
             name_dict = X509atts.names
             subject = issuer = x509.Name([
-                x509.NameAttribute(NameOID.COUNTRY_NAME, name_dict['C']),
-                x509.NameAttribute(NameOID.LOCALITY_NAME, name_dict['L']),
-                x509.NameAttribute(NameOID.ORGANIZATION_NAME, name_dict['O']),
-                x509.NameAttribute(NameOID.COMMON_NAME, name_dict['CN']),
+                x509.NameAttribute(x509.OID.NameOID.COUNTRY_NAME, name_dict['C']),
+                x509.NameAttribute(x509.NameOID.LOCALITY_NAME, name_dict['L']),
+                x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, name_dict['O']),
+                x509.NameAttribute(x509.NameOID.COMMON_NAME, name_dict['CN']),
             ])
 
             not_after = datetime.datetime.utcnow() + datetime.timedelta(
@@ -310,7 +310,7 @@ def _load_cakey(cakey_pem: bytes) -> Optional[rsa.RSAPrivateKey]:
 
 # --------------- function --------------
 
-def create_CAcert_meta(db: db_conn, cert_type: CertType, name: str) -> Certificate:
+def create_CAcert_meta(db: db_conn, name: str) -> Certificate:
     """
     Lookup or create a CA cert meta in rows ceetificates and subjects
     :param db:          pened database connection in read/write transaction
@@ -319,8 +319,8 @@ def create_CAcert_meta(db: db_conn, cert_type: CertType, name: str) -> Certifica
     :return:            cert meta
     """
     if name not in (SUBJECT_LOCAL_CA, SUBJECT_LE_CA):
-        AssertionError('create_CAcert_meta: argument name "{} invalid"'.format(name))
-    cm = Certificate.ca_cert_meta(db, cert_type, name)
+        raise AssertionError('create_CAcert_meta: argument name "{} invalid"'.format(name))
+    cm = Certificate.ca_cert_meta(db, name)
     if not cm:
         sle('Failed to create CA cert meta for {}'.format(name))
         sys.exit(1)

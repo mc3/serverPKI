@@ -55,7 +55,7 @@ def export_instance(db: db_conn) -> bool:
     :return: True on success
     """
 
-    name = Certificate._fqdn_from_serial(db, opts.cert_serial)
+    name = Certificate.fqdn_from_instance_serial(db, opts.cert_serial)
     cert_meta = Certificate(db, name)
     for ci in cert_meta.cert_instances:
         if ci.row_id == opts.cert_serial:

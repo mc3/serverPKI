@@ -52,7 +52,8 @@ def issue_local_cert(cert_meta: Certificate) -> Optional[CertInstance]:
     into Subjects, Certificates and CertInstances for local CA cert.
     Additional Certinstances may also be inserted if the local CA cert
     changes.
-    
+    FIXME: Currently only supports rsa keys
+
     :param cert_meta:   Cert meta instance to issue an certificate for
     :rtype:             cert instance id in DB of new cert or None
     """
@@ -167,7 +168,7 @@ def issue_local_cert(cert_meta: Certificate) -> Optional[CertInstance]:
                                    not_after=not_valid_after,
                                    ca_cert_ci=cacert_ci
                                    )
-    ci.store_cert_key(cert=cert, key=key)
+    ci.store_cert_key(algo=cert_meta.encryption_algo, cert=cert, key=key)
     cert_meta.save_instance(ci)
 
     sli('Certificate for {} {}, serial {}, valid until {} created.'.format(

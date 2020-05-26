@@ -45,7 +45,7 @@ from postgresql import driver as db_conn
 # --------------- local imports --------------
 from serverPKI.config import Pathes, X509atts, LE_SERVER
 from serverPKI.db import DBStoreException
-from serverPKI.utils import sld, sli, sln, sle, options
+from serverPKI.utils import sld, sli, sln, sle, options, db_encryption_key, db_encryption_in_use
 
 # ---------------  prepared SQL queries for class Certificate  --------------
 
@@ -148,7 +148,7 @@ class EncAlgoCKS(str):
 
 class SubjectType(str):
     def __new__(cls, content):
-        assert content in ('client', 'server')
+        assert content in ('CA', 'client', 'server')
         return str.__new__(cls, content)
 
 
@@ -172,35 +172,27 @@ class PlaceCertFileType(str):
 
 # --------------- public class Certificate --------------
 
-class Certificate(type):
+_all_CMs = {}
+
+def CM(db: db_conn, name: str) -> 'Certificate':
+    """
+    Obtain a Certificate (cert meta) instance
+    :param db: opened DB connection
+    :param name: cert name
+    :return:
+    """
+    if name in _all_CMs:
+        return _all_CMs[name]
+    return Certificate(db, name)
+
+class Certificate(object):
     """
     Certificate meta data class.
     In-memory representation of DB backed meta information.
     """
 
-    def __new__(cls, db: db_conn, name: str, serial: int):
-        """
-            Ensure that we create only one instance per row in certificates
-            From https://stackoverflow.com/questions/50883923/how-to-make-a-class-which-disallows-duplicate-instances-returning-an-existing-i
-        """
-
-        def _get_name(cls, db: db_conn, name: str, serial: int):
-            if serial:
-                return Certificate._fqdn_from_serial(db, serial)
-            return name
-
-        def __call__(cls, *args, **kwargs):
-            the_name = cls._get_name(*args, **kwargs)
-            if not hasattr(cls, '_cert_metas'):
-                cls._cert_metas = {}
-            if the_name in cls._cert_metas:
-                return cls._cert_metas[the_name]  # return existing instance
-            inst = super().__call__(*args, **kwargs)
-            cls._cert_metas[the_name] = inst
-            return inst  # return new instance
-
     @staticmethod
-    def _fqdn_from_serial(db: db_conn, serial: int):
+    def fqdn_from_instance_serial(db: db_conn, serial: int):
         """
         Obtain cert subject name from instance serial
 
@@ -223,33 +215,38 @@ class Certificate(type):
         sys.exit(1)
 
     @staticmethod
-    def ca_cert_meta(db: db_conn, cert_type: CertType, name: str) -> Optional['Certificate']:
+    def ca_cert_meta(db: db_conn, name: str, cert_type: Optional[CertType]=None) -> Optional['Certificate']:
         """
-        Return cert instance by subject name, inserting rows in certificates, subjects and certinstances if required
+        Return cert meta instance by subject name,
+        inserting rows in certificates, subjects and certinstances if necessary
         :param db:          opened database connection
-        :param cert_type:   Cert_type
         :param name:        subject name of certificate
+        :param cert_type:   Optional CertType. Must be set, if New CA cert to be created in case none exists in DB
         :return:            Certificate instance
         """
 
         global ps_insert_cacert, ps_insert_cacert_subject
 
-        cm = Certificate(db, name, serial=None)
-        if cm.row_id and cm.cert_type == cert_type:  # do we have a row in db and matches our CertType?
+        cm = Certificate(db, name)
+        if cm.row_id:                             # do we have a row in db?
             return cm  # yes, return existing meta instance
+        if not cert_type:
+            return
+        sln('Inserting CA cert meta {}, cert type {} into DB'.format(name, cert_type))
         if not ps_insert_cacert:
             ps_insert_cacert = db.prepare(q_insert_cacert)
-        certificates_row_id = ps_insert_cacert(cert_type)
+        (certificates_row_id,) = ps_insert_cacert.first(cert_type)
         if not certificates_row_id:
-            AssertionError('CA_cert_meta: ps_insert_cacert failed')
+            raise AssertionError('CA_cert_meta: ps_insert_cacert failed')
         if not ps_insert_cacert_subject:
             ps_insert_cacert_subject = db.prepare(q_insert_cacert_subject)
-        subjects_row_id = ps_insert_cacert_subject('CA', name, certificates_row_id)
+        (subjects_row_id,) = ps_insert_cacert_subject.first('CA', name, certificates_row_id)
         if not subjects_row_id:
-            AssertionError('CA_cert_meta: ps_insert_cacert_subject failed')
-        cm = Certificate(db, name, serial=None)
+            raise AssertionError('CA_cert_meta: ps_insert_cacert_subject failed')
+        cm = Certificate(db, name)
         if cm.row_id and cm.cert_type == cert_type:
             return cm
+        sle('Inserting of CA cert meta {} into DB failed'.format(name))
 
     @staticmethod
     def names(db: db_conn) -> [list]:
@@ -267,7 +264,12 @@ class Certificate(type):
             names.append(name)
         return names
 
-    def __init__(self, db: db_conn, name: str, serial: Optional[int]):
+    def __del__(self):
+        global _all_CMs
+        if self.name in _all_CMs:
+            del _all_CMs[self.name]
+
+    def __init__(self, db: db_conn, name: str):
         """
         Create or load a certificate meta instance.
         :param db: opened database connection
@@ -275,10 +277,14 @@ class Certificate(type):
         :param serial: row_id of instance, whose cert meta we are creating  # FIXME # ???
         """
 
-        global ps_all_cert_meta, ps_instances
+        global ps_all_cert_meta, ps_instances, _all_CMs
+
+        if name in _all_CMs:
+            raise AssertionError('Attempt to instantiate Certificate instance {} twice'.format(name))
 
         self.db = db
         self.name = name
+        _all_CMs[name] = self
 
         self.altnames = []
         self.tlsaprefixes = {}
@@ -375,11 +381,11 @@ class Certificate(type):
 
     def create_instance(self,
                         state: Optional[CertState],
-                        ocsp_ms: Optional[bool],
                         not_before: datetime.datetime,
                         not_after: datetime.datetime,
                         ca_cert_ci: 'CertInstance',
-                        cert_key_stores: Optional[dict]
+                        ocsp_ms: Optional[bool] = True,
+                        cert_key_stores: Optional[dict]={}
                         ):
         the_state = CertState(state) if state else CertState('reserved')
         the_ocsp_ms = ocsp_ms if ocsp_ms else self.ocsp_must_staple
@@ -447,6 +453,17 @@ class Certificate(type):
                 ret_dict[ci.state] = ci
 
         return ret_dict
+
+    def instance_from_row_id(self, row_id: int) -> Optional['CertInstance']:
+        """
+        Obtain the instance by DB row_id
+        :param row_id:
+        :return: the CertInstance of an issued certificate
+        :exception: raises AssertionError if CI not found
+        """
+        for ci in (self.cert_instances):
+            if ci.row_id == row_id:
+                return ci
 
     def zone_and_FQDN_from_altnames(self) -> List[Optional[Tuple[str, str]]]:
         """
@@ -529,7 +546,7 @@ class Certificate(type):
         if not ps_update_authorized_until:
             ps_update_authorized_until = self.db.prepare(q_update_authorized_until)
 
-        (updates) = ps_update_authorized_until.first(
+        updates = ps_update_authorized_until.first(
             self.row_id,
             until
         )
@@ -586,13 +603,13 @@ class Place(object):
 # ---------------  prepared SQL queries for class CertInstance  --------------
 
 q_load_instance = """
-    SELECT ci.id, ci.certificate AS cm_id, ci.state, ci.ocsp_must_staple, ci.not_before, ci.not_after,
-                    ca.cert AS ca_cert_ci, d.id AS ckd_id, d.encryption_algo, d.cert, d.key, d.hash
-        FROM CertInstances ci, CertInstances ca, CertKeyData d
-        WHERE
-            ci.id = $1::INT AND
-            ci.CAcert = ca.id AND
-            d.certinstance = $1::INT
+    SELECT ci.id, ci.certificate AS cm_id, ci.state::TEXT, ci.ocsp_must_staple, ci.not_before, ci.not_after,
+                        ci.CAcert AS ca_cert_ci_id, d.id AS ckd_id, d.encryption_algo::TEXT, d.cert, d.key, d.hash
+            FROM CertInstances ci
+            LEFT JOIN CertInstances ca ON ci.CAcert = ca.id
+            LEFT JOIN CertKeyData d    ON d.certinstance = ci.id
+            WHERE
+                ci.id = $1::INT;
 """
 
 q_delete_instance = """
@@ -645,7 +662,7 @@ class CertInstance(object):
         global ps_load_instance
 
         if not cert_meta:
-            AssertionError('CertInstance: Argument cert_meta missing')
+            raise AssertionError('CertInstance: Argument cert_meta missing')
         self.cm = cert_meta
         if not ps_load_instance:
             ps_load_instance = self.cm.db.prepare(q_load_instance)
@@ -660,7 +677,7 @@ class CertInstance(object):
             self.row_id = row_id
             rows = ps_load_instance(self.row_id)
             if not rows:
-                AssertionError('CertInstance: row_id {} does not exist'.format(self.row_id))
+                raise AssertionError('CertInstance: row_id {} does not exist'.format(self.row_id))
 
             self.cksd = {}
             first = True
@@ -670,20 +687,23 @@ class CertInstance(object):
                     self.ocsp_ms = row['ocsp_must_staple']
                     self.not_before = row['not_before']
                     self.not_after = row['not_after']
-                    self.ca_cert_ci = CertInstance(cert_meta, row_id=row[
-                        'ca_cert'])  # #FIXME# # CertInstance() during __init__() ???
+                    ca_cert_fqdn = Certificate.fqdn_from_instance_serial(cert_meta.db, row['ca_cert_ci_id'])
+                    ca_cert_meta = CM(cert_meta.db, ca_cert_fqdn)
+                    self.ca_cert_ci = ca_cert_meta.instance_from_row_id(row['ca_cert_ci_id'])
                     sld('Loading CertInstance row_id={}, state={}, ocsp_ms={}, not_before={}, not_after={}'
                         .format(self.row_id, self.state, self.ocsp_ms,
                                 self.not_before.isoformat(), self.not_after.isoformat()))
                     first = False
+                if not row['ckd_id']:
+                    break                                       # we have no certkeydata
                 cks = CertKeyStore(row_id=row['ckd_id'],
-                                   cert_instance=self,
-                                   algo=EncAlgoCKS(row['encryption_algo']),
-                                   cert=row['cert'],
-                                   key=row['key'],
-                                   hash=row['hash'])
+                               cert_instance=self,
+                               algo=EncAlgoCKS(row['encryption_algo']),
+                               cert=row['cert'],
+                               key=row['key'],
+                               hash=row['hash'])
                 self.cksd[EncAlgoCKS(row['encryption_algo'])] = cks
-                sld('Algo and Hash of loaded CertKeyStore are {} {}'.format(row['algo'], row['hash']))
+                sld('Loaded CertKeyStore with row_id={}, Algo={}, Hash={}'.format(row['id'], row['encryption_algo'], row['hash']))
 
         else:
             self.row_id = None
@@ -723,12 +743,21 @@ class CertInstance(object):
 
         if not ps_store_instance:
             ps_store_instance = self.cm.db.prepare(q_store_instance)
-        self.row_id = ps_store_instance(self.cm.row_id,
+        sld ('CertInstance._save(): row_id={}, state={}, ocsp_ms={}, not_before={}, not_after={}, ca_cert_ci.row_i={}'.format(
+            self.cm.row_id,
+            self.state,
+            self.ocsp_ms,
+            self.not_before,
+            self.not_after,
+            self.ca_cert_ci.row_id
+        ))
+        self.row_id = ps_store_instance.first(self.cm.row_id,
                                         self.state,
                                         self.ocsp_ms,
                                         self.not_before,
                                         self.not_after,
                                         self.ca_cert_ci.row_id)
+        sld('CertInstance._save(): Returned row_id={}'.format(self.row_id))
 
     def store_cert_key(self,
                        algo: EncAlgoCKS,
@@ -750,6 +779,9 @@ class CertInstance(object):
         if not self.not_after:
             self.not_after = cert.not_valid_after
 
+        if not self.row_id:                                 # CertKeyStore need our row_id
+            self._save()
+
         cks = CertKeyStore(
             row_id=None,
             cert_instance=self,
@@ -765,8 +797,8 @@ class CertInstance(object):
         Return True is this CertKeyStore's certificate is valid today
         :return: bool
         """
-        if (self.not_before < datetime.datetime.now(datetime.timezone.utc) and
-                self.not_after > datetime.datetime.now(datetime.timezone.utc)):
+        if (self.not_before < datetime.datetime.now() and
+                self.not_after > datetime.datetime.now()):
             return True
         else:
             return False
@@ -786,7 +818,7 @@ class CertInstance(object):
 q_store_certkeydata = """
     INSERT INTO CertKeyData
             (certinstance, encryption_algo, cert, key, hash, created)
-        VALUES ($1::INTEGER, $2, $3, $4, $5, datetime.datetime.now(datetime.timezone.utc))
+        VALUES ($1::INTEGER, $2, $3, $4, $5, now())
         RETURNING id::int
 """
 q_update_certkeydata = """
@@ -822,11 +854,16 @@ class CertKeyStore(object):
     _cert_key_stores = {}  # ensures that we have only one cert key store per hash
 
     @staticmethod
-    def hash_from_cert(cert: x509.Certificate) -> str:
+    def hash_from_cert(cert: Union[x509.Certificate, bytes]) -> str:
         """
         return TLSA suitable hash from cryptography.x509.Certificate instance
+        :cert:  certificate to compute hash from
         :return: the hash as str
         """
+        if isinstance(cert, bytes):
+            cert = x509.load_pem_x509_certificate(cert, default_backend())
+        elif not isinstance(cert, x509.Certificate):
+            raise AssertionError('CertKeyStore.hash_from_cert called with unexpected cert object type')
         return binascii.hexlify(
             cert.fingerprint(SHA256())).decode('ascii').upper()
 
@@ -883,14 +920,15 @@ class CertKeyStore(object):
         global ps_store_certkeydata
 
         if not cert_instance:
-            AssertionError('CertKeyStore: Argument cert_instance missing')
+            raise AssertionError('CertKeyStore: Argument cert_instance missing')
         hash = CertKeyStore.hash_from_cert(cert)
         if hash in CertKeyStore._cert_key_stores:
-            AssertionError('Attempt to create duplicate CertKeyStore for meta {}'.
+            raise AssertionError('Attempt to create duplicate CertKeyStore for meta {}'.
                            format(CertKeyStore._cert_key_stores[hash].ci.cm.name))
         self.ci = cert_instance
-        self.algo = EncAlgoCKS(algo)
+        self.algo = EncAlgoCKS(algo) if algo else EncAlgoCKS('rsa')
         self.row_id = row_id
+        sld('CertKeyStore.__init__: cm.name={}, algo={}, row_id={}'.format(cert_instance.cm.name, algo, row_id))
         if self.row_id:  # cert and key come from DB
             self._key = key  # self._key holds (encrypted) binary PEM format (=DB storage format)
             self._cert = cert  # self-_cert holds binary PEM format (=DB storage format)
@@ -911,7 +949,7 @@ class CertKeyStore(object):
     def __del__(self):
         if self.hash in CertKeyStore._cert_key_stores:
             del CertKeyStore._cert_key_stores[hash]
-        if self.algo in self.ci.cksd[self.algo]:
+        if self.algo in self.ci.cksd:
             del self.ci.cksd[self.algo]
 
     @property
@@ -942,6 +980,14 @@ class CertKeyStore(object):
         """
         return self._cert.decode('ascii')
 
+    @property
+    def cert_for_ca(self) -> bytes:
+        """
+        Return the seralized cert as bytes
+        :return:
+        """
+        return self._cert
+
     def _save(self) -> None:
         """
         Save this CertKeyStore instance in DB backend
@@ -950,15 +996,17 @@ class CertKeyStore(object):
         """
         global ps_store_certkeydata, ps_update_certkeydata
 
+        sld('CertKeyStore._save(): cm.name={}, row_id={}, ci.row_id={}, algo={}, hash={}'.format(
+            self.ci.cm.name, self.row_id, self.ci.row_id, self.algo, self.hash))
         if self.row_id:
             if not ps_update_certkeydata:
                 ps_update_certkeydata = self.ci.cm.db.prepare(q_update_certkeydata)
-            (updates) = ps_update_certkeydata(
+            updates = ps_update_certkeydata(
                 self.row_id,
                 self.ci.row_id,
                 self.algo,
-                self.cert,
-                self.key,
+                self._cert,
+                self._key,
                 self.hash
             )
             if updates != 1:
@@ -966,15 +1014,15 @@ class CertKeyStore(object):
         else:
             if not ps_store_certkeydata:
                 ps_store_certkeydata = self.ci.cm.db.prepare(q_store_certkeydata)
-            self.row_id = ps_store_certkeydata(
+            (self.row_id) = ps_store_certkeydata.first(
                 self.ci.row_id,
                 self.algo,
-                self.cert,
-                self.key,
+                self._cert,
+                self._key,
                 self.hash
             )
-            if not self.row_id:
-                raise DBStoreException('?Failed to store CertKeyStore in DB')
+            if not self.row_id and not isinstance(self.row_id, int):
+                raise DBStoreException('?Failed to store CertKeyStore in DB: returned id={}'.format(self.row_id))
 
     def _key_to_PEM(self, key: RSAPrivateKeyWithSerialization) -> bytes:
         """
