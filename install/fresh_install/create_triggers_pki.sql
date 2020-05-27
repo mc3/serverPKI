@@ -1,176 +1,32 @@
-    ----------------------------- serverPKI definition schema
-SET search_path = pki, dd, public, pg_catalog;
-SET log_min_messages='error';
-
-START TRANSACTION; 
-
-DROP SCHEMA IF EXISTS pki CASCADE;
-
-CREATE SCHEMA pki               -- DB schema for project serverPKI'
-
-
-CREATE TABLE Revision (
-  id                SERIAL          PRIMARY KEY,            -- 'PK of Revision'
-  schemaVersion     int2            NOT NULL  DEFAULT 1,    -- 'Version of DB schema'
-  keysEncrypted     BOOLEAN         NOT NULL  DEFAULT FALSE -- 'Cert keys are encrypted'
-)
-
-CREATE TABLE Certificates (     -- The certificate class
-  id                SERIAL          PRIMARY KEY,    -- 'PK of Certificates table'
-  type              dd.cert_type    NOT NULL,
-  disabled          BOOLEAN         NOT NULL
-                                    DEFAULT false,
-  authorized_until  TIMESTAMP,                      -- 'termination date of LE authorization'
-                                                    -- 'Last "please issue" mail of local cert send'
-  updated           dd.updated,                     -- 'time of record update'
-  created           dd.created,                     -- 'time of record creation'
-  remarks           TEXT                            -- 'Remarks'
-)
-
-
-CREATE TABLE Subjects (         -- A Subject or an alternate name of a certificate
-  id                SERIAL          PRIMARY KEY,    -- 'PK of Subjects table'
-  type              dd.subject_type NOT NULL        -- 'Type of subject'
-                                        DEFAULT 'server', 
-  name              CITEXT          NOT NULL UNIQUE,-- 'Either FQDN or user name'
-  isAltname         BOOLEAN         NOT NULL
-                                        DEFAULT TRUE, 
-  certificate       INT4                            -- 'certifcate for this subject'
-                        REFERENCES Certificates
-                        ON DELETE CASCADE
-                        ON UPDATE CASCADE,
-  updated           dd.updated,                     -- 'time of record update'
-  created           dd.created,                     -- 'time of record creation'
-  remarks           TEXT                            -- 'Remarks'
-)
-
-
-CREATE TABLE Services (         -- Service and port combination for TLSA-RR
-  id                SERIAL          PRIMARY KEY,    -- 'PK of Services table'
-  name              CITEXT          NOT NULL ,      -- 'Name of service
-  port              dd.port_number  NOT NULL ,      -- 'tcp / udp port number 
-  TLSAprefix        TEXT            NOT NULL,
-  created           dd.created,                     -- 'time of record update'
-  updated           dd.updated,                     -- 'time of record update'
-  remarks           TEXT,                           -- 'Remarks'
-
-    UNIQUE (name, port)
-)
-
-
-CREATE TABLE Certificates_Services (    -- Junction relation
-  certificate       int4                            -- 'certificate'
-                        REFERENCES Certificates
-                        ON DELETE CASCADE
-                        ON UPDATE CASCADE,
-  service           int4                            -- 'service'
-                        REFERENCES Services
-                        ON DELETE CASCADE
-                        ON UPDATE CASCADE,
-
-  PRIMARY KEY (certificate, service)
-)
-
-
-CREATE TABLE Places (         -- Places hold filesystem and exec data on target
-  id                SERIAL          PRIMARY KEY,    -- 'PK of Places table'
-  name              CITEXT          NOT NULL UNIQUE,-- 'Name of place
-  cert_file_type    dd.place_cert_file_type         -- 'which cert amd key files'
-                                    DEFAULT 'separate'
-                                    NOT NULL, 
-  cert_path         TEXT            NOT NULL,       -- 'path to cert/key dir' 
-  key_path          TEXT                    ,       -- 'path to key dir if different from cert' 
-  uid               int2                    ,       -- 'uid for chown of key file'
-  gid               int2                    ,       -- 'gid for chown of key file'
-  mode              int2                    ,       -- 'use this mode instead of 0400 for key file'
-  chownBoth         BOOLEAN         NOT NULL        -- 'chown both cert and key file'
-                                    DEFAULT FALSE,
-  pgLink            BOOLEAN         NOT NULL        -- 'create link for pqlib'
-                                    DEFAULT FALSE,
-  reload_command    TEXT            ,               -- 'shell command to reload service'
-  created           dd.created,                     -- 'time of record update'
-  updated           dd.updated,                     -- 'time of record update'
-  remarks           TEXT                            -- 'Remarks'
-)
-
-
-CREATE TABLE DistHosts (         -- Hosts where targets located (cert and key files)
-  id                SERIAL          PRIMARY KEY,    -- 'PK of DistHosts table'
-  FQDN              CITEXT          NOT NULL UNIQUE,-- 'FQDN of host'
-  jailroot          TEXT      ,                     -- 'path to root of jails'
-  updated           dd.updated,                     -- 'time of record update'
-  created           dd.created,                     -- 'time of record creation'
-  remarks           TEXT                            -- 'Remarks'
-)
-
-
-CREATE TABLE Jails (              -- FreeBSD jail, to place cert at
-  id                SERIAL          PRIMARY KEY,    -- 'PK of Jails table'
-  name              CITEXT          NOT NULL UNIQUE,-- 'FQDN of host'
-  distHost          int4            NOT NULL        -- 'host, hosting this jail'
-                        REFERENCES DistHosts
-                        ON DELETE CASCADE
-                        ON UPDATE CASCADE,
-  updated           dd.updated,                     -- 'time of record update'
-  created           dd.created,                     -- 'time of record creation'
-  remarks           TEXT                            -- 'Remarks'
-)
-
-
-CREATE TABLE Targets (    -- Target describes where and how certs and keys are deployed
-  id                SERIAL          PRIMARY KEY,    -- 'PK of DistHosts table'
-  distHost          int4            NOT NULL        -- 'host, hosting this jail/cert'
-                        REFERENCES DistHosts
-                        ON DELETE CASCADE
-                        ON UPDATE CASCADE,
-  jail              int4                            -- 'jail, hosting this cert'
-                        REFERENCES Jails
-                        ON DELETE SET NULL
-                        ON UPDATE SET NULL,
-  place             int4                            -- 'cert placed here'
-                        REFERENCES Places
-                        ON DELETE SET NULL
-                        ON UPDATE SET NULL,
-  certificate       int4            NOT NULL        -- 'subject of target'
-                        REFERENCES Certificates
-                        ON DELETE CASCADE
-                        ON UPDATE CASCADE,
-  updated           dd.updated,                     -- 'time of record update'
-  created           dd.created,                     -- 'time of record creation'
-  remarks           TEXT,                           -- 'Remarks'
-
-  UNIQUE(distHost, jail, place, certificate)
-)
-
-
-
-CREATE TABLE CertInstances (        -- certificate instances being issued
-  id                SERIAL          PRIMARY KEY,    -- 'PK of CertInstance table'
-  certificate       int4            NOT NULL        -- 'Certificate Class'
-                        REFERENCES Certificates
-                        ON DELETE CASCADE
-                        ON UPDATE CASCADE,
-  state             cert_state      NOT NULL,       -- 'state of instance
-  cert              BYTEA           NOT NULL,       -- 'PEM encoded certificate'
-  key               BYTEA           NOT NULL,       -- 'PEM encoded key'
-  hash              TEXT            NOT NULL,       -- 'hex ascii encoded TLSA hash'
-  CAcert            int4            NOT NULL        -- 'cert of issuing CA'
-                        REFERENCES CertInstances
-                        ON DELETE RESTRICT
-                        ON UPDATE RESTRICT
-                        DEFERRABLE
-                        INITIALLY DEFERRED,
-  not_before        TIMESTAMP,                      -- 'date, where cert is valid'
-  not_after         TIMESTAMP,                      -- 'date where cert expires'
-  updated           dd.updated,                     -- 'time of record update'
-  remarks           TEXT                            -- 'Remarks'
-)
-
-;                       -- CREATE SCHEMA pki -----------------------------------
-
-INSERT INTO revision (schemaVersion) values(1);     -- 'This is our schema version'
+SET SEARCH_PATH TO pki,dd;
+START TRANSACTION;
 
                         -- TRIGGERS --------------------------------------------
+
+--------------- triggers for update column of several tables
+
+------------------------------- ' trigger function for "updated"
+CREATE OR REPLACE FUNCTION u()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION u TO public;
+
+CREATE TRIGGER ut_Revision BEFORE UPDATE ON Revision FOR EACH ROW EXECUTE FUNCTION u();
+CREATE TRIGGER ut_Certificates BEFORE UPDATE ON Certificates FOR EACH ROW EXECUTE FUNCTION u();
+CREATE TRIGGER ut_CertInstances BEFORE UPDATE ON CertInstances FOR EACH ROW EXECUTE FUNCTION u();
+CREATE TRIGGER ut_Subjects BEFORE UPDATE ON Subjects FOR EACH ROW EXECUTE FUNCTION u();
+CREATE TRIGGER ut_Services BEFORE UPDATE ON Services FOR EACH ROW EXECUTE FUNCTION u();
+CREATE TRIGGER ut_DistHosts BEFORE UPDATE ON DistHosts FOR EACH ROW EXECUTE FUNCTION u();
+CREATE TRIGGER ut_Jails BEFORE UPDATE ON Jails FOR EACH ROW EXECUTE FUNCTION u();
+CREATE TRIGGER ut_Places BEFORE UPDATE ON Jails FOR EACH ROW EXECUTE FUNCTION u();
+CREATE TRIGGER ut_Targets BEFORE UPDATE ON Targets FOR EACH ROW EXECUTE FUNCTION u();
+
+
+--------------- triggers for table constraints beyond pure SQL declarations
 
 
 CREATE OR REPLACE FUNCTION Forbit_deleting_none_altname_subject() RETURNS TRIGGER AS $$
@@ -337,27 +193,29 @@ CREATE TRIGGER Update_updated_Subjects BEFORE UPDATE
 
                         -- Views --------------------------------------------
 
-CREATE OR REPLACE VIEW certs AS
-    SELECT  s1.type AS "Subject",
-            s1.name AS "Cert Name",
-            c.type AS "Type",
-            c.authorized_until::DATE AS "authorized",
-            s2.name AS "Alt Name",
-            s.name AS "TLSA",
-            s.port AS "Port",
-            d.fqdn AS "Dist Host",
-            j.name AS "Jail",
-            p.name AS "Place"
-    FROM ((((((((subjects s1
-     RIGHT JOIN certificates c ON (((s1.certificate = c.id) AND (s1.isaltname = false))))
-     LEFT JOIN subjects s2 ON (((s2.certificate = c.id) AND (s2.isaltname = true))))
-     LEFT JOIN certificates_services cs ON ((c.id = cs.certificate)))
-     LEFT JOIN services s ON ((cs.service = s.id)))
-     LEFT JOIN targets t ON ((c.id = t.certificate)))
-     LEFT JOIN disthosts d ON ((t.disthost = d.id)))
-     LEFT JOIN jails j ON ((t.jail = j.id)))
-     LEFT JOIN places p ON ((t.place = p.id)))
-    ORDER BY s1.name, s2.name, d.fqdn;
+CREATE OR REPLACE VIEW pki.certs AS
+ SELECT s1.type AS "Subject",
+    s1.name AS "Cert Name",
+    c.type AS "Type",
+    c.encryption_algo AS "algo",
+    c.OCSP_must_staple AS "ocsp_ms",
+    (c.authorized_until)::date AS authorized,
+    s2.name AS "Alt Name",
+    s.name AS "TLSA",
+    s.port AS "Port",
+    d.fqdn AS "Dist Host",
+    j.name AS "Jail",
+    p.name AS "Place"
+   FROM ((((((((pki.subjects s1
+     RIGHT JOIN pki.certificates c ON (((s1.certificate = c.id) AND (s1.isaltname = false))))
+     LEFT JOIN pki.subjects s2 ON (((s2.certificate = c.id) AND (s2.isaltname = true))))
+     LEFT JOIN pki.certificates_services cs ON ((c.id = cs.certificate)))
+     LEFT JOIN pki.services s ON ((cs.service = s.id)))
+     LEFT JOIN pki.targets t ON ((c.id = t.certificate)))
+     LEFT JOIN pki.disthosts d ON ((t.disthost = d.id)))
+     LEFT JOIN pki.jails j ON ((t.jail = j.id)))
+     LEFT JOIN pki.places p ON ((t.place = p.id)))
+  ORDER BY s1.name, s2.name, d.fqdn;
 
 CREATE VIEW certs_ids AS
  SELECT c.id AS c_id,
@@ -365,6 +223,8 @@ CREATE VIEW certs_ids AS
     s1.type AS "Subject Type",
     s1.name AS "Cert Name",
     c.type AS "Type",
+    c.encryption_algo AS "algo",
+    c.OCSP_must_staple AS "ocsp_ms",
     (c.authorized_until)::date AS authorized,
     s2.id AS s2_id,
     s2.name AS "Alt Name",
@@ -395,20 +255,23 @@ CREATE VIEW inst AS
     s.name,
     c.type,
     i.state,
+    i.ocsp_must_staple,
     i.not_before,
     i.not_after,
-    i.hash,
+    d.encryption_algo,
+    d.hash,
     i.updated
    FROM certinstances i,
+    CertKeyData d,
     certificates c,
     subjects s
-  WHERE (((i.certificate = c.id) AND (s.certificate = c.id)) AND (NOT s.isaltname))
+  WHERE (((d.certInstance = i.id) AND (i.certificate = c.id) AND (s.certificate = c.id)) AND (NOT s.isaltname))
   ORDER BY i.id;
 
                         -- Functions -------------------------------------------
                         
 -- SELECT * FROM add_cert('myserver.at.do.main', 'server','LE', NULL, NULL, NULL, NULL, NULL, NULL);
-CREATE FUNCTION add_cert(the_name citext, the_subject_type dd.subject_type, the_cert_type dd.cert_type, the_altname citext, the_tlsa_name citext, the_tlsa_port dd.port_number, the_disthost_name citext, the_jail citext, the_place citext) RETURNS text
+CREATE FUNCTION add_cert(the_name citext, the_subject_type dd.subject_type, the_cert_type dd.cert_type, the_encryption_algo dd.cert_encryption_algo, must_staple BOOLEAN, the_altname citext, the_tlsa_name citext, the_tlsa_port dd.port_number, the_disthost_name citext, the_jail citext, the_place citext) RETURNS text
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -444,8 +307,8 @@ CREATE FUNCTION add_cert(the_name citext, the_subject_type dd.subject_type, the_
             END IF;
         END IF;
         
-        INSERT INTO Certificates(type)
-            VALUES (the_cert_type)
+        INSERT INTO Certificates(type, encryption_algo, OCSP_must_staple)
+            VALUES (the_cert_type, the_encryption_algo, must_staple)
             RETURNING id INTO cert_id;
         INSERT INTO Subjects(type, name, isAltName, certificate)
             VALUES (the_subject_type, the_name, FALSE, cert_id);
@@ -758,12 +621,11 @@ CREATE FUNCTION remove_target(the_cert_name citext, the_disthost_name citext, th
 $$;
 
 
+GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA pki TO "serverPKI";
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA pki TO "serverPKI";
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pki TO "serverPKI";
 
-GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA pki TO pki_op;
-GRANT USAGE ON ALL SEQUENCES IN SCHEMA pki TO pki_op;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pki TO pki_op;
+GRANT USAGE ON SCHEMA pki TO "serverPKI";
 
-GRANT USAGE ON SCHEMA pki TO pki_op;
-
-COMMIT;                 -- CREATE SCHEMA pki
+COMMIT;
 
