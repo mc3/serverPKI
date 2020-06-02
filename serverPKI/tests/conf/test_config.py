@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-# example configuration for serverPKI
+# adjusted from example configuration for serverPKI
 
 
 from datetime import timedelta
@@ -29,8 +29,7 @@ class Pathes(object):
     """
     Definition of path config variables
     """
-    
-    home = Path('/var/pki_op/productive_CA').resolve()       # adjust
+    home = (Path(__file__).parent.parent / 'tmpdir').resolve()
     
     # some flat files not in RDBMS
     db = home / 'db'
@@ -86,12 +85,12 @@ class X509atts(object):
 
 
 # Database accounts
-dbAccounts = {'serverpki': {'dbHost':         'db-server.my.domain',
+dbAccounts = {'serverpki': {'dbHost':         'localhost',
                             'dbPort':         '5432',
-                            'dbUser':         'pki_op',
+                            'dbUser':         'serverPKI',
                             'dbDbaUser':      '',
                             'dbDatabase':     'serverPKI',
-                            'dbSslRequired':  True,
+                            'dbSslRequired':  False,
                             'dbSearchPath':   'pki,dd'}}
 
 SSH_CLIENT_USER_NAME = 'root'
@@ -115,6 +114,7 @@ LOCAL_CA_LIFETIME = 3680                # 10 years
 SUBJECT_LOCAL_CA = 'Local CA'
 SUBJECT_LE_CA = 'Lets Encrypt CA'
 
+# how many days before cert deployment is new cert together with old cert published in DNS
 PRE_PUBLISH_TIMEDELTA = timedelta(days=7)
 LOCAL_ISSUE_MAIL_TIMEDELTA = timedelta(days=30)
 

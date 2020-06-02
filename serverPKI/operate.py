@@ -21,6 +21,7 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
 from typing import List, Dict
+from subprocess import Popen, PIPE
 
 from paramiko import util
 from postgresql import driver as db_conn
@@ -45,8 +46,9 @@ from automatoes.register import register
 
 
 def execute_from_command_line():
-    import pydevd_pycharm
-    pydevd_pycharm.settrace('axels-imac.in.chaos1.de', port=4711, stdoutToServer=True, stderrToServer=True)
+    if hostname('hermes'):
+        import pydevd_pycharm
+        pydevd_pycharm.settrace('axels-imac.in.chaos1.de', port=4711, stdoutToServer=True, stderrToServer=True)
 
     all_cert_names: List[str, ...] = []
     our_cert_names: List[str, ...] = []
@@ -225,3 +227,13 @@ def issue(db: db_conn, cert_meta: Certificate) -> bool:
         return True
     return False
 
+def hostname(name:str) -> bool:
+    """
+    Check for hostname of development server
+    No PyCharm debugger if running test suite on localhost
+    :param name: hostname of remote development server
+    :return: True if hostname match name
+    """
+    p = process=Popen('hostname', stdout=PIPE, text=True)
+    stdout, stderr = p.communicate()
+    return stdout.strip() == name

@@ -1,6 +1,5 @@
 ----------------------------- serverPKI definition schema
 SET search_path = pki, dd, public, pg_catalog;
-SET log_min_messages='error';
 
 START TRANSACTION; 
 

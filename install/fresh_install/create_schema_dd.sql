@@ -1,5 +1,4 @@
 ----------------------------- serverPKI data dictionary schema
-SET log_min_messages='error';
 
 -- 'Attention!! drops referencing schema pki  Attention!!'
 DROP SCHEMA IF EXISTS dd CASCADE;
@@ -7,7 +6,6 @@ DROP SCHEMA IF EXISTS dd CASCADE;
 
 CREATE SCHEMA dd;            -- 'data dictionary for project serverPKI
 SET search_path = dd;
-CREATE EXTENSION citext SCHEMA dd;
 
 
 ------------------------------ 'created' timestamp
@@ -54,6 +52,7 @@ CREATE TYPE cert_encryption_algo AS ENUM (
     'ec',
     'rsa_plus_ec'
 );
+GRANT USAGE ON TYPE cert_encryption_algo TO public;
 
 
 GRANT USAGE ON SCHEMA dd TO public;

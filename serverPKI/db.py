@@ -38,7 +38,10 @@ from serverPKI.utils import sld, sli, sln, sle
 
 # --------------- db classes --------------
 class DbConnection(object):
-    'dbConnection'
+    """
+    Connection handler of DB session with PostgreSQL server
+    """
+
 
     def __init__(self, service):
         """
@@ -61,11 +64,15 @@ class DbConnection(object):
             self.host = conf.dbAccounts[service]['dbHost']
             self.port = conf.dbAccounts[service]['dbPort']
             self.user = conf.dbAccounts[service]['dbUser']
+            self.dba_user = conf.dbAccounts[service]['dbDbaUser']
+            self.ssl_required = conf.dbAccounts[service]['dbSslRequired']
             self.database = conf.dbAccounts[service]['dbDatabase']
             self.search_path = conf.dbAccounts[service]['dbSearchPath']
 
+            ssl_option = (', sslmode=' + '"require"') if self.ssl_required else ''
+            
             self.dsn = str('host=' + self.host + ', port=' + self.port +
-                           ', user=' + self.user + ', database=' + self.database + ', sslmode=' + '"require"')
+                           ', user=' + self.user + ', database=' + self.database + ssl_option)
 
             if 'dbCert' in conf.dbAccounts[service]:
                 self.sslcrtfile = conf.dbAccounts[service]['dbCert']
@@ -73,8 +80,8 @@ class DbConnection(object):
                 self.dsn = self.dsn + str(', sslcrtfile={}, sslkeyfile={}'.format(self.sslcrtfile, self.sslkeyfile))
         except:
             sle('Config error: Missing or wrong keyword in dbAccounts.\n' +
-                'Must be dbHost, dbPort, dbUser, dbDatabase and dbSearchPath.')
-            sys.exit(1)
+                'Must be dbHost, dbPort, dbUser, , dbDbaUser, dbDatabase, dbSslrequired and dbSearchPath.')
+            raise(BaseException())
 
     def open(self):
         """
@@ -86,12 +93,16 @@ class DbConnection(object):
         """
         if not self.conn:
             try:
-                if self.sslcrtfile:
-                    self.conn = pg_open(host=self.host, port=self.port, user=self.user, database=self.database,
-                                        sslmode="require", sslcrtfile=self.sslcrtfile, sslkeyfile=self.sslkeyfile)
+                if self.ssl_required:
+                    if self.sslcrtfile:
+                        self.conn = pg_open(host=self.host, port=self.port, user=self.user, database=self.database,
+                                            sslmode="require", sslcrtfile=self.sslcrtfile, sslkeyfile=self.sslkeyfile)
+                    else:
+                        self.conn = pg_open(host=self.host, port=self.port, user=self.user, database=self.database,
+                                            sslmode="require")
                 else:
-                    self.conn = pg_open(host=self.host, port=self.port, user=self.user, database=self.database,
-                                        sslmode="require")
+                    self.conn = pg_open(host=self.host, port=self.port, user=self.user, database=self.database)
+
                 self.conn.settings['search_path'] = self.search_path
 
             except:
