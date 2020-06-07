@@ -7,7 +7,7 @@ database.
 
 serverPKI includes support for
 - local CA
-- LetsEncrypt CA
+- LetsEncrypt CA (ACMEv2 only)
 - FreeBSD jails
 - publishing of DANE RR in DNS, using TLSA key rollover
 - unattended operation via cronjob
@@ -19,6 +19,7 @@ Required packages:
 
 Required Python3 packages:
 
+    configobj>=5.0.6
     cryptography>=2.5
     automatoes>=0.9.1
     dnspython>=1.16.0
@@ -70,9 +71,11 @@ setup(
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3 :: Only',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
         'Natural Language :: English',
     ],
     install_requires=[
+        'configobj>=5.0.6',
         'cryptography>=2.5',
         'automatoes>=0.9.1',
         'dnspython>=1.16.0',

@@ -45,7 +45,7 @@ from postgresql import driver as db_conn
 # --------------- local imports --------------
 from serverPKI.config import Pathes, X509atts, LE_SERVER
 from serverPKI.db import DBStoreException
-from serverPKI.utils import sld, sli, sln, sle, options, db_encryption_key, db_encryption_in_use
+from serverPKI.utils import sld, sli, sln, sle, db_encryption_key, db_encryption_in_use
 
 # ---------------  prepared SQL queries for class Certificate  --------------
 
@@ -266,6 +266,8 @@ class Certificate(object):
 
     def __del__(self):
         global _all_CMs
+        if not _all_CMs:
+            return
         if self.name in _all_CMs:
             del _all_CMs[self.name]
 

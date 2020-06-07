@@ -23,12 +23,16 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 # --------------- imported modules --------------
 from datetime import datetime, timedelta
 from typing import List, Tuple, Optional
+import io
 import optparse
 import subprocess
+import os
 import re
 import sys
 import syslog
 from prettytable import PrettyTable
+
+import configobj, validate
 
 from cryptography.hazmat.primitives.serialization import (
     KeySerializationEncryption, BestAvailableEncryption)
@@ -48,10 +52,132 @@ from serverPKI.config import (Pathes, dbAccounts,
                               SSH_CLIENT_USER_NAME, SYSLOG_FACILITY)
 from serverPKI import get_version, get_schema_version
 
+# -------------- config spec -------------
+
+configspec = """
+[Pathes]
+
+    # this path should be customized:
+    home = string()
+    
+    # some flat files not in RDBMS
+    db = string()
+    
+    # local CA cert
+    ca_cert = string()
+    ca_key = string()
+    
+    # encryption of keys in db
+    db_encryption_key = string()
+    
+    # lets encrypt
+    le_account = string()
+    
+    work = string()
+    work_tlsa = string()
+    
+    # DNS server for maintaining TLSA RR (empty = on local host)
+    tlsa_dns_master = string()
+    
+    
+    
+    # Used for maintenance of TLSA RR and ACME challenges by zone file
+    # editing (historical)
+    # required convention = zone_file_root/example.com/example.com.zone
+    
+    zone_file_root = string()
+    
+    # key for rndc command
+    dns_key = string()
+    
+    # mode + owner of *.tlsa and acme_challenges.inc files in zone directory
+    # in octal notation
+    zone_tlsa_inc_mode = string(default='0660')
+    
+    # owner and group of files. included by zone files
+    zone_tlsa_inc_uid =   integer(default=53)
+    zone_tlsa_inc_gid = integer()
+    
+    # filename for challenges to be included by zone file:
+    zone_file_include_name = string()
+    
+    # location of key for signing dynamic DNS commands
+    ddns_key_file = string()
+    
+    
+# Defaults of local X509 certificate standard attributes
+[X509atts]
+    
+    lifetime = integer()
+    bits = integer()
+
+    # Definition of fixed X.509 cert attributes
+    [[names]]
+    
+        C = string(min=2,max=2)
+        L = string()
+        O = string()-RAU
+        CN = string()
+    
+    [[extensions]]
+       
+
+[Database accounts]
+
+    dbHost =         string()
+    dbPort =         integer(min=1,max=64000)
+    dbUser =         string()
+    dbDbaUser =      string()
+    dbSslRequired =  boolean()
+    
+    dbDatabase =     string()
+    dbSearchPath =   list()
+    dbCert =         string()
+    dbCertKey =      string()
+
+[misc]
+
+    SSH_CLIENT_USER_NAME = string()
+    
+    LE_SERVER = string()
+    
+    # e-mail for registration
+    LE_EMAIL = string()
+    
+    # zone update method for challenge ('ddns' or 'zone_file')
+    LE_ZONE_UPDATE_METHOD = option('ddns', 'zone_file')
+    
+    # Key size and lifetime of local CA cert
+    LOCAL_CA_BITS = integer(min=3096,max=4096)
+    LOCAL_CA_LIFETIME = integer(min=365)
+    
+    # subjects in table Subjects for CA certs
+    # to be changed only before creating DB
+    SUBJECT_LOCAL_CA = string()
+    SUBJECT_LE_CA = string()
+    
+    # number of days to publish new certs before deploying it
+    PRE_PUBLISH_TIMEDELTA = integer(min=7)
+    
+    # number of days to send remainder before expiration of local certs
+    LOCAL_ISSUE_MAIL_TIMEDELTA = integer(min=1)
+    
+    # details for sending reminder mails
+    MAIL_RELAY = string()
+    MAIL_SUBJECT = string()
+    MAIL_SENDER = string()
+    MAIL_RECIPIENT = list()
+    
+    SYSLOG_FACILITY = string()
+"""
+
+
+
 # --------- globals ***DO WE NEED THIS?*** ----------
 
-global options, db_encryption_key
+##global options, db_encryption_key
 
+options = None
 
 class MyException(Exception):
     pass
@@ -59,124 +185,161 @@ class MyException(Exception):
 
 def get_name_string():
     v = get_version()
-    n = dbAccounts['serverpki']['dbDatabase']
-    return '{}-{}'.format(n, v)
+    ##n = dbAccounts['serverpki']['dbDatabase']
+    ##return '{}-{}'.format(n, v)
+    return v
 
 
 # --------------- command line options --------------
+##import pdb; pdb.set_trace()
 
-parser = optparse.OptionParser(description='Server PKI {}'.format(get_name_string()))
-parser.add_option('--schedule-actions', '-S', dest='schedule', action='store_true',
-                  default=False,
-                  help='Scan configuration and schedule necessary actions of'
-                       ' selected certs/hosts. This may trigger issuence or '
-                       ' distribution of certs/TLSA-RRS. With this options "--create-certs" and'
-                       ' "--distribute-certs" are ignored. Any state transitions may happen')
+def parse_options():
+    """
+    Parse commandline options
+    :return:
+    """
+    global options
 
-parser.add_option('--consolidate-certs', '-K', dest='sync_disk', action='store_true',
-                  default=False,
-                  help='Consolidate targets to be in sync with DB.'
-                       ' This affects certs in state "deployed".')
+    parser = optparse.OptionParser(description='Server PKI {}'.format(get_name_string()))
+    group = optparse.OptionGroup(parser, "Actions to issue and replace certificates.")
 
-parser.add_option('--consolidate-TLSAs', '-T', dest='sync_tlsas', action='store_true',
-                  default=False,
-                  help='Consolidate TLSA-RR to be in sync with DB.'
-                       ' This affects certs in state "deployed" or "prepublished".')
 
-parser.add_option('--remove-TLSAs', '-R', dest='remove_tlsas', action='store_true',
-                  default=False,
-                  help='Remove TLSA-RRs i.e. make them empty.')
+    group.add_option('--create-certs', '-C', dest='create', action='store_true',
+                      default=False,
+                      help='Scan configuration and create all certs, which are not'
+                           ' disbled or excluded.'
+                           ' State will be "issued" of created certs.'
+                           ' Action modifiers may be used to select a subset of certs to act on.')
 
-parser.add_option('--create-certs', '-C', dest='create', action='store_true',
-                  default=False,
-                  help='Scan configuration and create all certs, which are not'
-                       ' disbled or excluded.'
-                       ' State will be "issued" of created certs.')
+    group.add_option('--renew-local-certs', '-r', dest='remaining_days', action='store',
+                      type=int, default=False,
+                      help='Scan configuration for local certs in state deployed'
+                           ' which will expire within REMAINING_DAYS days.'
+                           ' Include these certs in a --create-certs operation.'
+                           ' If combined with "--distribute-certs", do not create certs,'
+                           ' but instead distribute certs, which would expire within'
+                           ' REMAINING_DAYS days and are issued no longer than'
+                           ' REMAINING_DAYS in the past.')
 
-parser.add_option('--renew-local-certs', '-r', dest='remaining_days', action='store',
-                  type=int, default=False,
-                  help='Scan configuration for local certs in state deployed'
-                       ' which will expire within REMAINING_DAYS days.'
-                       ' Include these certs in a --create-certs operation.'
-                       ' If combined with "--distribute-certs", do not create certs,'
-                       ' but instead distribute certs, which would expire within'
-                       ' REMAINING_DAYS days and are issued no longer than'
-                       ' REMAINING_DAYS in the past.')
+    group.add_option('--schedule-actions', '-S', dest='schedule', action='store_true',
+                      default=False,
+                      help='Scan configuration and schedule necessary actions of'
+                           ' selected certs/hosts. This may trigger issuence or '
+                           ' distribution of certs/TLSA-RRS. With this options "--create-certs" and'
+                           ' "--distribute-certs" are ignored. Any state transitions may happen')
 
-parser.add_option('--distribute-certs', '-D', dest='distribute', action='store_true',
-                  default=False,
-                  help='Scan configuration and distribute (to their target'
-                       ' host) all certs which are in state "issued" and currently'
-                       ' valid and not disabled or excluded.'
-                       ' Changes state to "deployed".'
-                       ' Corresponding TLSA RR are also installed, if not'
-                       ' suppressed with --no-TLSA-records-')
+    parser.add_option_group(group)
 
-parser.add_option('--export-cert-and-key', '-E', dest='cert_serial',
-                  action='store', type=int, default=False,
-                  help='Export certificate and key with CERT_SERIAL to work directory.'
-                       ' This action may not be combined with other actions.')
+    group = optparse.OptionGroup(parser, 'Actions to deploy or export certificates and'
+                                ' deploy or delete DNS TLSA resource records.')
 
-parser.add_option('--encrypt-keys', action='store_true', dest='encrypt',
-                  help='Encrypt all keys in DB.'
-                       'Configuration parameter db_encryption_key must point '
-                       'at a file, containing a usable passphrase.')
+    group.add_option('--distribute-certs', '-D', dest='distribute', action='store_true',
+                      default=False,
+                      help='Scan configuration and distribute (to their target'
+                           ' host) all certs which are in state "issued" and currently'
+                           ' valid and not disabled or excluded.'
+                           ' Changes state to "deployed".'
+                           ' Corresponding TLSA RR are also installed, if not'
+                           ' suppressed with --no-TLSA-records-')
 
-parser.add_option('--decrypt-keys', action='store_true', dest='decrypt',
-                  help='Replace all keys in the DB by their clear text version.'
-                       'Configuration parameter db_encryption_key must point '
-                       'at a file, containing a usable passphrase.')
+    group.add_option('--consolidate-certs', '-K', dest='sync_disk', action='store_true',
+                      default=False,
+                      help='Consolidate targets to be in sync with DB.'
+                            ' This affects certs in state "deployed" '
+                            ' and effectivly re-distributes certs.')
 
-parser.add_option('--issue-local-CAcert', '-I', dest='issue_local_cacert', action='store_true',
-                  default=False,
-                  help='Issue a new local CA cert, used for issuing future '
-                       'local server/client certs.')
+    group.add_option('--consolidate-TLSAs', '-T', dest='sync_tlsas', action='store_true',
+                      default=False,
+                      help='Consolidate TLSA-RR to be in sync with DB.'
+                           ' This affects certs in state "deployed" or "prepublished".')
 
-parser.add_option('--register', dest='register', action='store_true',
-                  help='Register a new account at LetsEncrypt,'
-                       ' This action may not be combined with other actions.')
+    group.add_option('--remove-TLSAs', '-R', dest='remove_tlsas', action='store_true',
+                      default=False,
+                      help='Remove TLSA-RRs i.e. make them empty.')
 
-parser.add_option('--all', '-a', action='store_true',
-                  help='All certs in configuration should be included in operation, even if disabled.')
+    group.add_option('--export-cert-and-key', '-E', dest='cert_serial',
+                      action='store', type=int, default=False,
+                      help='Export certificate and key with CERT_SERIAL to work directory.'
+                           ' CERT_SERIAL may be obtained from DB (column "id" of SELECT * FROM inst;)'
+                           ' This action may not be combined with other actions.')
 
-parser.add_option('--include', '-i', dest='cert_to_be_included', action='append',
-                  help='Specify, which cert to be included, even if disabled, in list of certs to be created or distributed. Is cumulative if multiple times provided.')
+    parser.add_option_group(group)
 
-parser.add_option('--exclude', '-e', dest='cert_to_be_excluded', action='append',
-                  help='Specify, which cert to be excluded from list of certs to be created or distributed. Is cumulative if multiple times provided.')
+    group = optparse.OptionGroup(parser, 'Action modifiers, to select subset of certificates'
+                                         ' whose meta data is stored in the DB or to set verbosity of messages.')
 
-parser.add_option('--only', '-o', dest='only_cert', action='append',
-                  help='Specify from which cert(s) the list of certs to be created or distributed. Is cumulative if multiple times provided.')
+    group.add_option('--all', '-a', action='store_true',
+                      help='All certs in configuration should be included in operation, even if disabled.')
 
-parser.add_option('--skip-disthost', '-s', dest='skip_host', action='append',
-                  help='Specify, which disthosts should not receive distributions. Is cumulative if multiple times provided.')
+    group.add_option('--include', '-i', dest='cert_to_be_included', action='append',
+                      help='Specify, which cert to be included, even if disabled, in list of certs to be created or distributed. Is cumulative if multiple times provided.')
 
-parser.add_option('--limit-to-disthost', '-l', dest='only_host', action='append',
-                  help='Specify, which disthosts should receive distributions only (others are excluded). Is cumulative if multiple times provided.')
+    group.add_option('--exclude', '-e', dest='cert_to_be_excluded', action='append',
+                      help='Specify, which cert to be excluded from list of certs to be created or distributed. Is cumulative if multiple times provided.')
 
-parser.add_option('--no-TLSA-records', '-N', dest='no_TLSA', action='store_true',
-                  default=False,
-                  help='Do not distribute/change TLSA resource records.')
+    group.add_option('--only', '-o', dest='only_cert', action='append',
+                      help='Specify from which cert(s) the list of certs to be created or distributed. Is cumulative if multiple times provided.')
 
-parser.add_option('--check-only', '-n', dest='check_only', action='store_true',
-                  default=False,
-                  help='Do syntax check of configuration data. Produce a '
-                       'listing of cert meta and related cert instances if combined '
-                       'with  --verbose. Listed certs may be selected with --only.'),
+    group.add_option('--skip-disthost', '-s', dest='skip_host', action='append',
+                      help='Specify, which disthosts should not receive distributions. Is cumulative if multiple times provided.')
 
-parser.add_option('--debug', '-d', action='store_true',
-                  default=False,
-                  help='Turn on debugging.'),
-parser.add_option('--quiet', '-q', action='store_true',
-                  default=False,
-                  help='Be quiet on command line. Do only logging. (for cron jobs).'),
-parser.add_option('--verbose', '-v', dest='verbose', action='store_true',
-                  default=False,
-                  help='Be more verbose.')
+    group.add_option('--limit-to-disthost', '-l', dest='only_host', action='append',
+                      help='Specify, which disthosts should receive distributions only (others are excluded). Is cumulative if multiple times provided.')
 
-options, args = parser.parse_args()
+    group.add_option('--no-TLSA-records', '-N', dest='no_TLSA', action='store_true',
+                      default=False,
+                      help='Do not distribute/change TLSA resource records.')
 
-if options.debug: options.verbose = True
+    parser.add_option_group(group)
+
+
+    group = optparse.OptionGroup(parser, 'Maintenance and administrative actions.')
+
+    group.add_option('--encrypt-keys', action='store_true', dest='encrypt',
+                      help='Encrypt all keys in DB.'
+                           'Configuration parameter db_encryption_key must point '
+                           'at a file, containing a usable passphrase.')
+
+    group.add_option('--decrypt-keys', action='store_true', dest='decrypt',
+                      help='Replace all keys in the DB by their clear text version.'
+                           'Configuration parameter db_encryption_key must point '
+                           'at a file, containing a usable passphrase.')
+
+    group.add_option('--issue-local-CAcert', '-I', dest='issue_local_cacert', action='store_true',
+                      default=False,
+                      help='Issue a new local CA cert, used for issuing future '
+                           'local server/client certs.')
+
+    group.add_option('--register', dest='register', action='store_true',
+                      help='Register a new account at LetsEncrypt,'
+                           ' This action may not be combined with other actions.')
+
+    group.add_option('--check-only', '-n', dest='check_only', action='store_true',
+                      default=False,
+                      help='Do syntax check of configuration data. Produce a '
+                           'listing of cert meta and related cert instances if combined '
+                           'with  --verbose. Listed certs may be selected with --only.'),
+
+    group.add_option('--debug', '-d', action='store_true',
+                      default=False,
+                      help='Turn on debugging.'),
+    group.add_option('--quiet', '-q', action='store_true',
+                      default=False,
+                      help='Be quiet on command line. Do only logging. (for cron jobs).'),
+    group.add_option('--verbose', '-v', dest='verbose', action='store_true',
+                      default=False,
+                      help='Be more verbose.')
+
+    group.add_option('--config_file', '-f', dest='config_file', action='store',
+                      type='string',
+                      help='Path of an alternate configuration file.')
+
+    parser.add_option_group(group)
+
+    (options, args) = parser.parse_args()
+    if options.debug:
+        options.verbose = True
+    return options
 
 # --------------- logging functions --------------
 
@@ -248,6 +411,113 @@ def init_syslog():
     syslog.openlog(ident='{}'.format(get_name_string()),
                    facility=SYSLOG_FACILITY)
     syslog_initialized = True
+
+
+
+# ------------------ configuration file parsing ---------------
+
+# container Classes, filled by parse_config
+
+class Pathes(object):
+    pass
+
+class X509atts(object):
+    pass
+
+class DBAccounts(object):
+    pass
+
+class Conf(object):
+    pass
+
+def parse_config():
+    """
+    Parse config file. Exits on error.
+    :return:
+    """
+    global Pathes, X509atts, DBAccounts, Conf
+
+    the_config_spec = configobj.ConfigObj(io.StringIO(initial_value=configspec, newline='\n'),
+                                                      _inspec=True,
+                                                      encoding='UTF8')
+
+    config = None
+    for config_file in (options.config_file,
+                        sys.prefix + '/etc/serverpki.conf',
+                        '/usr/local/etc/serverPKI/serverpki.conf'):
+            if not config_file:
+                continue
+            sld('Trying config file {}'.format(config_file))
+            if not os.path.isfile(config_file):
+                continue
+            sli('Using config file {}'.format(config_file))
+            try:
+                config = configobj.ConfigObj(config_file,
+                                             encoding='UTF8',
+                                             interpolation='Template',
+                                             configspec=the_config_spec)
+            except SyntaxError as e:
+                sle('Configuration file errors found. Can''t continue. List of errors:')
+                for err in e.errors:
+                    sle('{}'.format(err))
+                sys.exit(1)
+            break
+    if not config:
+        sle('No config file found. Can''t continue.')
+        sys.exit(1)
+
+    vtor = validate.Validator()
+    result = config.validate(vtor, preserve_errors=True)
+    if result != True:
+        sle('Config validation failed:')
+        for entry in configobj.flatten_errors(config, result):
+            # each entry is a tuple
+            section_list, key, error = entry
+            if key is not None:
+                section_list.append(key)
+            else:
+                section_list.append('[missing section]')
+            section_string = ', '.join(section_list)
+            if error == False:
+                error = 'Missing value or section.'
+            sle(section_string + ' = ' + str(error))
+
+        for sections, name in configobj.get_extra_values(config):
+
+            # this code gets the extra values themselves
+            the_section = config
+            for section in sections:
+                the_section = the_section[section]
+
+            # the_value may be a section or a value
+            the_value = the_section[name]
+
+            section_or_value = 'value'
+            if isinstance(the_value, dict):
+                # Sections are subclasses of dict
+                section_or_value = 'section'
+
+            section_string = ', '.join(sections) or "top level"
+            print('Extra entry in section: %s. Entry %r is a %s' % (
+                                    section_string, name, section_or_value))
+
+        sld(str(result))
+
+    sys.exit(1)
+
+    try:
+        Pathes.dbHost = config.get('Database accounts', 'dbHost')
+        Pathes.dbPort = config.getint('Database accounts', 'dbPort')
+        Pathes.dbUser = config.get('Database accounts', 'dbUser')
+        Pathes.dbDbaUser = config.get('Database accounts', 'dbDbaUser')
+        Pathes.dbSslRequired = config.getboolean('Database accounts', 'dbSslRequired')
+        Pathes.dbDatabase = config.get('Database accounts', 'dbDatabase')
+        Pathes.dbSearchPath = config.get('Database accounts', 'dbSearchPath')
+        Pathes.dbCert = config.get('Database accounts', 'dbCert')
+        Pathes.dbCertKey = config.get('Database accounts', 'dbCertKey')
+    except configparser.Error as e:
+        sle('Config file parsing error in section "Database accounts"":\n {}\nCan''t continue.'.format(e))
+        sys.exit(1)
 
 
 # --------------- utility functions -------------
@@ -614,6 +884,8 @@ def encrypt_all_keys(db: db_conn):
 
     if not db_encryption_key:
         sle('Needing db_encryption_key to encrypt all keys (see config).')
+        sli('Create it like so: ssh-keygen -t ed25519 -m PEM -f {}'.format(Pathes.db_encryption_key))
+        sli('<ENTER> for empty passphrase.')
         return False
     try:
         result = get_revision(db)

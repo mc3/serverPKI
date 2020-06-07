@@ -16,7 +16,6 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 """
-
 # commandline interface module
 
 import sys
@@ -35,6 +34,7 @@ from serverPKI.issue_LE import issue_LE_cert
 from serverPKI.issue_local import issue_local_cert
 
 from serverPKI.utils import options as opts
+from serverPKI.utils import parse_options, parse_config
 from serverPKI.utils import get_name_string, options_set, check_actions
 from serverPKI.utils import names_of_local_certs_to_be_renewed, print_certs
 from serverPKI.utils import options_set, check_actions, updateSOAofUpdatedZones
@@ -46,6 +46,7 @@ from automatoes.register import register
 
 
 def execute_from_command_line():
+
     if hostname('hermes'):
         import pydevd_pycharm
         pydevd_pycharm.settrace('axels-imac.in.chaos1.de', port=4711, stdoutToServer=True, stderrToServer=True)
@@ -56,6 +57,9 @@ def execute_from_command_line():
 
     util.log_to_file('sftp.log')
 
+    opts = parse_options()
+    parse_config()
+
     sli('operateCA [{}]started with options {}'.format(
         get_name_string(), options_set()))
     check_actions()
@@ -64,8 +68,6 @@ def execute_from_command_line():
     db: db_conn = pe.open()
 
     read_db_encryption_key(db)
-
-    preload_ca_cert_metas(db)
 
     all_cert_names = Certificate.names(db)
 
@@ -188,18 +190,6 @@ def execute_from_command_line():
             ' and e-mail {}'.format(LE_SERVER, LE_EMAIL))
         register(LE_SERVER, Pathes.le_account, LE_EMAIL, None)
 
-
-def preload_ca_cert_metas(db: db_conn) -> None:
-    """
-    Preload (or create, if required) the CA cert meta data instances,
-    to have their CIs handy for referencing them from other CIs
-    :param db: Opened DB connection
-    :return:
-    """
-    # make sure cert meta of CAs are loaded (for referencing them from CI).
-    for ca_name in (SUBJECT_LOCAL_CA, SUBJECT_LE_CA):
-        if not Certificate.ca_cert_meta(db, ca_name):
-            sys.exit(1)
 
 def issue(db: db_conn, cert_meta: Certificate) -> bool:
     """
