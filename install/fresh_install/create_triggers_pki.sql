@@ -627,5 +627,7 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pki TO "serverPKI";
 
 GRANT USAGE ON SCHEMA pki TO "serverPKI";
 
+INSERT INTO Revision(schemaversion, keysencrypted) values(5,false);
+
 COMMIT;
 
