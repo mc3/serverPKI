@@ -33,4 +33,5 @@ def test_if_cert_meta_created(create_local_cert_meta, db_handle):
         assert row[i] == ('client', 'client1', 'local', 'rsa', False, None, None, None, None, get_hostname(),
                          None, 'place_1')[i]
 
-
+def test_run_from_command_line():
+    pass

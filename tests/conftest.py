@@ -7,6 +7,7 @@ from typing import Tuple
 import pytest
 
 from serverPKI.db import DbConnection as dbc
+from serverPKI.utils import parse_config, parse_options
 
 error_marker =  re.compile('ERROR|FATAL|STATEMENT|HINT')
 
@@ -18,12 +19,8 @@ TEMP_DIR = ((Path(__file__).parent.resolve()) / 'tmpdir').resolve()
 INSTALL_DIR = ((Path(__file__).parent.parent.resolve()) / 'install').resolve()
 FRESH_INSTALL_DIR = INSTALL_DIR / 'fresh_install'
 
-CONFIG_MODULE_DIRS = (((Path(__file__).parent.resolve()) / 'conf').resolve(),)
-sys.path.append(str(CONFIG_MODULE_DIRS[0]))
 
-from test_config import Pathes as Pathes
-from test_config import dbAccounts as dbAccounts
-
+config_file = None
 
 def get_hostname():
     p = process = Popen('hostname', stdout=PIPE, text=True)
@@ -32,15 +29,25 @@ def get_hostname():
 
 
 class Psql(object):
+
+    global config_file
+
+    from serverPKI.utils import DBAccount
+
+    cd = Path(__file__).parent.resolve()
+    config_file = (cd / 'conf' / 'serverpki.conf' ).resolve()
+    parse_options()
+    parse_config(str(config_file))
+
     db_default_db = DEFAULT_DB
     install_dir = INSTALL_DIR
     fresh_install_dir = FRESH_INSTALL_DIR
 
-    db_host = dbAccounts[SERVICE]['dbHost']
-    db_port = dbAccounts[SERVICE]['dbPort']
-    db_user = dbAccounts[SERVICE]['dbUser']
-    dba_user = dbAccounts[SERVICE]['dbDbaUser']
-    db_database = dbAccounts[SERVICE]['dbDatabase']
+    db_host = DBAccount.dbHost
+    db_port = str(DBAccount.dbPort)
+    db_user = DBAccount.dbUser
+    dba_user = DBAccount.dbDbaUser
+    db_database = DBAccount.dbDatabase
 
     def __init__(self):
         pass
