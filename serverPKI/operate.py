@@ -28,24 +28,25 @@ from postgresql import driver as db_conn
 from serverPKI.cacert import issue_local_CAcert
 from serverPKI.cert import Certificate, CertType
 from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA, export_instance
-from serverPKI.config import LE_SERVER, LE_EMAIL, Pathes, SUBJECT_LOCAL_CA, SUBJECT_LE_CA
 from serverPKI.db import DbConnection as dbc
 from serverPKI.issue_LE import issue_LE_cert
 from serverPKI.issue_local import issue_local_cert
 
-from serverPKI.utils import options as opts
 from serverPKI.utils import parse_options, parse_config
-from serverPKI.utils import get_name_string, options_set, check_actions
+
+from serverPKI.utils import get_name_string, get_version_string, options_set, check_actions
 from serverPKI.utils import names_of_local_certs_to_be_renewed, print_certs
 from serverPKI.utils import options_set, check_actions, updateSOAofUpdatedZones
 from serverPKI.utils import read_db_encryption_key, encrypt_all_keys, decrypt_all_keys
-from serverPKI.utils import sld, sli, sln, sle
+from serverPKI.utils import sld, sli, sln, sle, Misc, Pathes, options
 from serverPKI.schedule import scheduleCerts
 
 from automatoes.register import register
 
 
 def execute_from_command_line():
+
+    global options
 
     if hostname('hermes'):
         import pydevd_pycharm
@@ -55,13 +56,13 @@ def execute_from_command_line():
     our_cert_names: List[str, ...] = []
     our_certs: Dict[str, Certificate] = {}
 
-    util.log_to_file('sftp.log')
+    ##util.log_to_file('sftp.log')
 
-    opts = parse_options()
-    parse_config()
+    options = opts = parse_options()        # globals not re-initialized
+    db_name = parse_config()                # globals not re-initialized
 
-    sli('operateCA [{}]started with options {}'.format(
-        get_name_string(), options_set()))
+    sli('operateCA [{}-{}]started with options {}'.format(
+        db_name, get_version_string(), options_set()))
     check_actions()
 
     pe = dbc('serverpki')
@@ -187,8 +188,8 @@ def execute_from_command_line():
 
     if opts.register:
         sli('Registering a new Let\'s Encrypt Account.\n With URI:{}\n'
-            ' and e-mail {}'.format(LE_SERVER, LE_EMAIL))
-        register(LE_SERVER, Pathes.le_account, LE_EMAIL, None)
+            ' and e-mail {}'.format(Misc.LE_SERVER, Misc.LE_EMAIL))
+        register(Misc.LE_SERVER, Pathes.le_account, Misc.LE_EMAIL, None)
 
 
 def issue(db: db_conn, cert_meta: Certificate) -> bool:

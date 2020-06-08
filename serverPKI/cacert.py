@@ -35,17 +35,13 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography import x509
-##from cryptography.x509 import Certificate
-##from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
 
 from postgresql import driver as db_conn
 
 # --------------- local imports --------------
 from serverPKI.cert import Certificate, CM, CertInstance, CertType, EncAlgoCKS
-from serverPKI.config import Pathes, X509atts, LE_SERVER, SUBJECT_LOCAL_CA
-from serverPKI.config import LOCAL_CA_BITS, LOCAL_CA_LIFETIME
-from serverPKI.utils import sld, sli, sln, sle
+from serverPKI.utils import sld, sli, sln, sle,  Pathes, X509atts, Misc
 
 # ----------------- globals --------------------
 
@@ -98,7 +94,7 @@ def get_cacert_and_key(db: db_conn) -> Tuple[x509.Certificate, rsa.RSAPrivateKey
     if local_cacert and local_cakey and local_cacert_instance:
         return (local_cacert, local_cakey, local_cacert_instance)
 
-    cm = CM(db, name=SUBJECT_LOCAL_CA)
+    cm = CM(db, name=Misc.SUBJECT_LOCAL_CA)
     ci = cksd = cks = None
     if cm:
         ci = cm.most_recent_active_instance
@@ -163,7 +159,7 @@ def create_local_ca_cert(db: db_conn,
     global local_cacert, local_cakey, local_cacert_instance
 
     # create rows for cacert meta (in certificates and subjects)
-    cm = create_CAcert_meta(db, SUBJECT_LOCAL_CA)
+    cm = create_CAcert_meta(db, Misc.SUBJECT_LOCAL_CA)
     ci = cm.most_recent_active_instance()
     if not ci:  # no ca cert in db
         sli('Local CA cert not in DB or has expired, creating a new one')
@@ -195,7 +191,7 @@ def create_local_ca_cert(db: db_conn,
             # Generate our key
             cakey = rsa.generate_private_key(
                 public_exponent=65537,
-                key_size=LOCAL_CA_BITS,
+                key_size=Misc.LOCAL_CA_BITS,
                 backend=default_backend()
             )
 
@@ -213,7 +209,7 @@ def create_local_ca_cert(db: db_conn,
             ])
 
             not_after = datetime.datetime.utcnow() + datetime.timedelta(
-                days=LOCAL_CA_LIFETIME)
+                days=Misc.LOCAL_CA_LIFETIME)
             not_before = datetime.datetime.utcnow() - datetime.timedelta(
                 days=1)
             ci = cm.create_instance(not_before=not_before, not_after=not_after)
@@ -258,7 +254,7 @@ def create_local_ca_cert(db: db_conn,
 
             sli('CA cert serial {} with {} bit key, valid until {} created.'.format(
                 serial,
-                LOCAL_CA_BITS,
+                Misc.LOCAL_CA_BITS,
                 not_after.isoformat()
             ))
         ci.ca_cert_ci = ci
@@ -315,10 +311,10 @@ def create_CAcert_meta(db: db_conn, name: str) -> Certificate:
     Lookup or create a CA cert meta in rows ceetificates and subjects
     :param db:          pened database connection in read/write transaction
     :param cert_type:   either 'local' or 'LE' for local or Letsencrypt certs
-    :param name:        name of CA cert (as configured in config: SUBJECT_LOCAL_CA or SUBJECT_LE_CA)
+    :param name:        name of CA cert (as configured in config: Misc.SUBJECT_LOCAL_CA or SUBJECT_LE_CA)
     :return:            cert meta
     """
-    if name not in (SUBJECT_LOCAL_CA, SUBJECT_LE_CA):
+    if name not in (Misc.SUBJECT_LOCAL_CA, Misc.SUBJECT_LE_CA):
         raise AssertionError('create_CAcert_meta: argument name "{} invalid"'.format(name))
     cm = Certificate.ca_cert_meta(db, name)
     if not cm:

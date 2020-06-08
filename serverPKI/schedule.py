@@ -28,13 +28,10 @@ from typing import Optional
 
 from postgresql import driver as db_conn
 
-from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, PRE_PUBLISH_TIMEDELTA
-from serverPKI.config import LOCAL_ISSUE_MAIL_TIMEDELTA
-from serverPKI.config import MAIL_RELAY, MAIL_SENDER, MAIL_RECIPIENT
 from serverPKI.cert import Certificate, CertInstance, CertState, CertType
 from serverPKI.certdist import deployCerts, distribute_tlsa_rrs
 from serverPKI.issue_LE import issue_LE_cert
-from serverPKI.utils import sld, sli, sln, sle
+from serverPKI.utils import sld, sli, sln, sle, Misc
 from serverPKI.utils import shortDateTime
 from serverPKI.utils import options as opts
 
@@ -174,7 +171,7 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
 
         if deployed_ci and issued_ci:  # issued too old to replace deployed in future?
             if issued_ci.not_after < (deployed_ci.not_after +
-                                      LOCAL_ISSUE_MAIL_TIMEDELTA):
+                                      Misc.LOCAL_ISSUE_MAIL_TIMEDELTA):
                 to_be_deleted |= {(issued_ci,)}  # yes: mark for delete
                 issued_ci = None
                 # request issue_mail if near to expiration
@@ -182,7 +179,7 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
                 and cm.cert_type == 'local'
                 and not cm.authorized_until
                 and datetime.utcnow() >= (deployed_ci.not_after -
-                                          LOCAL_ISSUE_MAIL_TIMEDELTA)):
+                                          Misc.LOCAL_ISSUE_MAIL_TIMEDELTA)):
             to_be_mailed.append(cm)
             sld('schedule.to_be_mailed: ' + str(cm))
 
@@ -212,7 +209,7 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
             continue  # no TLSAs with local certs
             # We have an active LE cert deployed
         if datetime.utcnow() >= \
-                (deployed_ci.not_after - PRE_PUBLISH_TIMEDELTA):
+                (deployed_ci.not_after - Misc.PRE_PUBLISH_TIMEDELTA):
             # pre-publishtime reached?
             ci = issued_ci
             if prepublished_ci:  # yes: TLSA already pre-published?
@@ -240,7 +237,7 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
     if to_be_mailed:
 
         body = str('Following local Certificates must be issued prior to {}:\n'.
-                   format(date.today() + LOCAL_ISSUE_MAIL_TIMEDELTA))
+                   format(date.today() + Misc.LOCAL_ISSUE_MAIL_TIMEDELTA))
 
         for cert_meta in to_be_mailed:
             body += str('\t{} \t{}'.format(cert_meta.name,
@@ -249,9 +246,9 @@ def scheduleCerts(db: db_conn, cert_metas: list) -> None:
 
         msg = MIMEText(body)
         msg['Subject'] = 'Local certificate issue reminder'
-        msg['From'] = MAIL_SENDER
-        msg['To'] = MAIL_RECIPIENT
-        s = smtplib.SMTP(MAIL_RELAY)
+        msg['From'] = Misc.MAIL_SENDER
+        msg['To'] = Misc.MAIL_RECIPIENT
+        s = smtplib.SMTP(Misc.MAIL_RELAY)
         s.send_message(msg)
         s.quit()
 

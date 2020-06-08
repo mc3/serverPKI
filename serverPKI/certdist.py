@@ -38,9 +38,8 @@ from paramiko import SSHClient, HostKeys, AutoAddPolicy
 from postgresql import driver as db_conn
 
 from serverPKI.cert import Certificate, CertInstance, EncAlgoCKS, CertState, CertType, PlaceCertFileType, SubjectType
-from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, LE_ZONE_UPDATE_METHOD
 from serverPKI.utils import options as opts
-from serverPKI.utils import sld, sli, sln, sle
+from serverPKI.utils import sld, sli, sln, sle,  Pathes, Misc
 from serverPKI.utils import updateSOAofUpdatedZones, ddns_update
 
 
@@ -296,7 +295,7 @@ def ssh_connection(dest_host):
     client.load_host_keys(expanduser('~/.ssh/known_hosts'))
     sld('Connecting to {}'.format(dest_host))
     try:
-        client.connect(dest_host, username=SSH_CLIENT_USER_NAME,
+        client.connect(dest_host, username=Misc.SSH_CLIENT_USER_NAME,
                             key_filename=expanduser('~/.ssh/id_rsa'))
     except Exception:
         sln('Failed to connect to host {}, because {} [{}]'.
@@ -504,7 +503,7 @@ def delete_TLSA(cert_meta: Certificate) -> None:
 
     if Pathes.tlsa_dns_master == '':       # DNS master on local host
         
-        if LE_ZONE_UPDATE_METHOD == 'zone_file':
+        if Misc.LE_ZONE_UPDATE_METHOD == 'zone_file':
 
             for (zone, fqdn) in cert_meta.zone_and_FQDN_from_altnames():
                 filename = fqdn + '.tlsa'
@@ -515,7 +514,7 @@ def delete_TLSA(cert_meta: Certificate) -> None:
                     sli('Truncating {}'.format(dest))
                 updateZoneCache(zone)
     
-        elif LE_ZONE_UPDATE_METHOD == 'ddns':
+        elif Misc.LE_ZONE_UPDATE_METHOD == 'ddns':
 
             zones = {}
             for (zone, fqdn) in cert_meta.zone_and_FQDN_from_altnames():
@@ -557,7 +556,7 @@ def distribute_tlsa_rrs(cert_meta: Certificate, hashes: Union[Tuple[str],List[st
 
     if Pathes.tlsa_dns_master == '':       # DNS master on local host
         
-        if LE_ZONE_UPDATE_METHOD == 'zone_file':
+        if Misc.LE_ZONE_UPDATE_METHOD == 'zone_file':
 
             for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta): 
                 filename = fqdn + '.tlsa'
@@ -573,7 +572,7 @@ def distribute_tlsa_rrs(cert_meta: Certificate, hashes: Union[Tuple[str],List[st
                 updateZoneCache(zone)
     
         
-        elif LE_ZONE_UPDATE_METHOD == 'ddns':
+        elif Misc.LE_ZONE_UPDATE_METHOD == 'ddns':
     
             tlsa_datatype = rdatatype.from_text('TLSA')
             zones = {}

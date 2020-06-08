@@ -44,12 +44,9 @@ from cryptography.hazmat.primitives.serialization import (
 )
 from cryptography.hazmat.backends import default_backend
 from dns import update, tsigkeyring, tsig
-from serverPKI.config import X509atts
 from pathlib import Path
 from postgresql import driver as db_conn
 
-from serverPKI.config import (Pathes, dbAccounts,
-                              SSH_CLIENT_USER_NAME, SYSLOG_FACILITY)
 from serverPKI import get_version, get_schema_version
 
 # -------------- config spec -------------
@@ -122,7 +119,7 @@ configspec = """
     [[extensions]]
        
 
-[Database accounts]
+[DBAccount]
 
     dbHost =         string()
     dbPort =         integer(min=1,max=64000)
@@ -135,7 +132,7 @@ configspec = """
     dbCert =         string()
     dbCertKey =      string()
 
-[misc]
+[Misc]
 
     SSH_CLIENT_USER_NAME = string()
     
@@ -172,6 +169,20 @@ configspec = """
 """
 
 
+# container Classes, filled by parse_config
+
+class Pathes(object):
+    pass
+
+class X509atts(object):
+    pass
+
+class DBAccount(object):
+    pass
+
+class Misc(object):
+    SYSLOG_FACILITY = syslog.LOG_LOCAL6
+
 
 # --------- globals ***DO WE NEED THIS?*** ----------
 
@@ -185,10 +196,11 @@ class MyException(Exception):
 
 def get_name_string():
     v = get_version()
-    ##n = dbAccounts['serverpki']['dbDatabase']
-    ##return '{}-{}'.format(n, v)
-    return v
+    n = DBAccount.dbDatabase      # FIXME not yet initialized
+    return '{}-{}'.format(n, v)
 
+def get_version_string():
+    return get_version()
 
 # --------------- command line options --------------
 ##import pdb; pdb.set_trace()
@@ -200,7 +212,7 @@ def parse_options():
     """
     global options
 
-    parser = optparse.OptionParser(description='Server PKI {}'.format(get_name_string()))
+    parser = optparse.OptionParser(description='Server PKI {}'.format(get_version_string()))
     group = optparse.OptionGroup(parser, "Actions to issue and replace certificates.")
 
 
@@ -347,10 +359,10 @@ syslog_initialized = False
 
 LOG_SECURITY = 13 << 3  # FreeBSD  - does not work with python
 
-SLD = syslog.LOG_DEBUG | SYSLOG_FACILITY
-SLI = syslog.LOG_INFO | SYSLOG_FACILITY
-SLN = syslog.LOG_NOTICE | SYSLOG_FACILITY
-SLE = syslog.LOG_ERR | SYSLOG_FACILITY
+SLD = syslog.LOG_DEBUG | Misc.SYSLOG_FACILITY
+SLI = syslog.LOG_INFO | Misc.SYSLOG_FACILITY
+SLN = syslog.LOG_NOTICE | Misc.SYSLOG_FACILITY
+SLE = syslog.LOG_ERR | Misc.SYSLOG_FACILITY
 
 
 def sld(msg: str) -> None:
@@ -408,41 +420,46 @@ def sle(msg: str) -> None:
 def init_syslog():
     global syslog_initialized
 
-    syslog.openlog(ident='{}'.format(get_name_string()),
-                   facility=SYSLOG_FACILITY)
+    syslog.openlog(ident='{}'.format(get_version_string()),
+                   facility=Misc.SYSLOG_FACILITY)
+    syslog_initialized = True
+
+def re_init_syslog():           # after parsing config, we have DB name
+    global syslog_initialized
+
+    syslog.closelog()
+    syslog.openlog(ident='{}'.format(get_name_string()), # FIXME openlog wants int as ident
+                   facility=Misc.SYSLOG_FACILITY)
     syslog_initialized = True
 
 
 
 # ------------------ configuration file parsing ---------------
-
-# container Classes, filled by parse_config
-
-class Pathes(object):
-    pass
-
-class X509atts(object):
-    pass
-
-class DBAccounts(object):
-    pass
-
-class Conf(object):
-    pass
-
-def parse_config():
+def parse_config(test_config=None):
     """
     Parse config file. Exits on error.
     :return:
     """
-    global Pathes, X509atts, DBAccounts, Conf
+    global Pathes, X509atts, DBAccounts, Misc
+
+    def dict_to_class(the_class: str, section: str, list: Tuple):
+        """
+        Set class attributes from parsed config data
+        :param the_class: Name of class
+        :param section: Name of config section
+        :param list: list of section keywords
+        :return:
+        """
+        for item in list:
+            setattr(globals()[the_class], item, config[section][item])
 
     the_config_spec = configobj.ConfigObj(io.StringIO(initial_value=configspec, newline='\n'),
                                                       _inspec=True,
                                                       encoding='UTF8')
 
     config = None
-    for config_file in (options.config_file,
+    for config_file in (test_config,
+                        options.config_file,
                         sys.prefix + '/etc/serverpki.conf',
                         '/usr/local/etc/serverPKI/serverpki.conf'):
             if not config_file:
@@ -466,8 +483,12 @@ def parse_config():
         sle('No config file found. Can''t continue.')
         sys.exit(1)
 
-    vtor = validate.Validator()
-    result = config.validate(vtor, preserve_errors=True)
+    try:
+        vtor = validate.Validator()
+        result = config.validate(vtor, preserve_errors=True)
+    except configobj.MissingInterpolationOption as e:
+        sle('Substitution error: {}. Can''t continue.'.format(e.msg))
+        sys.exit(1)
     if result != True:
         sle('Config validation failed:')
         for entry in configobj.flatten_errors(config, result):
@@ -503,22 +524,65 @@ def parse_config():
 
         sld(str(result))
 
-    sys.exit(1)
+    def test_walk(section, key):
+        sld('{}[{}] {} = {}'.format('['+section.parent.name+']' if section.parent.name else '',
+                                      section.name,
+                                      key,
+                                      section[key]))
 
-    try:
-        Pathes.dbHost = config.get('Database accounts', 'dbHost')
-        Pathes.dbPort = config.getint('Database accounts', 'dbPort')
-        Pathes.dbUser = config.get('Database accounts', 'dbUser')
-        Pathes.dbDbaUser = config.get('Database accounts', 'dbDbaUser')
-        Pathes.dbSslRequired = config.getboolean('Database accounts', 'dbSslRequired')
-        Pathes.dbDatabase = config.get('Database accounts', 'dbDatabase')
-        Pathes.dbSearchPath = config.get('Database accounts', 'dbSearchPath')
-        Pathes.dbCert = config.get('Database accounts', 'dbCert')
-        Pathes.dbCertKey = config.get('Database accounts', 'dbCertKey')
-    except configparser.Error as e:
-        sle('Config file parsing error in section "Database accounts"":\n {}\nCan''t continue.'.format(e))
-        sys.exit(1)
+    config.walk(test_walk)
 
+    def add_attribute_to_class(section: configobj, key: str):
+        """
+        If called by config.walk, filles corresponding container class with class variable
+        :param section: The section
+        :param key: The key of attribute
+        :return:
+        """
+        def flatten_list(value: List) -> str:
+            """
+            Make string from list
+            :param value: list
+            :return:
+            """
+            result = ''
+            first = True
+            for e in value:
+                if not first:
+                    result += ', '
+                first = False
+                result += e
+            return result
+
+        value = section[key]
+        if section.name == 'Pathes' and key == 'zone_tlsa_inc_mode':
+            value = int(value, 8)      # file permission is octal
+        elif (section.name == 'Misc' and key == 'MAIL_RECIPIENT') or (
+            section.name == 'DBAccount' and key == 'dbSearchPath'):
+            result = ''
+            first = True
+            for e in value:
+                if not first:
+                    result += ', '
+                first = False
+                result += e
+            value = result
+
+        if not section.parent.name:
+            setattr(globals()[section.name], key, value)
+        else:
+            try:
+                d = getattr(globals()[section.parent.name],section.name)
+            except AttributeError:
+                d = {}
+                setattr(globals()[section.parent.name], section.name, d)
+            d[key] = value
+
+    config.walk(add_attribute_to_class)
+
+    ## re_init_syslog()
+    sli(DBAccount.dbHost + ' ' + str(DBAccount.dbPort) + ' ' + DBAccount.dbUser + ' ' + DBAccount.dbCert)
+    return DBAccount.dbDatabase
 
 # --------------- utility functions -------------
 
@@ -789,7 +853,7 @@ def read_db_encryption_key(db):
     global db_encryption_key, db_encryption_in_use
 
     try:
-        with Path.open(Pathes.db_encryption_key, 'rb') as f:
+        with open(Pathes.db_encryption_key, 'rb') as f:
             db_encryption_key = f.read()
     except Exception:
         sld('DB Encryption key not available, because {} [{}]'.

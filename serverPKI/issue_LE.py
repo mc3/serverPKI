@@ -62,9 +62,7 @@ from automatoes import errors as manuale_errors
 # --------------- local imports --------------
 from serverPKI.cacert import create_CAcert_meta
 from serverPKI.cert import Certificate, CertInstance, CertKeyStore, EncAlgo, EncAlgoCKS, CertType, CertState
-from serverPKI.config import (Pathes, X509atts, LE_SERVER, SUBJECT_LE_CA,
-                              LE_ZONE_UPDATE_METHOD)
-from serverPKI.utils import sld, sli, sln, sle, options
+from serverPKI.utils import sld, sli, sln, sle, options,  Pathes, X509atts, Misc
 from serverPKI.utils import updateSOAofUpdatedZones
 from serverPKI.utils import updateZoneCache, print_order, ddns_update
 
@@ -194,7 +192,7 @@ def _issue_cert_for_one_algo(encryption_algo: EncAlgoCKS, cert_meta: Certificate
                                     alt_names,
                                     must_staple=cert_meta.ocsp_must_staple)
 
-    acme = AcmeV2(LE_SERVER, account)
+    acme = AcmeV2(Misc.LE_SERVER, account)
     try:
         sli('Requesting certificate issuance from LE...')
 
@@ -256,13 +254,13 @@ def _get_intermediate_instance(db: db_conn, int_cert: x509.Certificate) -> CertI
     :return: ci of CA cert
     """
 
-    ci = CertKeyStore.ci_from_cert_and_name(db=db, cert=int_cert, name=SUBJECT_LE_CA)
+    ci = CertKeyStore.ci_from_cert_and_name(db=db, cert=int_cert, name=Misc.SUBJECT_LE_CA)
     if ci:
         return ci
 
     # intermediate is not in DB - insert it
     # obtain our cert meta
-    cm = create_CAcert_meta(db=db, name=SUBJECT_LE_CA)
+    cm = create_CAcert_meta(db=db, name=Misc.SUBJECT_LE_CA)
     ci = cm.create_instance(state=CertState('issued'),
                             not_before=int_cert.not_valid_before,
                             not_after=int_cert.not_valid_after)
@@ -284,7 +282,7 @@ def _authorize(cert_meta, account):
     @rtype:             True if all fqdns could be authorized, False otherwise
     @exceptions:        manuale_errors.AutomatoesError on Network or other fatal error
     """
-    acme = AcmeV2(LE_SERVER, account)
+    acme = AcmeV2(Misc.LE_SERVER, account)
 
     FQDNS = dict()
     FQDNS[cert_meta.name] = 0
@@ -394,7 +392,7 @@ def create_challenge_responses_in_dns(zones, fqdn_challenges):
                             DNS update failed for zone {} with rcode: {}
     """
 
-    if LE_ZONE_UPDATE_METHOD == 'zone_file':
+    if Misc.LE_ZONE_UPDATE_METHOD == 'zone_file':
 
         for zone in zones.keys():
             dest = str(Pathes.zone_file_root / zone / Pathes.zone_file_include_name)
@@ -411,7 +409,7 @@ def create_challenge_responses_in_dns(zones, fqdn_challenges):
             updateZoneCache(zone)
         updateSOAofUpdatedZones()
 
-    elif LE_ZONE_UPDATE_METHOD == 'ddns':
+    elif Misc.LE_ZONE_UPDATE_METHOD == 'ddns':
 
         txt_datatape = rdatatype.from_text('TXT')
         for zone in zones.keys():
@@ -448,7 +446,7 @@ def delete_challenge_responses_in_dns(zones):
                             DNS update failed for zone {} with rcode: {}
     """
 
-    if LE_ZONE_UPDATE_METHOD == 'zone_file':
+    if Misc.LE_ZONE_UPDATE_METHOD == 'zone_file':
 
         for zone in zones.keys():
             dest = str(Pathes.zone_file_root / zone / Pathes.zone_file_include_name)
@@ -457,7 +455,7 @@ def delete_challenge_responses_in_dns(zones):
             updateZoneCache(zone)
         updateSOAofUpdatedZones()
 
-    elif LE_ZONE_UPDATE_METHOD == 'ddns':
+    elif Misc.LE_ZONE_UPDATE_METHOD == 'ddns':
 
         txt_datatape = rdatatype.from_text('TXT')
         for zone in zones.keys():

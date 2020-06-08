@@ -32,9 +32,7 @@ from postgresql import alock
 from postgresql import exceptions
 
 # --------------- local imports --------------
-import serverPKI.config as conf
-from serverPKI.utils import sld, sli, sln, sle
-
+from serverPKI.utils import DBAccount, sld, sli, sln, sle
 
 # --------------- db classes --------------
 class DbConnection(object):
@@ -53,33 +51,30 @@ class DbConnection(object):
         @exceptions:        None, but does a exit(1) if connection can't be
                             established
         """
-        if service not in ('serverpki',):
-            sle('Config error: dbAccounts must be "serverpki"')
-            sys.exit(0)
 
         self.lock = None
         self.conn = None
         self.sslcrtfile = None
         try:
-            self.host = conf.dbAccounts[service]['dbHost']
-            self.port = conf.dbAccounts[service]['dbPort']
-            self.user = conf.dbAccounts[service]['dbUser']
-            self.dba_user = conf.dbAccounts[service]['dbDbaUser']
-            self.ssl_required = conf.dbAccounts[service]['dbSslRequired']
-            self.database = conf.dbAccounts[service]['dbDatabase']
-            self.search_path = conf.dbAccounts[service]['dbSearchPath']
+            self.host = DBAccount.dbHost
+            self.port = str(DBAccount.dbPort)
+            self.user = DBAccount.dbUser
+            self.dba_user = DBAccount.dbDbaUser
+            self.ssl_required = DBAccount.dbSslRequired
+            self.database = DBAccount.dbDatabase
+            self.search_path = DBAccount.dbSearchPath
 
             ssl_option = (', sslmode=' + '"require"') if self.ssl_required else ''
-            
+
             self.dsn = str('host=' + self.host + ', port=' + self.port +
                            ', user=' + self.user + ', database=' + self.database + ssl_option)
 
-            if 'dbCert' in conf.dbAccounts[service]:
-                self.sslcrtfile = conf.dbAccounts[service]['dbCert']
-                self.sslkeyfile = conf.dbAccounts[service]['dbCertKey']
+            if DBAccount.dbCert:
+                self.sslcrtfile = DBAccount.dbCert
+                self.sslkeyfile = DBAccount.dbCertKey
                 self.dsn = self.dsn + str(', sslcrtfile={}, sslkeyfile={}'.format(self.sslcrtfile, self.sslkeyfile))
         except:
-            sle('Config error: Missing or wrong keyword in dbAccounts.\n' +
+            sle('Config error: Missing or wrong keyword in DBAccount.\n' +
                 'Must be dbHost, dbPort, dbUser, , dbDbaUser, dbDatabase, dbSslrequired and dbSearchPath.')
             raise(BaseException())
 

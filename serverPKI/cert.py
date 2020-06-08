@@ -43,9 +43,8 @@ from cryptography import x509
 
 from postgresql import driver as db_conn
 # --------------- local imports --------------
-from serverPKI.config import Pathes, X509atts, LE_SERVER
 from serverPKI.db import DBStoreException
-from serverPKI.utils import sld, sli, sln, sle, db_encryption_key, db_encryption_in_use
+from serverPKI.utils import Pathes, sld, sli, sln, sle, db_encryption_key, db_encryption_in_use
 
 # ---------------  prepared SQL queries for class Certificate  --------------
 
