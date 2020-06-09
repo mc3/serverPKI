@@ -28,7 +28,7 @@ CREATE DOMAIN port_number
 GRANT USAGE ON DOMAIN port_number TO public;
 
 ------------------------------ type of Subject
-CREATE TYPE subject_type AS ENUM ('CA', 'client', 'server');
+CREATE TYPE subject_type AS ENUM ('CA', 'client', 'server', 'reserved');
 GRANT USAGE ON TYPE subject_type TO public;
 
 ------------------------------ type of Place

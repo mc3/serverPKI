@@ -61,9 +61,9 @@ from automatoes import errors as manuale_errors
 
 # --------------- local imports --------------
 from serverPKI.cacert import create_CAcert_meta
-from serverPKI.cert import Certificate, CertInstance, CertKeyStore, EncAlgo, EncAlgoCKS, CertType, CertState
-from serverPKI.utils import sld, sli, sln, sle, options,  Pathes, X509atts, Misc
-from serverPKI.utils import updateSOAofUpdatedZones
+from serverPKI.cert import Certificate, CertInstance, CertKeyStore, EncAlgo, EncAlgoCKS, CertState, CM
+from serverPKI.utils import sld, sli, sln, sle,  Pathes, X509atts, Misc
+from serverPKI.utils import updateSOAofUpdatedZones, get_options
 from serverPKI.utils import updateZoneCache, print_order, ddns_update
 
 
@@ -164,6 +164,7 @@ def _issue_cert_for_one_algo(encryption_algo: EncAlgoCKS, cert_meta: Certificate
     :return: None or dict: dict layout as follows:
              {'Cert': certificate, 'Key': certificate_key, 'Intermediate': intcert, 'Algo': encryption_algo}
     """
+    options = get_options()
 
     alt_names = [cert_meta.name, ]
     if len(cert_meta.altnames) > 0:
@@ -253,20 +254,26 @@ def _get_intermediate_instance(db: db_conn, int_cert: x509.Certificate) -> CertI
     :param int_cert: the CA cert to find the ci for
     :return: ci of CA cert
     """
-
     ci = CertKeyStore.ci_from_cert_and_name(db=db, cert=int_cert, name=Misc.SUBJECT_LE_CA)
     if ci:
         return ci
 
     # intermediate is not in DB - insert it
-    # obtain our cert meta
-    cm = create_CAcert_meta(db=db, name=Misc.SUBJECT_LE_CA)
+    # obtain our cert meta - check, if it exists
+
+    if Misc.SUBJECT_LE_CA in Certificate.names(db):
+        cm = CM(db, Misc.SUBJECT_LE_CA)                 # yes: we have meta but no instance
+    else:                                               # no: this ist 1st cert with this CA
+        cm = create_CAcert_meta(db=db, name=Misc.SUBJECT_LE_CA)
+    random_ci = Certificate.random_ci(db)
     ci = cm.create_instance(state=CertState('issued'),
                             not_before=int_cert.not_valid_before,
-                            not_after=int_cert.not_valid_after)
+                            not_after=int_cert.not_valid_after,
+                            ca_cert_ci=random_ci)
+    cm.save_instance(ci)
     ci.ca_cert_ci = ci  # CAs are issued by themselves
     ci.store_cert_key(algo=EncAlgoCKS('rsa'), cert=int_cert, key=b'')  ##FIXME## might be ec in the future
-    ci.save()
+    cm.save_instance(ci)
 
     return ci
 
@@ -319,7 +326,7 @@ def _authorize(cert_meta, account):
         # find zones by fqdn
         zones = {}
         sld('Calling zone_and_FQDN_from_altnames()')
-        for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta):
+        for (zone, fqdn) in Certificate.zone_and_FQDN_from_altnames(cert_meta):
             if fqdn in fqdn_challenges:
                 if zone in zones:
                     if fqdn not in zones[zone]: zones[zone].append(fqdn)

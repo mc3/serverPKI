@@ -310,7 +310,6 @@ def create_CAcert_meta(db: db_conn, name: str) -> Certificate:
     """
     Lookup or create a CA cert meta in rows ceetificates and subjects
     :param db:          pened database connection in read/write transaction
-    :param cert_type:   either 'local' or 'LE' for local or Letsencrypt certs
     :param name:        name of CA cert (as configured in config: Misc.SUBJECT_LOCAL_CA or SUBJECT_LE_CA)
     :return:            cert meta
     """

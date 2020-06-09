@@ -50,8 +50,10 @@ CREATE TABLE CertInstances (     -- certificate instances being issued
                         ON UPDATE RESTRICT
                         DEFERRABLE
                         INITIALLY DEFERRED,
-  not_before        TIMESTAMP,                      -- 'date, where cert is valid'
-  not_after         TIMESTAMP,                      -- 'date where cert expires'
+  not_before        TIMESTAMP
+                            DEFAULT NOW() NOT NULL, -- 'date, where cert is valid'
+  not_after         TIMESTAMP
+                            DEFAULT NOW() NOT NULL, -- 'date where cert expires'
   updated           dd.updated,                     -- 'time of record update'
   remarks           TEXT                            -- 'Remarks'
 )

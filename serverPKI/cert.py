@@ -25,6 +25,7 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 import binascii
 import datetime
 from functools import total_ordering
+from pathlib import Path
 import sys
 from typing import Union, Optional, Dict, List, Tuple
 
@@ -135,7 +136,7 @@ ps_fqdn_from_serial = None
 
 class EncAlgo(str):
     def __new__(cls, content):
-        assert content in ('rsa', 'ec', 'ec plus rsa')
+        assert content in ('rsa', 'ec', 'rsa_plus_ec')
         return str.__new__(cls, content)
 
 
@@ -147,7 +148,7 @@ class EncAlgoCKS(str):
 
 class SubjectType(str):
     def __new__(cls, content):
-        assert content in ('CA', 'client', 'server')
+        assert content in ('CA', 'client', 'server', 'reserved')
         return str.__new__(cls, content)
 
 
@@ -226,7 +227,7 @@ class Certificate(object):
 
         global ps_insert_cacert, ps_insert_cacert_subject
 
-        cm = Certificate(db, name)
+        cm = CM(db, name)
         if cm.row_id:                             # do we have a row in db?
             return cm  # yes, return existing meta instance
         if not cert_type:
@@ -262,6 +263,25 @@ class Certificate(object):
         for (name,) in row_list:
             names.append(name)
         return names
+
+    @staticmethod
+    def random_ci(db: db_conn) -> 'CertInstance':
+        """
+        Obtain a random cert instance as temporary cacert_ci while creating 1st cert instance
+        :param db:   opened database connection
+        :return: CertInstance instance
+        """
+        for cm in _all_CMs.values():
+            if cm.cert_instances:
+                return cm.cert_instances[0]
+        # no cm with ci's loaded - look at DB
+        for name in Certificate.names(db):
+            cm = CM(db, name)
+            if cm.cert_instances:
+                return cm.cert_instances[0]
+        sle('Can''t find any CertInstance in DB. Can''t store new CA cert. Can''t continue.')
+        sys.exit(1)
+
 
     def __del__(self):
         global _all_CMs
@@ -387,9 +407,10 @@ class Certificate(object):
                         ca_cert_ci: 'CertInstance',
                         ocsp_ms: Optional[bool] = True,
                         cert_key_stores: Optional[dict]={}
-                        ):
+                        ) -> 'CertInstance':
         the_state = CertState(state) if state else CertState('reserved')
         the_ocsp_ms = ocsp_ms if ocsp_ms else self.ocsp_must_staple
+
         ci = CertInstance(cert_meta=self,
                           state=the_state,
                           ocsp_ms=the_ocsp_ms,
@@ -480,8 +501,8 @@ class Certificate(object):
             fqdn_tags = fqdn.split(sep='.')
             for i in range(1, len(fqdn_tags) + 1):
                 zone = '.'.join(fqdn_tags[-i::])
-                if (Pathes.zone_file_root / zone).exists():
-                    sld('{}'.format(str(Pathes.zone_file_root / zone)))
+                if (Path(Pathes.zone_file_root) / zone).exists():
+                    sld('{}'.format(str(Path(Pathes.zone_file_root) / zone)))
                     retval.append((zone, fqdn))
                     break
         return retval
@@ -625,9 +646,16 @@ q_store_instance = """
         RETURNING id::int
 """
 
+q_update_instance = """
+    UPDATE CertInstances
+        SET certificate=$1::INTEGER, state=$2, ocsp_must_staple=$3::BOOLEAN, 
+            not_before=$4::DATE, not_after=$5::DATE, cacert=$6::INTEGER
+        WHERE id=$7::INTEGER
+"""
 ps_load_instance = None
 ps_delete_instance = None
 ps_store_instance = None
+ps_update_instance = None
 
 
 # ---------------------------- class CertInstance (CI)---------------------------
@@ -740,10 +768,12 @@ class CertInstance(object):
         Store this instance of CertInstance in DB backend (must not exist in DB)
         :return:
         """
-        global ps_store_instance
+        global ps_store_instance, ps_update_instance
 
         if not ps_store_instance:
             ps_store_instance = self.cm.db.prepare(q_store_instance)
+        if not ps_update_instance:
+            ps_update_instance = self.cm.db.prepare(q_update_instance)
         sld ('CertInstance._save(): row_id={}, state={}, ocsp_ms={}, not_before={}, not_after={}, ca_cert_ci.row_i={}'.format(
             self.cm.row_id,
             self.state,
@@ -752,7 +782,17 @@ class CertInstance(object):
             self.not_after,
             self.ca_cert_ci.row_id
         ))
-        self.row_id = ps_store_instance.first(self.cm.row_id,
+        if self.row_id:
+            result = ps_update_instance.first(self.cm.row_id,
+                                        self.state,
+                                        self.ocsp_ms,
+                                        self.not_before,
+                                        self.not_after,
+                                        self.ca_cert_ci.row_id,
+                                        self.row_id)
+            assert result==1,'?Failed to update CI with row_id {} of cert {}'.format(self.row_id, self.cm.name)
+        else:
+            self.row_id = ps_store_instance.first(self.cm.row_id,
                                         self.state,
                                         self.ocsp_ms,
                                         self.not_before,
@@ -891,7 +931,7 @@ class CertKeyStore(object):
         """
 
         hash = CertKeyStore.hash_from_cert(cert)
-        cm = Certificate(db=db, name=name)
+        cm = CM(db=db, name=name)
         if not cm.row_id:  # make shure cert meta has been loaded (with all dependant  ci,cks)
             return None  # No cert meta with that name
         if hash in CertKeyStore._cert_key_stores:
@@ -904,7 +944,7 @@ class CertKeyStore(object):
                  cert_instance: CertInstance,
                  algo: EncAlgoCKS,
                  cert: Union[x509.Certificate, bytes],
-                 key: Union[RSAPrivateKeyWithSerialization, bytes],
+                 key: Optional[Union[RSAPrivateKeyWithSerialization, bytes]],
                  hash=None):
         """
         Create a new CertKeyStore instance
@@ -942,10 +982,12 @@ class CertKeyStore(object):
                 AssertionError('CertKeyStore: Argument id is omitted and arument cert'
                                'is not a x509.Certificate instance')
             self._cert = cert.public_bytes(Encoding.PEM)
-            self._key = self._encrypt_key(key)
+            self._key = self._encrypt_key(key) if key else b''
             self.hash = self.hash_from_cert(cert)
 
             self._save()
+
+        CertKeyStore._cert_key_stores[hash] = self
 
     def __del__(self):
         if self.hash in CertKeyStore._cert_key_stores:

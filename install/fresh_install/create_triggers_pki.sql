@@ -629,5 +629,9 @@ GRANT USAGE ON SCHEMA pki TO "serverPKI";
 
 INSERT INTO Revision(schemaversion, keysencrypted) values(5,false);
 
+INSERT INTO Certificates(id,type,disabled,remarks) VALUES(1,'local',true,'Placeholder to resolve chicken-egg-problem');
+INSERT INTO Subjects(id,type,name,isAltname,certificate,remarks) VALUES(1,'reserved','No cert',false,1, 'Placeholder to resolve chicken-egg-problem');
+INSERT INTO CertInstances(id,certificate,state,CAcert,remarks) VALUES(1,1,'reserved',1,'Placeholder to resolve chicken-egg-problem');
+
 COMMIT;
 
