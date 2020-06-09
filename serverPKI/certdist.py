@@ -38,7 +38,7 @@ from paramiko import SSHClient, HostKeys, AutoAddPolicy
 from postgresql import driver as db_conn
 
 from serverPKI.cert import Certificate, CertInstance, EncAlgoCKS, CertState, CertType, PlaceCertFileType, SubjectType
-from serverPKI.utils import options as opts
+from serverPKI.utils import get_options
 from serverPKI.utils import sld, sli, sln, sle,  Pathes, Misc
 from serverPKI.utils import updateSOAofUpdatedZones, ddns_update
 
@@ -53,6 +53,7 @@ def export_instance(db: db_conn) -> bool:
     :param db: Opened database handle
     :return: True on success
     """
+    opts = get_options()
 
     name = Certificate.fqdn_from_instance_serial(db, opts.cert_serial)
     cert_meta = Certificate(db, name)
@@ -125,6 +126,8 @@ def deployCerts(cert_metas: Dict[str, Certificate],
 
     error_found = False
     limit_hosts = False
+
+    opts = get_options()
 
     only_host = []
     if opts.only_host: only_host = opts.only_host
@@ -226,36 +229,42 @@ def deployCerts(cert_metas: Dict[str, Certificate],
                             sld('Handling fqdn {} and dest_dir "{}" in deployCerts'.format(
                                 fqdn, dest_dir))
 
-                            if place.key_path:
-                                key_dest_dir = PurePath(dest_path, place.key_path)
-                                distribute_cert(fd_key, fqdn, key_dest_dir, key_file_name, place, None)
+                            try:
 
-                            elif place.cert_file_type == 'separate':
-                                distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
-                                if cert_meta.cert_type == 'LE':
-                                    chain_file_name = cert_cacert_chain_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
-                                    fd_chain = StringIO(cert_text + cacert_text)
-                                    distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
+                                if place.key_path:
+                                    key_dest_dir = PurePath(dest_path, place.key_path)
+                                    distribute_cert(fd_key, fqdn, key_dest_dir, key_file_name, place, None)
 
-                            elif place.cert_file_type == 'combine key':
-                                cert_file_name = key_cert_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
-                                fd_cert = StringIO(key_text + cert_text)
-                                if cert_meta.cert_type == 'LE':
-                                    chain_file_name = key_cert_cacert_chain_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
-                                    fd_chain = StringIO(key_text + cert_text + cacert_text)
-                                    distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
+                                elif place.cert_file_type == 'separate':
+                                    distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
+                                    if cert_meta.cert_type == 'LE':
+                                        chain_file_name = cert_cacert_chain_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
+                                        fd_chain = StringIO(cert_text + cacert_text)
+                                        distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
 
-                            elif place.cert_file_type == 'combine both':
-                                cert_file_name = key_cert_cacert_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
-                                fd_cert = StringIO(key_text + cert_text + cacert_text)
+                                elif place.cert_file_type == 'combine key':
+                                    cert_file_name = key_cert_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
+                                    fd_cert = StringIO(key_text + cert_text)
+                                    if cert_meta.cert_type == 'LE':
+                                        chain_file_name = key_cert_cacert_chain_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
+                                        fd_chain = StringIO(key_text + cert_text + cacert_text)
+                                        distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
 
-                            elif place.cert_file_type == 'combine cacert':
-                                cert_file_name = cert_cacert_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
-                                fd_cert = StringIO(cert_text + cacert_text)
-                                distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
+                                elif place.cert_file_type == 'combine both':
+                                    cert_file_name = key_cert_cacert_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
+                                    fd_cert = StringIO(key_text + cert_text + cacert_text)
 
-                            # this may be redundant in case of LE, where the cert was in chained file
-                            distribute_cert(fd_cert, fqdn, dest_dir, cert_file_name, place, jail)
+                                elif place.cert_file_type == 'combine cacert':
+                                    cert_file_name = cert_cacert_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
+                                    fd_cert = StringIO(cert_text + cacert_text)
+                                    distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
+
+                                # this may be redundant in case of LE, where the cert was in chained file
+                                distribute_cert(fd_cert, fqdn, dest_dir, cert_file_name, place, jail)
+
+                            except IOError:         # distribute_cert may error out
+                                error_found = True
+                                break               # no cert - no TLSA
             
             sli('')
 

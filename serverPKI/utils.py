@@ -353,6 +353,15 @@ def parse_options():
         options.verbose = True
     return options
 
+def get_options() -> dict:
+    """
+    Return dict of command line options.
+    Importing the global does not always work
+    :return: options
+    """
+
+    return options
+
 # --------------- logging functions --------------
 
 syslog_initialized = False
