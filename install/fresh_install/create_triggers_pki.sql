@@ -633,5 +633,10 @@ INSERT INTO Certificates(id,type,disabled,remarks) VALUES(1,'local',true,'Placeh
 INSERT INTO Subjects(id,type,name,isAltname,certificate,remarks) VALUES(1,'reserved','No cert',false,1, 'Placeholder to resolve chicken-egg-problem');
 INSERT INTO CertInstances(id,certificate,state,CAcert,remarks) VALUES(1,1,'reserved',1,'Placeholder to resolve chicken-egg-problem');
 
+SELECT pg_catalog.setval('pki.certificates_id_seq', 2, true);
+SELECT pg_catalog.setval('pki.subjects_id_seq', 2, true);
+SELECT pg_catalog.setval('pki.certinstances_id_seq', 2, true);
+
+
 COMMIT;
 
