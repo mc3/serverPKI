@@ -774,7 +774,7 @@ class CertInstance(object):
             ps_store_instance = self.cm.db.prepare(q_store_instance)
         if not ps_update_instance:
             ps_update_instance = self.cm.db.prepare(q_update_instance)
-        sld ('CertInstance._save(): row_id={}, state={}, ocsp_ms={}, not_before={}, not_after={}, ca_cert_ci.row_i={}'.format(
+        sld ('CertInstance._save(): cm.row_id={}, state={}, ocsp_ms={}, not_before={}, not_after={}, ca_cert_ci.row_i={}'.format(
             self.cm.row_id,
             self.state,
             self.ocsp_ms,

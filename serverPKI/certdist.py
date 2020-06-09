@@ -585,7 +585,7 @@ def distribute_tlsa_rrs(cert_meta: Certificate, hashes: Union[Tuple[str],List[st
     
             tlsa_datatype = rdatatype.from_text('TLSA')
             zones = {}
-            for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta):
+            for (zone, fqdn) in cert_meta.zone_and_FQDN_from_altnames():
                 if zone in zones:
                     if fqdn not in zones[zone]: zones[zone].append(fqdn)
                 else:
