@@ -217,3 +217,4 @@ def create_local_cert_meta(db_handle):
     SELECT * FROM add_cert($1::TEXT::citext, 'client'::TEXT::subject_type, 'local'::TEXT::cert_type, 'rsa'::TEXT::cert_encryption_algo, 'False', NULL, NULL, NULL, $2::TEXT::citext, NULL, $3::TEXT::citext)
     """, CLIENT_CERT_1, get_hostname(), TEST_PLACE_1)
     print(result)
+

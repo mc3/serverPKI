@@ -1,9 +1,10 @@
 import sys
+from subprocess import Popen, PIPE
 
 from postgresql import driver as db_conn
 import pytest
 
-from .conftest import CLIENT_CERT_1, TEST_PLACE_1, get_hostname
+from .conftest import CLIENT_CERT_1, TEST_PLACE_1, config_file, get_hostname
 
 def test_1_db_setup(psql_handle):
     """
@@ -25,13 +26,18 @@ def test_if_cert_meta_created(create_local_cert_meta, db_handle):
     rows = db_handle.query("""
     SELECT * FROM certs""")
 
-    assert len(rows) == 1
+    assert len(rows) == 2
 
-    row = rows[0]
+    row = rows[1]
     print(row)
     for i in range(len(row)):
         assert row[i] == ('client', 'client1', 'local', 'rsa', False, None, None, None, None, get_hostname(),
                          None, 'place_1')[i]
 
-def test_run_from_command_line():
-    pass
+def test_run_from_command_line_1(create_local_cert_meta):
+    p = Popen(('operate_serverPKI', '-d', '-f', config_file) ,
+              stdout=PIPE, stderr=PIPE, text=True)
+    stdout, stderr = p.communicate()
+    print(stderr)
+    print(stdout)
+    assert p.returncode == 0
