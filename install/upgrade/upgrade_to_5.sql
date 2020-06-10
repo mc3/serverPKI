@@ -3,6 +3,7 @@
 START TRANSACTION; 
 
 ALTER TYPE dd.cert_encryption_algo RENAME VALUE 'rsa_plus_ec' TO 'rsa plus ec';
+ALTER TYPE dd.subject_type ADD VALUE 'reserved';
 
 SET search_path = pki, dd, public, pg_catalog;
 
