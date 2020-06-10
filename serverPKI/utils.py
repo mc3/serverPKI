@@ -804,7 +804,7 @@ def print_certs(db: db_conn, names) -> None:
     global ps_certs_for_printing_insert
 
     pt = PrettyTable()
-    pt.field_names = ['Subject', 'Cert Name', 'Type', 'authorized', 'Alt Name',
+    pt.field_names = ['Subject', 'Cert Name', 'Type', 'Algo', 'OCSP m st', 'authorized', 'Alt Name',
                       'TLSA', 'Port', 'Dist Host', 'Jail', 'Place']
     with db.xact('SERIALIZABLE'):
         name_tuple_list = []
@@ -828,8 +828,8 @@ def print_certs(db: db_conn, names) -> None:
         print()
 
         pt = PrettyTable()
-        pt.field_names = ['Serial', 'Cert Name', 'State', 'not before', 'not after',
-                          'hash', 'updated']
+        pt.field_names = ['Serial', 'Cert Name', 'Type', 'State', 'not before', 'not after',
+                          'ALGO', 'Hash', 'updated']
 
         pc_query = db.prepare('SELECT * FROM inst WHERE "name" IN (SELECT name FROM "print_certs")')
 
