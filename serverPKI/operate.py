@@ -26,7 +26,7 @@ from paramiko import util
 from postgresql import driver as db_conn
 
 from serverPKI.cacert import issue_local_CAcert
-from serverPKI.cert import Certificate, CertType
+from serverPKI.cert import Certificate, CertType, CM
 from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA, export_instance
 from serverPKI.db import DbConnection as dbc
 from serverPKI.issue_LE import issue_LE_cert
@@ -135,7 +135,7 @@ def execute_from_command_line():
     our_cert_names = sorted(list(cert_name_set))
 
     for name in our_cert_names:
-        c = Certificate(db, name)
+        c = CM(db, name)
         if c: our_certs[name] = c
 
     if opts.check_only and not opts.schedule:
