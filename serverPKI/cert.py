@@ -136,7 +136,7 @@ ps_fqdn_from_serial = None
 
 class EncAlgo(str):
     def __new__(cls, content):
-        assert content in ('rsa', 'ec', 'rsa_plus_ec')
+        assert content in ('rsa', 'ec', 'rsa plus ec')
         return str.__new__(cls, content)
 
 
@@ -243,7 +243,7 @@ class Certificate(object):
         (subjects_row_id,) = ps_insert_cacert_subject.first('CA', name, certificates_row_id)
         if not subjects_row_id:
             raise AssertionError('CA_cert_meta: ps_insert_cacert_subject failed')
-        cm = Certificate(db, name)
+        cm = CM(db, name)
         if cm.row_id and cm.cert_type == cert_type:
             return cm
         sle('Inserting of CA cert meta {} into DB failed'.format(name))
@@ -418,6 +418,13 @@ class Certificate(object):
                           not_after=not_after,
                           ca_cert_ci=ca_cert_ci,
                           cert_key_stores=cert_key_stores)
+        ci._save()                             # obtain a row_id to make it unique
+        for a_ci in self.cert_instances:
+            assert ci.row_id != a_ci.row_id, '?Duplicate CI found with row_id={} and cert meta={}'.format(
+                ci.row_id, self.cm.name)
+        assert ci not in self.cert_instances, '?Attempted to create CI a 2nd time with row_id={} and cert meta={}'.format(
+                ci.row_id, self.cm.name)
+        self.cert_instances.append(ci)
         return ci
 
     def save_instance(self, ci: 'CertInstance'):
@@ -427,8 +434,9 @@ class Certificate(object):
         :return:
         """
         if ci._save():  # _ci._save() is only for usage by Certificate
-            if ci not in self.cert_instances:
-                self.cert_instances.append(ci)
+            assert ci in self.cert_instances, ('?Attempt to save CI which was not created by CM.create_instance'
+                                              'with row_id={} and cert meta={}'.format(
+                                                    ci.row_id, self.cm.name))
 
     def delete_instance(self, ci: 'CertInstance') -> int:
         """
@@ -436,6 +444,9 @@ class Certificate(object):
         :param ci: The instance to delete
         :return:
         """
+        assert ci in self.cert_instances, '?Attempt to delete CI which was not created by CM.create_instance'
+        'with row_id={} and cert meta={}'.format(
+            ci.row_id, self.cm.name)
         result = ci._delete
         if ci in self.cert_instances:
             self.cert_instances.remove(ci)
