@@ -2,6 +2,8 @@
 
 START TRANSACTION; 
 
+ALTER TYPE dd.cert_encryption_algo RENAME VALUE 'rsa_plus_ec' TO 'rsa plus ec';
+
 SET search_path = pki, dd, public, pg_catalog;
 
 CREATE TABLE CertKeyData                  -- cert, key and hash binary data
