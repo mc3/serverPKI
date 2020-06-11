@@ -210,6 +210,7 @@ class Certificate(object):
             ps_fqdn_from_serial = db.prepare(q_fqdn_from_serial)
 
         result = ps_fqdn_from_serial.first(serial)
+        sld('Certificate.fqdn_from_instance_serial found fqdn={} from row_id={}'.format(result, serial))
         if result: return result
         sle('No cert meta found for serial {}.'.format(serial))
         sys.exit(1)
@@ -230,8 +231,7 @@ class Certificate(object):
         cm = CM(db, name)
         if cm.row_id:                             # do we have a row in db?
             return cm  # yes, return existing meta instance
-        if not cert_type:
-            return
+        assert cert_type, '?Missing cert_type for of new CA CM'
         sln('Inserting CA cert meta {}, cert type {} into DB'.format(name, cert_type))
         if not ps_insert_cacert:
             ps_insert_cacert = db.prepare(q_insert_cacert)
@@ -404,10 +404,11 @@ class Certificate(object):
                         state: Optional[CertState],
                         not_before: datetime.datetime,
                         not_after: datetime.datetime,
-                        ca_cert_ci: 'CertInstance',
+                        ca_cert_ci: Optional['CertInstance']=None,
                         ocsp_ms: Optional[bool] = True,
                         cert_key_stores: Optional[dict]={}
                         ) -> 'CertInstance':
+        assert ca_cert_ci or self.subject_type == SubjectType('CA'), '?CM.create_instance called wthout ca_cert_ci of none-CA CM'
         the_state = CertState(state) if state else CertState('reserved')
         the_ocsp_ms = ocsp_ms if ocsp_ms else self.ocsp_must_staple
 
@@ -657,6 +658,13 @@ q_store_instance = """
         RETURNING id::int
 """
 
+q_store_cacert_instance = """
+    INSERT INTO CertInstances
+            (certificate, state, ocsp_must_staple, not_before, not_after, cacert)
+        VALUES ($1::INTEGER, $2, $3::BOOLEAN, $4::DATE, $5::DATE, currval('certinstances_id_seq'))
+        RETURNING id::int
+"""
+
 q_update_instance = """
     UPDATE CertInstances
         SET certificate=$1::INTEGER, state=$2, ocsp_must_staple=$3::BOOLEAN, 
@@ -666,6 +674,7 @@ q_update_instance = """
 ps_load_instance = None
 ps_delete_instance = None
 ps_store_instance = None
+ps_store_cacert_instance = None
 ps_update_instance = None
 
 
@@ -685,17 +694,17 @@ class CertInstance(object):
                  ocsp_ms: bool = None,
                  not_before: datetime.datetime = None,
                  not_after: datetime.datetime = None,
-                 ca_cert_ci: 'CertInstance' = None,
+                 ca_cert_ci: Optional['CertInstance'] = None,
                  cert_key_stores: Dict[EncAlgoCKS, 'CertKeyStore'] = {}):
         """
         Load or create a certificate instance (CI), which may be incomplete and may be updated later
         :param cert_meta: Our Certificate meta instance (required)
-        :param row_id: id of row in DB
+        :param row_id: id of row in DB, if supplied, other args may be empty
         :param state: State of new instance
         :param ocsp_ms:
         :param not_before:
         :param not_after:
-        :param ca_cert_ci:
+        :param ca_cert_ci:  Must be supplied, if row_id is empty and cert meta is not a CA
         :param cert_key_stores:
         """
 
@@ -712,6 +721,7 @@ class CertInstance(object):
         self.not_before = not_before
         self.not_after = not_after
         self.ca_cert_ci = ca_cert_ci
+        assert ca_cert_ci or row_id or cert_meta.subject_type == SubjectType('CA')
         self.cksd = cert_key_stores if cert_key_stores else {}
         if row_id:
             self.row_id = row_id
@@ -727,12 +737,16 @@ class CertInstance(object):
                     self.ocsp_ms = row['ocsp_must_staple']
                     self.not_before = row['not_before']
                     self.not_after = row['not_after']
-                    ca_cert_fqdn = Certificate.fqdn_from_instance_serial(cert_meta.db, row['ca_cert_ci_id'])
-                    ca_cert_meta = CM(cert_meta.db, ca_cert_fqdn)
-                    self.ca_cert_ci = ca_cert_meta.instance_from_row_id(row['ca_cert_ci_id'])
-                    sld('Loading CertInstance row_id={}, state={}, ocsp_ms={}, not_before={}, not_after={}'
+                    if self.cm.subject_type == SubjectType('CA'):       # are we a CA ?
+                        self.ca_cert_ci = self                          # yes - we are issued from our self
+                    else:
+                        ca_cert_fqdn = Certificate.fqdn_from_instance_serial(cert_meta.db, row['ca_cert_ci_id'])
+                        ca_cert_meta = CM(cert_meta.db, ca_cert_fqdn)   # This have been loaded already by operate.execute_from_command_line
+                        self.ca_cert_ci = ca_cert_meta.instance_from_row_id(row['ca_cert_ci_id'])
+                        assert self.ca_cert_ci, '? No CI for CA cert found, while loading CI of {}:{}'.format(cert_meta.name, self.row_id)
+                    sld('Loaded CertInstance row_id={}, state={}, ocsp_ms={}, not_before={}, not_after={}, ca_cert_ci_id={}'
                         .format(self.row_id, self.state, self.ocsp_ms,
-                                self.not_before.isoformat(), self.not_after.isoformat()))
+                                self.not_before.isoformat(), self.not_after.isoformat(), row['ca_cert_ci_id']))
                     first = False
                 if not row['ckd_id']:
                     break                                       # we have no certkeydata
@@ -747,6 +761,9 @@ class CertInstance(object):
 
         else:
             self.row_id = None
+            if not self.ca_cert_ci:
+                self.ca_cert_ci = self
+
 
     def __str__(self):
         return str(self.row_id if self.row_id else self.cm.name + 'instance')
@@ -803,12 +820,22 @@ class CertInstance(object):
                                         self.row_id)
             assert result==1,'?Failed to update CI with row_id {} of cert {}'.format(self.row_id, self.cm.name)
         else:
-            self.row_id = ps_store_instance.first(self.cm.row_id,
-                                        self.state,
-                                        self.ocsp_ms,
-                                        self.not_before,
-                                        self.not_after,
-                                        self.ca_cert_ci.row_id)
+            if self.ca_cert_ci == self:     # we are a CI of a CA cert meta
+                if not ps_store_cacert_instance:
+                    ps_store_cacert_instance = self.cm.db.prepare(q_store_cacert_instance)
+                self.row_id = ps_store_cacert_instance.first(self.cm.row_id,
+                                                             self.state,
+                                                             self.ocsp_ms,
+                                                             self.not_before,
+                                                             self.not_after)
+            else:
+                self.row_id = ps_store_instance.first(self.cm.row_id,
+                                                      self.state,
+                                                      self.ocsp_ms,
+                                                      self.not_before,
+                                                      self.not_after,
+                                                      self.ca_cert_ci.row_id)
+            assert self.row_id, '?Failed to INSERT CI of {}'.format(self.cm.name)
         sld('CertInstance._save(): Returned row_id={}'.format(self.row_id))
 
     def store_cert_key(self,
@@ -943,8 +970,8 @@ class CertKeyStore(object):
 
         hash = CertKeyStore.hash_from_cert(cert)
         cm = CM(db=db, name=name)
-        if not cm.row_id:  # make shure cert meta has been loaded (with all dependant  ci,cks)
-            return None  # No cert meta with that name
+        if not cm.row_id:           # make shure cert meta has been loaded (with all dependant  ci,cks)
+            return None             # No cert meta with that name
         if hash in CertKeyStore._cert_key_stores:
             return CertKeyStore._cert_key_stores[hash].ci
         else:

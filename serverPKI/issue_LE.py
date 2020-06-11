@@ -108,12 +108,13 @@ def issue_LE_cert(cert_meta: Certificate) -> Optional[CertInstance]:
     sli('Creating certificate for {} and crypto algo {}'.format(cert_meta.name, cert_meta.encryption_algo))
 
     try:
-        account = manuale_cli.load_account(str(Pathes.le_account))
+        account: Account = manuale_cli.load_account(str(Pathes.le_account))
     except:
         sle('Problem with Lets Encrypt account data at {}'.
             format(Pathes.le_account))
         return None
-    if cert_meta.encryption_algo == EncAlgo('rsa_plus_ec'):
+
+    if cert_meta.encryption_algo == EncAlgo('rsa plus ec'):
         encryption_algos = (EncAlgoCKS('rsa'), EncAlgoCKS('ec'))
     else:
         encryption_algos = (cert_meta.encryption_algo,)
@@ -257,21 +258,20 @@ def _get_intermediate_instance(db: db_conn, int_cert: x509.Certificate) -> CertI
     ci = CertKeyStore.ci_from_cert_and_name(db=db, cert=int_cert, name=Misc.SUBJECT_LE_CA)
     if ci:
         return ci
-
+    sln('Storing new intermediate cert.')
     # intermediate is not in DB - insert it
     # obtain our cert meta - check, if it exists
 
     if Misc.SUBJECT_LE_CA in Certificate.names(db):
         cm = CM(db, Misc.SUBJECT_LE_CA)                 # yes: we have meta but no instance
+        sln('Cert meta for intermediate cert exists, but no instance.')
     else:                                               # no: this ist 1st cert with this CA
-        cm = create_CAcert_meta(db=db, name=Misc.SUBJECT_LE_CA)
-    random_ci = Certificate.random_ci(db)
+        sln('Cert meta for intermediate does not exist, creating {}.'.format(Misc.SUBJECT_LE_CA))
+        cm = create_CAcert_meta(db=db, name=Misc.SUBJECT_LE_CA, cert_type=CertType('LE'))
     ci = cm.create_instance(state=CertState('issued'),
                             not_before=int_cert.not_valid_before,
-                            not_after=int_cert.not_valid_after,
-                            ca_cert_ci=random_ci)
+                            not_after=int_cert.not_valid_after)
     cm.save_instance(ci)
-    ci.ca_cert_ci = ci  # CAs are issued by themselves
     ci.store_cert_key(algo=EncAlgoCKS('rsa'), cert=int_cert, key=b'')  ##FIXME## might be ec in the future
     cm.save_instance(ci)
 

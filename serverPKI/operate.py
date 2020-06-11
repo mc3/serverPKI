@@ -32,13 +32,13 @@ from serverPKI.db import DbConnection as dbc
 from serverPKI.issue_LE import issue_LE_cert
 from serverPKI.issue_local import issue_local_cert
 
-from serverPKI.utils import parse_options, parse_config
+from serverPKI.utils import parse_options, parse_config, get_config
 
 from serverPKI.utils import get_name_string, get_version_string, options_set, check_actions
 from serverPKI.utils import names_of_local_certs_to_be_renewed, print_certs
 from serverPKI.utils import options_set, check_actions, updateSOAofUpdatedZones
 from serverPKI.utils import read_db_encryption_key, encrypt_all_keys, decrypt_all_keys
-from serverPKI.utils import sld, sli, sln, sle, Misc, Pathes, options
+from serverPKI.utils import sld, sli, sln, sle
 from serverPKI.schedule import scheduleCerts
 
 from automatoes.register import register
@@ -59,9 +59,11 @@ def execute_from_command_line():
     ##util.log_to_file('sftp.log')
 
     options = opts = parse_options()        # globals not re-initialized
-    db_name = parse_config()                # globals not re-initialized
+    parse_config()                          # globals not re-initialized
+    (DBAccount, Misc, Pathes, X509atts) = get_config()
+    db_name = DBAccount.dbDatabase
 
-    sli('operateCA [{}-{}]started with options {}'.format(
+    sli('operateCA [{}-{}] started with options {}'.format(
         db_name, get_version_string(), options_set()))
     check_actions()
 
@@ -72,7 +74,14 @@ def execute_from_command_line():
 
     all_cert_names = Certificate.names(db)
 
-    sli('{} certificates in configuration'.format(len(all_cert_names)))
+    # preload CMs, CIs and CKSs of our CAs
+    cas = []
+    for name in (Misc.SUBJECT_LOCAL_CA, Misc.SUBJECT_LE_CA):
+        if name in all_cert_names:      # does CA exist in DB?
+            cm = CM(db, name)
+            cas.append(name)
+
+    sli('{} certificates and CAs {} in DB'.format(len(all_cert_names), cas))
 
     if opts.encrypt:
         if encrypt_all_keys(db):
@@ -148,7 +157,7 @@ def execute_from_command_line():
 
     if opts.schedule:
         sli('Scheduling actions.')
-        scheduleCerts(db, our_cert_names)
+        scheduleCerts(db, our_certs)
     else:
         if opts.create:
             sli('Creating certificates.')

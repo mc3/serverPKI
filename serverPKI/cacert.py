@@ -159,7 +159,7 @@ def create_local_ca_cert(db: db_conn,
     global local_cacert, local_cakey, local_cacert_instance
 
     # create rows for cacert meta (in certificates and subjects)
-    cm = create_CAcert_meta(db, Misc.SUBJECT_LOCAL_CA)
+    cm = create_CAcert_meta(db=db, name=Misc.SUBJECT_LOCAL_CA, cert_type=CertType('local'))
     ci = cm.most_recent_active_instance()
     if not ci:  # no ca cert in db
         sli('Local CA cert not in DB or has expired, creating a new one')
@@ -257,7 +257,6 @@ def create_local_ca_cert(db: db_conn,
                 Misc.LOCAL_CA_BITS,
                 not_after.isoformat()
             ))
-        ci.ca_cert_ci = ci
         ci.store_cert_key(algo='rsa', cert=cacert, key=cakey)
         ci.save()
 
@@ -306,16 +305,17 @@ def _load_cakey(cakey_pem: bytes) -> Optional[rsa.RSAPrivateKey]:
 
 # --------------- function --------------
 
-def create_CAcert_meta(db: db_conn, name: str) -> Certificate:
+def create_CAcert_meta(db: db_conn, name: str, cert_type: Optional[CertType]=None) -> Certificate:
     """
     Lookup or create a CA cert meta in rows ceetificates and subjects
-    :param db:          pened database connection in read/write transaction
+    :param db:          opened database connection in read/write transaction
     :param name:        name of CA cert (as configured in config: Misc.SUBJECT_LOCAL_CA or SUBJECT_LE_CA)
+    :cert_type:         CertType
     :return:            cert meta
     """
     if name not in (Misc.SUBJECT_LOCAL_CA, Misc.SUBJECT_LE_CA):
         raise AssertionError('create_CAcert_meta: argument name "{} invalid"'.format(name))
-    cm = Certificate.ca_cert_meta(db, name)
+    cm = Certificate.ca_cert_meta(db, name, cert_type)
     if not cm:
         sle('Failed to create CA cert meta for {}'.format(name))
         sys.exit(1)
