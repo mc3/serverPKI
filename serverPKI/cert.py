@@ -422,9 +422,9 @@ class Certificate(object):
         ci._save()                             # obtain a row_id to make it unique
         for a_ci in self.cert_instances:
             assert ci.row_id != a_ci.row_id, '?Duplicate CI found with row_id={} and cert meta={}'.format(
-                ci.row_id, self.cm.name)
+                ci.row_id, self.name)
         assert ci not in self.cert_instances, '?Attempted to create CI a 2nd time with row_id={} and cert meta={}'.format(
-                ci.row_id, self.cm.name)
+                ci.row_id, self.name)
         self.cert_instances.append(ci)
         return ci
 
@@ -437,7 +437,7 @@ class Certificate(object):
         if ci._save():  # _ci._save() is only for usage by Certificate
             assert ci in self.cert_instances, ('?Attempt to save CI which was not created by CM.create_instance'
                                               'with row_id={} and cert meta={}'.format(
-                                                    ci.row_id, self.cm.name))
+                                                    ci.row_id, self.name))
 
     def delete_instance(self, ci: 'CertInstance') -> int:
         """
@@ -447,8 +447,8 @@ class Certificate(object):
         """
         assert ci in self.cert_instances, '?Attempt to delete CI which was not created by CM.create_instance'
         'with row_id={} and cert meta={}'.format(
-            ci.row_id, self.cm.name)
-        result = ci._delete
+            ci.row_id, self.name)
+        result = ci._delete()
         if ci in self.cert_instances:
             self.cert_instances.remove(ci)
         return result
@@ -786,8 +786,11 @@ class CertInstance(object):
 
         if not ps_delete_instance:
             ps_delete_instance = self.cm.db.prepare(q_delete_instance)
+        sld('CI._delete called for row_id {}'.format(self.row_id))
         if self.row_id:
-            return ps_delete_instance(self.row_id)
+            result = ps_delete_instance.first(self.row_id)
+            sld('CI._delete returned {} for row_id {}'.format(result, self.row_id))
+            return result
         else:
             return 0
 
