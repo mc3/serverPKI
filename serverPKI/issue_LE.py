@@ -53,7 +53,7 @@ am.__dict__['DEFAULT_HEADERS'] = {
 }
 
 from automatoes.acme import AcmeV2
-from automatoes.model import Account
+from automatoes.model import Account, Order
 from automatoes import crypto as manuale_crypto
 from automatoes import issue as manuale_issue
 from automatoes import cli as manuale_cli
@@ -278,7 +278,7 @@ def _get_intermediate_instance(db: db_conn, int_cert: x509.Certificate) -> CertI
     return ci
 
 
-def _authorize(cert_meta, account):
+def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
     """
     Try to prove the control about a DNS object.
     
@@ -298,7 +298,7 @@ def _authorize(cert_meta, account):
             FQDNS[name] = 0
     domains = list(FQDNS.keys())
 
-    order = acme.new_order(domains, 'dns')
+    order: Order = acme.new_order(domains, 'dns')
     returned_order = acme.query_order(order)
     order.contents = returned_order.contents
     sld('new_order for {} returned\n{}'.

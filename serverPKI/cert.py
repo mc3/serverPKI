@@ -1029,7 +1029,7 @@ class CertKeyStore(object):
 
     def __del__(self):
         if self.hash in CertKeyStore._cert_key_stores:
-            del CertKeyStore._cert_key_stores[hash]
+            del CertKeyStore._cert_key_stores[self.hash]
         if self.algo in self.ci.cksd:
             del self.ci.cksd[self.algo]
 
