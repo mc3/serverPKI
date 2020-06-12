@@ -59,10 +59,11 @@ def issue_local_cert(cert_meta: Certificate) -> Optional[CertInstance]:
 
     (cacert, cakey, cacert_ci) = get_cacert_and_key(cert_meta.db)
 
-    sli('Creating key ({} bits) and cert for {} {}'.format(
+    sli('Creating key ({} bits) and cert for {} {}. Using CA cert {}'.format(
         int(X509atts.bits),
         cert_meta.subject_type,
-        cert_meta.name)
+        cert_meta.name,
+        cacert_ci.row_id)
     )
     serial = int(randbits(16))
     # Generate our key

@@ -175,7 +175,7 @@ def scheduleCerts(db: db_conn, cert_metas: Dict[str, cert.Certificate]) -> None:
         if deployed_ci and issued_ci:  # issued too old to replace deployed in future?
             if issued_ci.not_after < (deployed_ci.not_after +
                                       timedelta(days=Misc.LOCAL_ISSUE_MAIL_TIMEDELTA)):
-                to_be_deleted |= {(issued_ci,)}  # yes: mark for delete
+                to_be_deleted |= set((issued_ci,))  # yes: mark for delete
                 issued_ci = None
                 # request issue_mail if near to expiration
         if (deployed_ci
@@ -290,8 +290,9 @@ def _find_to_be_deleted(cm: cert.Certificate) -> Optional[set]:
         for ci in surviving:
             if ci.state == state:
                 ci_list.append(ci)
-        ci_list.sort()
-        s = set(ci_list[:-1])  # most recent instance survives
+        s = set(sorted(ci_list, key=lambda ci: ci.row)[-1])
+        ##ci_list.sort()
+        ##s = set(ci_list[:-1])  # most recent instance survives
         surviving -= s  # remove other instances from surviving set
         to_be_deleted |= s  # add other instances to to_be_deleted set
         sld('{}: {}'.format(state, str([i.__str__() for i in ci_list])))

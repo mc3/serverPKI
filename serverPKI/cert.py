@@ -469,9 +469,8 @@ class Certificate(object):
 
     @property
     def most_recent_active_instance(self):
-        for ci in reversed(self.cert_instances):
-            if ci.active:
-                return ci
+
+        return sorted(self.cert_instances, key=lambda ci: ci.row_id)[-1]
 
     @property
     def active_instances(self) -> dict:
