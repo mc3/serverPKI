@@ -290,7 +290,12 @@ def _find_to_be_deleted(cm: cert.Certificate) -> Optional[set]:
         for ci in surviving:
             if ci.state == state:
                 ci_list.append(ci)
-        s = set(sorted(ci_list, key=lambda ci: ci.row)[-1])
+        if not ci_list:
+            continue
+        sl = sorted(ci_list, key=lambda ci: ci.row_id)
+        lci = sl[-1]
+        s = set((lci,))
+        #s = set(sorted(ci_list, key=lambda ci: ci.row_id)[-1])
         ##ci_list.sort()
         ##s = set(ci_list[:-1])  # most recent instance survives
         surviving -= s  # remove other instances from surviving set

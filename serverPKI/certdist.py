@@ -78,26 +78,27 @@ def export_instance(db: db_conn) -> bool:
     return True
 
 
-def consolidate_cert(cert_meta):
+def consolidate_cert(cert_meta: Certificate):
     """
     Consolidate cert targets of one cert meta.
     This means cert and key files of instance in state "deployed"
     are redistributed.
     
     @param cert_meta:   Cert meta
-    @type cert_meta:    cert.Certificate instance
+    @type cert_meta:    cert.Certificate
     @rtype:             None
     @exceptions:
     """
     deployed_ci = None
     
-    inst_dict = cert_meta.active_instances.items
+    inst_dict = cert_meta.active_instances
     sld('consolidate_cert: inst_list = {}'.format(inst_dict))
     if not inst_dict: return
     
     for state, ci in inst_dict.items():
-        if state == 'deployed':
+        if state == CertState('deployed'):
             deployed_ci = ci
+            break
 
     if not deployed_ci:
         sli('consolidate_cert: No instance of {} in state "deployed"'.format(
