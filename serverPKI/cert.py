@@ -405,7 +405,7 @@ class Certificate(object):
                         not_before: datetime.datetime,
                         not_after: datetime.datetime,
                         ca_cert_ci: Optional['CertInstance']=None,
-                        ocsp_ms: Optional[bool] = True,
+                        ocsp_ms: Optional[bool] = None,
                         cert_key_stores: Optional[dict]={}
                         ) -> 'CertInstance':
         assert ca_cert_ci or self.subject_type == SubjectType('CA'), '?CM.create_instance called wthout ca_cert_ci of none-CA CM'
