@@ -292,18 +292,15 @@ def _find_to_be_deleted(cm: cert.Certificate) -> Optional[set]:
                 ci_list.append(ci)
         if not ci_list:
             continue
-        sl = sorted(ci_list, key=lambda ci: ci.row_id)
-        lci = sl[-1]
-        s = set((lci,))
-        #s = set(sorted(ci_list, key=lambda ci: ci.row_id)[-1])
-        ##ci_list.sort()
-        ##s = set(ci_list[:-1])  # most recent instance survives
-        surviving -= s  # remove other instances from surviving set
-        to_be_deleted |= s  # add other instances to to_be_deleted set
-        sld('{}: {}'.format(state, str([i.__str__() for i in ci_list])))
+        # only the most recent (with highest row_id) survives from current state set
+        sorted_list = sorted(ci_list, key=lambda ci: ci.row_id)
+        to_be_added_to_be_deleted = set(sorted_list[:-1])   # all but last to be deleted
+        to_be_deleted.update(to_be_added_to_be_deleted)     # add to to_be_deleted set
+        surviving = surviving - to_be_added_to_be_deleted   # remove from surviving set
+        sld('{} surviving in state {}'.format(sorted_list[-1].row_id, state))
+        sld('to_be_deleted now: {}'.format(str([i.__str__() for i in to_be_deleted])))
+        sld('surviving now: {}'.format(str([i.__str__() for i in surviving])))
 
-    sld('to_be_deleted : {}'.format(str([i.__str__() for i in to_be_deleted])))
-    sld('surviving : {}'.format(str([i.__str__() for i in surviving])))
     sld('---------------------------------------------------------------')
 
     return surviving
