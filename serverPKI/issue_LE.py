@@ -44,7 +44,7 @@ from postgresql import driver as db_conn
 
 from . import get_version
 import automatoes.acme as am
-
+from automatoes.errors import AcmeError
 # set our identity and version
 
 am.__dict__['DEFAULT_HEADERS'] = {
@@ -206,8 +206,8 @@ def _issue_cert_for_one_algo(encryption_algo: EncAlgoCKS, cert_meta: Certificate
                 sld('{}/{}:  Order finalized. Certificate is being issued.'
                     .format(cert_meta.name, encryption_algo))
             else:
-                sle("{}:  Order not ready or invalid after finalize. Giving up"
-                    .format(cert_meta.name))
+                sle("{}:  Order not ready or invalid after finalize. Status = {}. Giving up. \n Response = {}"
+                    .format(cert_meta.name, final_order['status'], final_order))
                 return None
 
         if order.certificate_uri is None:
@@ -298,7 +298,11 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
             FQDNS[name] = 0
     domains = list(FQDNS.keys())
 
-    order: Order = acme.new_order(domains, 'dns')
+    try:
+        order: Order = acme.new_order(domains, 'dns')
+    except AcmeError as e:
+        print(e)
+        return None
     returned_order = acme.query_order(order)
     order.contents = returned_order.contents
     sld('new_order for {} returned\n{}'.
