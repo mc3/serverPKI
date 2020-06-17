@@ -48,9 +48,11 @@ def execute_from_command_line():
 
     global options
 
+
     if hostname('hermes'):
         import pydevd_pycharm
         pydevd_pycharm.settrace('axels-imac.in.chaos1.de', port=4711, stdoutToServer=True, stderrToServer=True)
+
 
     all_cert_names: List[str, ...] = []
     our_cert_names: List[str, ...] = []
@@ -73,7 +75,7 @@ def execute_from_command_line():
     read_db_encryption_key(db)
 
     all_cert_names = Certificate.names(db)
-
+    all_disthost_names = Certificate.disthost_names(db)
     # preload CMs, CIs and CKSs of our CAs
     cas = []
     for name in (Misc.SUBJECT_LOCAL_CA, Misc.SUBJECT_LE_CA):
@@ -136,6 +138,16 @@ def execute_from_command_line():
                     error = True
             if not error:
                 cert_name_set -= set(opts.cert_to_be_excluded)
+    if opts.only_host:
+        for i in opts.only_host:
+            if i not in all_disthost_names:
+                sle("{} not in configuration. Can't use in --limit-to-disthost".format(i))
+                error = True
+    if opts.skip_host:
+        for i in opts.skip_host:
+            if i not in all_disthost_names:
+                sle("{} not in configuration. Can't use in --skip-disthost".format(i))
+                error = True
 
     if error:
         sle('Stopped due to command line errors')

@@ -265,6 +265,20 @@ class Certificate(object):
         return names
 
     @staticmethod
+    def disthost_names(db: db_conn) -> [list]:
+        """
+        Obtain list of disthost names
+        :param db:  opened database connection
+        :return:    list of all disthost names in db
+        """
+        names = []
+        row_list = db.query("""
+            SELECT fqdn from DistHosts ORDER BY fqdn""", )
+        for (name,) in row_list:
+            names.append(name)
+        return names
+
+    @staticmethod
     def random_ci(db: db_conn) -> 'CertInstance':
         """
         Obtain a random cert instance as temporary cacert_ci while creating 1st cert instance
@@ -410,7 +424,7 @@ class Certificate(object):
                         ) -> 'CertInstance':
         assert ca_cert_ci or self.subject_type == SubjectType('CA'), '?CM.create_instance called wthout ca_cert_ci of none-CA CM'
         the_state = CertState(state) if state else CertState('reserved')
-        the_ocsp_ms = ocsp_ms if ocsp_ms else self.ocsp_must_staple
+        the_ocsp_ms = ocsp_ms if ocsp_ms in (True, False) else self.ocsp_must_staple
 
         ci = CertInstance(cert_meta=self,
                           state=the_state,
@@ -716,7 +730,7 @@ class CertInstance(object):
             ps_load_instance = self.cm.db.prepare(q_load_instance)
 
         self.state = CertState(state) if state else CertState('reserved')
-        self.ocsp_ms = ocsp_ms if ocsp_ms else cert_meta.ocsp_must_staple
+        self.ocsp_ms = ocsp_ms if ocsp_ms in (True, False) else cert_meta.ocsp_must_staple
         self.not_before = not_before
         self.not_after = not_after
         self.ca_cert_ci = ca_cert_ci
