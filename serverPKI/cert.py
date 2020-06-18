@@ -230,20 +230,21 @@ class Certificate(object):
 
         cm = CM(db, name)
         if cm.in_db:                             # do we have a row in db?
-            return cm  # yes, return existing meta instance
+            return cm                            # yes, return existing meta instance
+        del _all_CMs[name]                       # delete incomplete cached cert meta
         assert cert_type, '?Missing cert_type for of new CA CM'
         sln('Inserting CA cert meta {}, cert type {} into DB'.format(name, cert_type))
         if not ps_insert_cacert:
             ps_insert_cacert = db.prepare(q_insert_cacert)
-        (certificates_row_id,) = ps_insert_cacert.first(cert_type)
+        certificates_row_id = ps_insert_cacert.first(cert_type)
         if not certificates_row_id:
             raise AssertionError('CA_cert_meta: ps_insert_cacert failed')
         if not ps_insert_cacert_subject:
             ps_insert_cacert_subject = db.prepare(q_insert_cacert_subject)
-        (subjects_row_id,) = ps_insert_cacert_subject.first('CA', name, certificates_row_id)
+        subjects_row_id = ps_insert_cacert_subject.first('CA', name, certificates_row_id)
         if not subjects_row_id:
             raise AssertionError('CA_cert_meta: ps_insert_cacert_subject failed')
-        cm = CM(db, name)
+        cm = CM(db, name)                        # should load the rows just created
         if cm.in_db and cm.cert_type == cert_type:
             return cm
         sle('Inserting of CA cert meta {} into DB failed'.format(name))
@@ -312,24 +313,23 @@ class Certificate(object):
             if not ps_all_cert_meta:
                 ps_all_cert_meta = db.prepare(q_all_cert_meta)
             for row in ps_all_cert_meta(self.name):
-                if not self.row_id:
-                    self.row_id = row['c_id']
-                    self.cert_type = CertType(row['c_type'])
-                    self.disabled = row['c_disabled']
-                    self.authorized_until = row['authorized_until']
-                    self.subject_type = SubjectType(row['subject_type'])
-                    self.encryption_algo = EncAlgo(row['encryption_algo'])
-                    self.ocsp_must_staple = row['ocsp_must_staple']
-                    sld('----------- {}\t{}\t{}\t{}\t{}\t{}\t{}'.format(
-                        self.row_id,
-                        self.name,
-                        self.cert_type,
-                        self.disabled,
-                        self.authorized_until,
-                        self.subject_type,
-                        self.encryption_algo,
-                        self.ocsp_must_staple)
-                    )
+                self.row_id = row['c_id']
+                self.cert_type = CertType(row['c_type'])
+                self.disabled = row['c_disabled']
+                self.authorized_until = row['authorized_until']
+                self.subject_type = SubjectType(row['subject_type'])
+                self.encryption_algo = EncAlgo(row['encryption_algo'])
+                self.ocsp_must_staple = row['ocsp_must_staple']
+                sld('----------- {}\t{}\t{}\t{}\t{}\t{}\t{}'.format(
+                    self.row_id,
+                    self.name,
+                    self.cert_type,
+                    self.disabled,
+                    self.authorized_until,
+                    self.subject_type,
+                    self.encryption_algo,
+                    self.ocsp_must_staple)
+                )
                 if row['alt_name']: self.altnames.append(row['alt_name'])
                 if row['tlsaprefix']: self.tlsaprefixes[row['tlsaprefix']] = 1
 
@@ -386,7 +386,7 @@ class Certificate(object):
             sld('tlsaprefixes of {}: {}'.format(self.name, self.tlsaprefixes))
 
             # End of meta data tree creation. Now do cert instances
-            
+
             if not ps_instances:
                 ps_instances = db.prepare(q_instances)
 
@@ -395,7 +395,6 @@ class Certificate(object):
                 ci = CertInstance(row_id=row['id'], cert_meta=self)
                 self.cert_instances.append(ci)
 
-        # return super.__init__(cls)
 
     def create_instance(self,
                         state: Optional[CertState],
@@ -465,8 +464,10 @@ class Certificate(object):
         return self.cert_instances[-1]
 
     @property
-    def most_recent_active_instance(self):
+    def most_recent_active_instance(self) -> Optional['CertInstance']:
 
+        if not self.cert_instances:
+            return None
         return sorted(self.cert_instances, key=lambda ci: ci.row_id)[-1]
 
     @property
@@ -795,7 +796,7 @@ class CertInstance(object):
         Store this instance of CertInstance in DB backend (must not exist in DB)
         :return:
         """
-        global ps_store_instance, ps_update_instance
+        global ps_store_instance, ps_update_instance, ps_store_cacert_instance
 
         if not ps_store_instance:
             ps_store_instance = self.cm.db.prepare(q_store_instance)

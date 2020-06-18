@@ -48,11 +48,11 @@ def execute_from_command_line():
 
     global options
 
-    """"""
+    """
     if hostname('hermes'):
         import pydevd_pycharm
         pydevd_pycharm.settrace('axels-imac.in.chaos1.de', port=4711, stdoutToServer=True, stderrToServer=True)
-    """"""
+    """
 
     all_cert_names: List[str, ...] = []
     our_cert_names: List[str, ...] = []

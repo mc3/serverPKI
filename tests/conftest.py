@@ -1,3 +1,4 @@
+
 from pathlib import Path
 import re
 from subprocess import Popen, PIPE
@@ -8,13 +9,10 @@ import pytest
 
 from serverPKI.db import DbConnection as dbc
 from serverPKI.utils import parse_config, parse_options
-
+from .test_parameters import CLIENT_CERT_1, SERVICE, TEST_PLACE_1, CA_CERT_PASS_PHASE
 error_marker =  re.compile('ERROR|FATAL|STATEMENT|HINT')
 
 DEFAULT_DB = 'postgres'
-SERVICE = 'serverpki'
-TEST_PLACE_1 = 'place_1'
-CLIENT_CERT_1 = 'client1'
 TEMP_DIR = ((Path(__file__).parent.resolve()) / 'tmpdir').resolve()
 INSTALL_DIR = ((Path(__file__).parent.parent.resolve()) / 'install').resolve()
 FRESH_INSTALL_DIR = INSTALL_DIR / 'fresh_install'
@@ -218,3 +216,11 @@ def create_local_cert_meta(db_handle):
     """, CLIENT_CERT_1, get_hostname(), TEST_PLACE_1)
     print(result)
 
+"""
+@pytest.fixture(autouse=True)
+def get_passphrase(monkeypatch):
+    def mockreturn():
+        return CA_CERT_PASS_PHASE
+    
+    monkeypatch.setattr("getpass.getpass",mockreturn())
+"""
