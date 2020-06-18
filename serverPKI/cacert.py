@@ -96,7 +96,7 @@ def get_cacert_and_key(db: db_conn) -> Tuple[x509.Certificate, rsa.RSAPrivateKey
 
     cm = CM(db, name=Misc.SUBJECT_LOCAL_CA)
     ci = cksd = cks = None
-    if cm:
+    if cm.in_db:
         ci = cm.most_recent_active_instance
     cks = None
     if ci:  # we have a active CA cert in db

@@ -48,11 +48,11 @@ def execute_from_command_line():
 
     global options
 
-
+    """"""
     if hostname('hermes'):
         import pydevd_pycharm
         pydevd_pycharm.settrace('axels-imac.in.chaos1.de', port=4711, stdoutToServer=True, stderrToServer=True)
-
+    """"""
 
     all_cert_names: List[str, ...] = []
     our_cert_names: List[str, ...] = []
@@ -156,8 +156,8 @@ def execute_from_command_line():
     our_cert_names = sorted(list(cert_name_set))
 
     for name in our_cert_names:
-        c = CM(db, name)
-        if c: our_certs[name] = c
+        cm = CM(db, name)
+        if cm.in_db: our_certs[name] = cm
 
     if opts.check_only and not opts.schedule:
         sli('No syntax errors found in configuration.')

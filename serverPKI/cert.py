@@ -229,7 +229,7 @@ class Certificate(object):
         global ps_insert_cacert, ps_insert_cacert_subject
 
         cm = CM(db, name)
-        if cm.row_id:                             # do we have a row in db?
+        if cm.in_db:                             # do we have a row in db?
             return cm  # yes, return existing meta instance
         assert cert_type, '?Missing cert_type for of new CA CM'
         sln('Inserting CA cert meta {}, cert type {} into DB'.format(name, cert_type))
@@ -244,7 +244,7 @@ class Certificate(object):
         if not subjects_row_id:
             raise AssertionError('CA_cert_meta: ps_insert_cacert_subject failed')
         cm = CM(db, name)
-        if cm.row_id and cm.cert_type == cert_type:
+        if cm.in_db and cm.cert_type == cert_type:
             return cm
         sle('Inserting of CA cert meta {} into DB failed'.format(name))
 
@@ -277,25 +277,6 @@ class Certificate(object):
         for (name,) in row_list:
             names.append(name)
         return names
-
-    @staticmethod
-    def random_ci(db: db_conn) -> 'CertInstance':
-        """
-        Obtain a random cert instance as temporary cacert_ci while creating 1st cert instance
-        :param db:   opened database connection
-        :return: CertInstance instance
-        """
-        for cm in _all_CMs.values():
-            if cm.cert_instances:
-                return cm.cert_instances[0]
-        # no cm with ci's loaded - look at DB
-        for name in Certificate.names(db):
-            cm = CM(db, name)
-            if cm.cert_instances:
-                return cm.cert_instances[0]
-        sle('Can''t find any CertInstance in DB. Can''t store new CA cert. Can''t continue.')
-        sys.exit(1)
-
 
     def __del__(self):
         global _all_CMs
@@ -402,15 +383,17 @@ class Certificate(object):
                     row['jail'] if row['jail'] else '',
                     row['place'] if row['place'] else '')
                 )
-        sld('tlsaprefixes of {}: {}'.format(self.name, self.tlsaprefixes))
+            sld('tlsaprefixes of {}: {}'.format(self.name, self.tlsaprefixes))
 
-        if not ps_instances:
-            ps_instances = db.prepare(q_instances)
+            # End of meta data tree creation. Now do cert instances
+            
+            if not ps_instances:
+                ps_instances = db.prepare(q_instances)
 
-        self.cert_instances = []
-        for row in ps_instances(self.row_id):
-            ci = CertInstance(row_id=row['id'], cert_meta=self)
-            self.cert_instances.append(ci)
+            self.cert_instances = []
+            for row in ps_instances(self.row_id):
+                ci = CertInstance(row_id=row['id'], cert_meta=self)
+                self.cert_instances.append(ci)
 
         # return super.__init__(cls)
 
@@ -986,8 +969,8 @@ class CertKeyStore(object):
 
         hash = CertKeyStore.hash_from_cert(cert)
         cm = CM(db=db, name=name)
-        if not cm.row_id:           # make shure cert meta has been loaded (with all dependant  ci,cks)
-            return None             # No cert meta with that name
+        if not cm.in_db:           # make shure cert meta has been loaded (with all dependant  ci,cks)
+            return None            # No cert meta with that name
         if hash in CertKeyStore._cert_key_stores:
             return CertKeyStore._cert_key_stores[hash].ci
         else:
