@@ -1,15 +1,13 @@
 
 from pathlib import Path
-import re
 from subprocess import Popen, PIPE
-import sys
-from typing import Tuple
+import pty, re, os, re, shutil, sys, typing
 
 import pytest
 
 from serverPKI.db import DbConnection as dbc
-from serverPKI.utils import parse_config, parse_options
-from .test_parameters import CLIENT_CERT_1, SERVICE, TEST_PLACE_1, CA_CERT_PASS_PHASE
+from serverPKI.utils import parse_config, parse_options, Pathes
+from .parameters import CLIENT_CERT_1, SERVICE, TEST_PLACE_1, CA_CERT_PASS_PHASE
 error_marker =  re.compile('ERROR|FATAL|STATEMENT|HINT')
 
 DEFAULT_DB = 'postgres'
@@ -20,9 +18,33 @@ FRESH_INSTALL_DIR = INSTALL_DIR / 'fresh_install'
 
 config_file = None
 
-def get_hostname():
-    p = process = Popen('hostname', stdout=PIPE, text=True)
+##def setup_directories(Optional[only] = None) -> None:
+
+
+def setup_directories(only: typing.Optional[str] = None) -> None:
+    """
+    Make sure work and db directories exist and clear them.
+    :param only: Optional path to clear
+    :return: None
+    """
+    if only:
+        shutil.rmtree(only)
+        os.makedirs(only, mode=0o750)
+    else:
+        shutil.rmtree(Pathes.home)
+        os.makedirs(Pathes.work, mode=0o750)
+        os.makedirs(Pathes.db, mode=0o750)
+
+def run_command(cmd):
+    p = process = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
     stdout, stderr = p.communicate()
+    print(stdout)
+    print(stderr)
+    return (p.returncode, stdout)
+
+
+def get_hostname():
+    status, stdout = run_command('hostname')
     return stdout.strip()
 
 
@@ -54,7 +76,7 @@ class Psql(object):
                  cmd: str = None,
                  sql_file: str = None,
                  alt_db: bool = False,
-                 run_as_dba: bool = False) -> Tuple[str, str, int]:
+                 run_as_dba: bool = False) -> typing.Tuple[str, str, int]:
         """
         Send SQL to server, using psql utility
         :param cmd: Issue this SQL command
@@ -216,11 +238,29 @@ def create_local_cert_meta(db_handle):
     """, CLIENT_CERT_1, get_hostname(), TEST_PLACE_1)
     print(result)
 
-"""
-@pytest.fixture(autouse=True)
-def get_passphrase(monkeypatch):
-    def mockreturn():
-        return CA_CERT_PASS_PHASE
-    
-    monkeypatch.setattr("getpass.getpass",mockreturn())
-"""
+@pytest.fixture(scope="package")
+def create_CAcert_from_scratch(db_handle):
+
+    master, slave = pty.openpty()
+    p = Popen(('operate_serverPKI', '--issue-local-CAcert', '-f', config_file) ,
+              stdin=slave, text=True, shell=True)
+    os.write(master, str(CA_CERT_PASS_PHASE + '\n' + CA_CERT_PASS_PHASE + '\n').encode("UTF-8"))
+    p.wait()
+    os.close(master)
+    os.close(slave)
+    stdout, stderr = p.communicate()
+    print(stdout)
+    print(stderr)
+    assert p.returncode == 0
+
+
+@pytest.fixture(scope="package")
+def export_cert(create_CAcert_from_scratch):
+
+    # cleanup work directory and ca files
+    # status, stdout = run_command(('rm', '-r', '-f', Pathes.work ))
+    assert status == 0
+
+    # export ca files
+    # status, stdout = run_command(('operate_serverPKI', '-f', config_file, -E, '1'))
+    assert status == 0
