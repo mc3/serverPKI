@@ -16,14 +16,15 @@ INSTALL_DIR = ((Path(__file__).parent.parent.resolve()) / 'install').resolve()
 FRESH_INSTALL_DIR = INSTALL_DIR / 'fresh_install'
 
 
-config_file = None
-
 ##def setup_directories(Optional[only] = None) -> None:
 
 def get_config_path():
     cd = Path(__file__).parent.resolve()
     config_file = (cd / 'conf' / 'serverpki.conf' ).resolve()
     return config_file
+
+config_file = get_config_path()
+
 
 def setup_directories(only: typing.Optional[str] = None) -> None:
     """
