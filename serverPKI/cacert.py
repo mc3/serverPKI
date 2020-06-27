@@ -67,15 +67,6 @@ def issue_local_CAcert(db: db_conn) -> bool:
     """
 
     sli('Creating local CA certificate.')
-    """
-    try:
-    
-        with db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
-            create_local_ca_cert(db, None, None)
-    except Exception as e:
-        sle('Failed to create local CA cert, because: {}'.format(str(e)))
-        return False
-    """
     try:
         create_local_ca_cert(db, None, None)
     except Exception as e:

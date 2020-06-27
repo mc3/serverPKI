@@ -76,8 +76,8 @@ setup(
     ],
     install_requires=[
         'configobj>=5.0.6',
-        'cryptography==2.8',
-        'automatoes>=0.9.1',
+        'cryptography>=2.9.2',
+        'automatoes>=0.9.3',
         'dnspython>=1.16.0',
         'py-postgresql>=1.2.1',
         'paramiko>=2.4.2',
@@ -85,5 +85,3 @@ setup(
         'iso8601'
     ],
 )
-#          automatoes requires 2.8
-#         'cryptography>=2.5',
