@@ -20,6 +20,10 @@ config_file = None
 
 ##def setup_directories(Optional[only] = None) -> None:
 
+def get_config_path():
+    cd = Path(__file__).parent.resolve()
+    config_file = (cd / 'conf' / 'serverpki.conf' ).resolve()
+    return config_file
 
 def setup_directories(only: typing.Optional[str] = None) -> None:
     """
@@ -54,8 +58,6 @@ class Psql(object):
 
     from serverPKI.utils import DBAccount
 
-    cd = Path(__file__).parent.resolve()
-    config_file = (cd / 'conf' / 'serverpki.conf' ).resolve()
     parse_options()
     parse_config(str(config_file))
 

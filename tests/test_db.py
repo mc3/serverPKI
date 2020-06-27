@@ -3,7 +3,10 @@ from subprocess import Popen, PIPE
 
 from postgresql import driver as db_conn
 
-from .conftest import config_file
+from .conftest import get_config_path
+
+config_file = get_config_path()
+
 
 def test_if_db_setup(psql_handle):
     """

@@ -5,9 +5,10 @@ from postgresql import driver as db_conn
 
 from serverPKI.utils import Misc
 
-from .conftest import config_file, get_hostname, run_command, setup_directories, TEMP_DIR
+from .conftest import get_config_path, get_hostname, run_command, setup_directories, TEMP_DIR
 from .parameters import CLIENT_CERT_1, TEST_PLACE_1, CA_CERT_PASS_PHASE
 
+config_file = get_config_path()
 
 def insert_local_cert_meta(db_handle):
 
