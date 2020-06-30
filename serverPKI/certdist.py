@@ -64,11 +64,11 @@ def export_instance(db: db_conn) -> bool:
                 cert = cks.cert
                 key = cks.key
 
-                cert_path = Pathes.work / 'cert-{}-{}.pem'.format(opts.cert_serial, algo)
+                cert_path = Path(Pathes.work) / 'cert-{}-{}.pem'.format(opts.cert_serial, algo)
                 with open(str(cert_path), 'w') as fde:
                     fde.write(cert)
 
-                key_path = Pathes.work / 'key-{}-{}.pem'.format(opts.cert_serial, algo)
+                key_path = Path(Pathes.work) / 'key-{}-{}.pem'.format(opts.cert_serial, algo)
                 with open(str(key_path), 'w') as fde:
                     fde.write(key)
                     key_path.chmod(0o400)

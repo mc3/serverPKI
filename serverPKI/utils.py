@@ -277,7 +277,8 @@ def parse_options():
     group.add_option('--export-cert-and-key', '-E', dest='cert_serial',
                      action='store', type=int, default=False,
                      help='Export certificate and key with CERT_SERIAL to work directory.'
-                          ' CERT_SERIAL may be obtained from DB (column "id" of SELECT * FROM inst;)'
+                          ' CERT_SERIAL may be obtained from DB (column "id" with command'
+                          ' operate_serverPKI -n -v)'
                           ' This action may not be combined with other actions.')
 
     parser.add_option_group(group)

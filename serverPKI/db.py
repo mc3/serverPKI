@@ -40,7 +40,6 @@ class DbConnection(object):
     Connection handler of DB session with PostgreSQL server
     """
 
-
     def __init__(self, service):
         """
         Create a DbConnection instance
