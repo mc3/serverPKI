@@ -1,14 +1,12 @@
 import sys, os, pty
-from subprocess import Popen, PIPE
+import getpass
 
 from postgresql import driver as db_conn
 
-from serverPKI.utils import Misc
+from serverPKI.utils import Misc, Pathes
 
-from .conftest import get_config_path, get_hostname, run_command, setup_directories, TEMP_DIR
+from .conftest import get_hostname, run_command, setup_directories, config_path_for_pytest, TEMP_DIR
 from .parameters import CLIENT_CERT_1, TEST_PLACE_1, CA_CERT_PASS_PHASE
-
-config_file = get_config_path()
 
 def insert_local_cert_meta(db_handle):
 
@@ -51,7 +49,7 @@ def test_cert_meta_creation(db_handle):
 def delete_and_cleanup_local_cert(allow_empty: bool, db_handle):
 
     result = db_handle.query.first("""
-    DELETE FROM certificates WHERE  id in (SELECT id FROM subjects WHERE name = '{}')""".format(CLIENT_CERT_1))
+    DELETE FROM certificates WHERE  id in (SELECT certificate FROM subjects WHERE name = '{}')""".format(CLIENT_CERT_1))
     assert result == 1 or allow_empty
 
     result = db_handle.query.first("""
@@ -69,32 +67,35 @@ def delete_and_cleanup_local_ca_cert(allow_empty: bool, db_handle) -> None:
     :param db_handle:
     :return:
     """
+
     result = db_handle.query.first("""
     DELETE FROM certificates WHERE id in
-        (SELECT id FROM subjects WHERE name = '{}')""".format(Misc.SUBJECT_LOCAL_CA))
+        (SELECT certificate FROM subjects WHERE name = '{}')""".format(Misc.SUBJECT_LOCAL_CA))
     assert result == 1 or allow_empty
 
 # CA cert tests
 
-def test_issue_CAcert_from_scratch(db_handle):
+def test_issue_CAcert_from_scratch(db_handle, monkeypatch, script_runner):
+    """
+    GIVEN a monkeypatched version of getpass.getpass()
+    WHEN operate_serverPKI --issue-local-CAcert invoked via cli
+    THEN check the return status
+    """
 
     delete_and_cleanup_local_ca_cert(True, db_handle)
 
-    master, slave = pty.openpty()
-    p = Popen(('operate_serverPKI', '--issue-local-CAcert', '-f', config_file) ,
-              stdin=slave, text=True, shell=True)
-    os.write(master, str(CA_CERT_PASS_PHASE + '\n' + CA_CERT_PASS_PHASE + '\n').encode("UTF-8"))
-    p.wait()
-    os.close(master)
-    os.close(slave)
-    stdout, stderr = p.communicate()
-    print(stdout)
-    print(stderr)
-    assert p.returncode == 0
+    def mock_getpass(prompt: str):
+        return CA_CERT_PASS_PHASE
+    monkeypatch.setattr(getpass, 'getpass', mock_getpass)
 
-def test_if_CA_cert_issued_from_scratch(db_handle):
+    ret = script_runner.run('operate_serverPKI', '--issue-local-CAcert', '-f', config_path_for_pytest)
+    assert ret.success
+    print(ret.stdout)
+    print(ret.stderr)
 
-    test_issue_CAcert_from_scratch(db_handle)
+def test_if_CA_cert_issued_from_scratch(db_handle, monkeypatch, script_runner):
+
+    test_issue_CAcert_from_scratch(db_handle, monkeypatch, script_runner)
 
     rows = db_handle.query("""
     SELECT type, state, encryption_algo  FROM inst WHERE name = '{}'
@@ -107,58 +108,60 @@ def test_if_CA_cert_issued_from_scratch(db_handle):
                 row['state'] == 'issued'
                 and row['encryption_algo'] == 'rsa')
 
-def test_issue_local_cert_from_ca_cert_in_flatfile(db_handle):
+"""
+def test_issue_local_cert_from_ca_cert_in_flatfile(db_handle, monkeypatch, script_runner):
 
-    test_issue_CAcert_from_scratch(db_handle)
+    test_if_CA_cert_issued_from_scratch(db_handle, monkeypatch, script_runner)
+    # cleanup work directory
     setup_directories()
-    # export ca files (row_id is 1)
-    status, stdout = run_command(('operate_serverPKI', '-f', config_file, '--export-cert-and-key', '1'))
+
+    def mock_getpass(prompt: str):
+        return CA_CERT_PASS_PHASE
+
+    monkeypatch.setattr(getpass, 'getpass', mock_getpass)
+
+    # export ca cert+key (row_id is 5) to work directory
+    ret = script_runner.run('operate_serverPKI', '--export-cert-and-key', '5', '-f', config_path_for_pytest)
+    assert ret.success
+    print(ret.stdout)
+    print(ret.stderr)
+
+    # rename exported files to destination
+    os.rename(Pathes.work + '/cert-5-rsa.pem', Pathes.ca_cert)
+    os.rename(Pathes.work + '/key-5-rsa.pem', Pathes.ca_key)
+
     # delete ca cert in db
-    delete_and_cleanup_local_ca_cert(True, db_handle)
+    delete_and_cleanup_local_ca_cert(False, db_handle)
+
     # delete and re-insert local cert meta
     delete_and_cleanup_local_cert(True, db_handle)
     insert_local_cert_meta(db_handle)
 
     # now issue local cert
-    master, slave = pty.openpty()
-    p = Popen(('operate_serverPKI', '--create-certs', '-o', CLIENT_CERT_1, '-v', '-f', config_file),
-              stdin=slave, text=True, shell=True)
-    os.write(master, str(CA_CERT_PASS_PHASE + '\n').encode("UTF-8"))
-    p.wait()
-    os.close(master)
-    os.close(slave)
-    stdout, stderr = p.communicate()
-    print(stdout)
-    print(stderr)
-    assert p.returncode == 0
+    ret = script_runner.run('operate_serverPKI', '--create-certs', '-o', CLIENT_CERT_1, '-v', '-f', config_path_for_pytest)
+    assert ret.success
+    print(ret.stdout)
+    print(ret.stderr)
+"""
 
-def test_if_local_cert_and_ca_cert_from_flatfile_issued(db_handle):
-
-    test_issue_local_cert_and_missing_ca_cert(db_handle)
-
-    rows = db_handle.query("""
-    SELECT id,name,type,state,encryption_algo FROM inst""")
-    for row in rows:
-        assert row['name'] in (Misc.SUBJECT_LOCAL_CA, CLIENT_CERT_1)
-        assert row['type'] == 'local' and row['state'] == 'issued' and row['encryption_algo'] == 'rsq'
-
-def test_issue_local_cert_and_missing_ca_cert(db_handle):
+def test_issue_local_cert_and_missing_ca_cert(db_handle, monkeypatch, script_runner):
 
     delete_and_cleanup_local_ca_cert(True, db_handle)
     delete_and_cleanup_local_cert(True, db_handle)
     insert_local_cert_meta(db_handle)
 
-    master, slave = pty.openpty()
-    p = Popen(('operate_serverPKI', '--create-certs', '-o', CLIENT_CERT_1, '-v', '-f', config_file) ,
-              stdin=slave, text=True, shell=True)
-    os.write(master, str(CA_CERT_PASS_PHASE + '\n' + CA_CERT_PASS_PHASE + '\n').encode("UTF-8"))
-    p.wait()
-    os.close(master)
-    os.close(slave)
-    stdout, stderr = p.communicate()
-    print(stdout)
-    print(stderr)
-    assert p.returncode == 0
+
+    def mock_getpass(prompt: str):
+        return CA_CERT_PASS_PHASE
+
+    monkeypatch.setattr(getpass, 'getpass', mock_getpass)
+
+    # issue local cert
+    ret = script_runner.run('operate_serverPKI', '--create-certs', '-o', CLIENT_CERT_1, '-f', config_path_for_pytest)
+    assert ret.success
+    print(ret.stdout)
+    print(ret.stderr)
+
 
 def test_if_local_cert_and_missing_ca_cert_issued(db_handle):
 
@@ -166,6 +169,7 @@ def test_if_local_cert_and_missing_ca_cert_issued(db_handle):
 
     rows = db_handle.query("""
     SELECT id,name,type,state,encryption_algo FROM inst""")
+    assert len(rows) == 3
     for row in rows:
         assert row['name'] in (Misc.SUBJECT_LOCAL_CA, CLIENT_CERT_1)
         assert row['type'] == 'local' and row['state'] == 'issued' and row['encryption_algo'] == 'rsq'

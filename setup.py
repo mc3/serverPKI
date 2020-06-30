@@ -19,17 +19,26 @@ Required packages:
 
 Required Python3 packages:
 
-    configobj>=5.0.6
-    cryptography>=2.5
-    automatoes>=0.9.1
-    dnspython>=1.16.0
-    py-postgresql>=1.2.1
-    paramiko>=2.4.2
-    prettytable>=0.7.2
+    configobj>=5.0.6,
+    cryptography>=2.9.2,
+    automatoes>=0.9.3,
+    dnspython>=1.16.0,
+    py-postgresql>=1.2.1,
+    paramiko>=2.4.2,
+    prettytable>=0.7.2,
     iso8601
 
 To install the development version, ``pip install -e
 git+https://github.com/mc3/serverPKI/#egg=serverPKI``.
+
+Additional requirements for testing:
+
+    pytest>=5.4.3      
+    pytest-console-scripts>=0.2.0      
+    pytest-cov>=2.10.0     
+    pytest-pycharm>=0.6.0      
+    pytest-runner>=5.2        
+
 '''
 
 import sys

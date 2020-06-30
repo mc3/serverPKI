@@ -3,10 +3,7 @@ from subprocess import Popen, PIPE
 
 from postgresql import driver as db_conn
 
-from .conftest import get_config_path
-
-config_file = get_config_path()
-
+from .conftest import config_path_for_pytest
 
 def test_if_db_setup(psql_handle):
     """
@@ -27,7 +24,7 @@ def test_if_services_loaded(db_handle: db_conn):
 def test_run_from_command_line(db_handle: db_conn):
     test_if_services_loaded(db_handle)
 
-    p = Popen(('operate_serverPKI', '-f', config_file, '-v') ,
+    p = Popen(('operate_serverPKI', '-f', config_path_for_pytest, '-v') ,
               stdout=PIPE, stderr=PIPE, text=True)
     stdout, stderr = p.communicate()
     print(stderr)
