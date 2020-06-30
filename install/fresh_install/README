@@ -1,0 +1,9 @@
+# Example how to create DB (serverPKI assumed as DB name):
+
+psql -h localhost serverPKI <create_schema_dd.sql 
+psql -h localhost serverPKI <create_schema_pki.sql 
+
+# in case you have historical data only backup. Install backuo so:
+psql -h localhost serverPKI <pki_dev__2020-05-27T164042.sql 
+
+psql -h localhost serverPKI <create_triggers_pki.sql 

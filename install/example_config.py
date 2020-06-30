@@ -89,7 +89,9 @@ class X509atts(object):
 dbAccounts = {'serverpki': {'dbHost':         'db-server.my.domain',
                             'dbPort':         '5432',
                             'dbUser':         'pki_op',
-                            'dbDatabase':     'serverpki',
+                            'dbDbaUser':      '',
+                            'dbDatabase':     'serverPKI',
+                            'dbSslRequired':  True,
                             'dbSearchPath':   'pki,dd'}}
 
 SSH_CLIENT_USER_NAME = 'root'

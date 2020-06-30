@@ -24,119 +24,111 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 
 
 import sys
-from datetime import datetime
 from io import StringIO
 from pathlib import PurePath, Path
 from os.path import expanduser
 from os import chdir
 from socket import timeout
-import subprocess
-from shutil import copy2
-from time import sleep
+from typing import Union, List, Dict, Optional, Tuple
 
 from dns import rdatatype
 from dns import query as dns_query
 
 from paramiko import SSHClient, HostKeys, AutoAddPolicy
+from postgresql import driver as db_conn
 
-from serverPKI.cert import Certificate
-from serverPKI.config import Pathes, SSH_CLIENT_USER_NAME, LE_ZONE_UPDATE_METHOD
-from serverPKI.utils import options as opts
-from serverPKI.utils import sld, sli, sln, sle
-from serverPKI.utils import updateZoneCache, zone_and_FQDN_from_altnames
-from serverPKI.utils import updateSOAofUpdatedZones
-from serverPKI.utils import update_state_of_instance, ddns_update
+from serverPKI.cert import Certificate, CM, CertInstance, EncAlgoCKS, CertState, CertType, PlaceCertFileType, SubjectType
+from serverPKI.utils import get_options
+from serverPKI.utils import sld, sli, sln, sle,  Pathes, Misc
+from serverPKI.utils import updateSOAofUpdatedZones, ddns_update
+
 
 class MyException(Exception):
     pass
 
 
-def export_instance(db):
+def export_instance(db: db_conn) -> bool:
     """
-    Export cert and key whose serial number has been read from command line
-    to work area
-    
-    @param db:      Opened database handle
-    @type db:    
-    @rtype:         boolean always True (or sys.exit done in cert_meta.inst if
-                    serial does not exist.
-    @exceptions:
+    Export certs and keys of one CertInstance
+    :param db: Opened database handle
+    :return: True on success
     """
+    opts = get_options()
 
-    cert_meta = Certificate(db, '', serial=opts.cert_serial)
-    result = cert_meta.instance(instance_id=opts.cert_serial)
-    (inst_id, state, cert, key, tlsa, cacert, algo) = result
+    name = Certificate.fqdn_from_instance_serial(db, opts.cert_serial)
+    cert_meta = CM(db, name)
+    for ci in cert_meta.cert_instances:
+        if ci.row_id == opts.cert_serial:
+            for cks in ci.cksd.values():
+                algo = cks.algo
+                cert = cks.cert
+                key = cks.key
 
-    cert_path = Pathes.work / 'cert-{}.pem'.format(opts.cert_serial)
-    with open(str(cert_path), 'w') as fde:
-        fde.write(cert)
+                cert_path = Path(Pathes.work) / 'cert-{}-{}.pem'.format(opts.cert_serial, algo)
+                with open(str(cert_path), 'w') as fde:
+                    fde.write(cert)
 
-    key_path = Pathes.work / 'key-{}.pem'.format(opts.cert_serial)
-    with open(str(key_path), 'w') as fde:
-        fde.write(key)
-    key_path.chmod(0o400)
+                key_path = Path(Pathes.work) / 'key-{}-{}.pem'.format(opts.cert_serial, algo)
+                with open(str(key_path), 'w') as fde:
+                    fde.write(key)
+                    key_path.chmod(0o400)
     
-    sli('Cert and {} key for {} exported to {} and {}'.
-                    format(algo, cert_meta.name, str(cert_path), str(key_path)))
+                sli('Cert and {} key for {} exported to {} and {}'.
+                                format(algo, cert_meta.name, str(cert_path), str(key_path)))
     return True
 
 
-def consolidate_cert(cert_meta):
+def consolidate_cert(cert_meta: Certificate):
     """
     Consolidate cert targets of one cert meta.
     This means cert and key files of instance in state "deployed"
     are redistributed.
     
     @param cert_meta:   Cert meta
-    @type cert_meta:    cert.Certificate instance
+    @type cert_meta:    cert.Certificate
     @rtype:             None
     @exceptions:
     """
-    deployed_id = None
+    deployed_ci = None
     
-    inst_list = cert_meta.active_instances()
-    sld('consolidate_cert: inst_list = {}'.format(inst_list))
-    if not inst_list: return
+    inst_dict = cert_meta.active_instances
+    sld('consolidate_cert: inst_list = {}'.format(inst_dict))
+    if not inst_dict: return
     
-    for inst_id, state in inst_list:
-        if state == 'deployed':
-            deployed_id = inst_id
+    for state, ci in inst_dict.items():
+        if state == CertState('deployed'):
+            deployed_ci = ci
+            break
 
-    if not deployed_id:
+    if not deployed_ci:
         sli('consolidate_cert: No instance of {} in state "deployed"'.format(
                                                                 cert_meta.name))
         return
     
     try:
         deployCerts({cert_meta.name: cert_meta},
-            instance_ids=(deployed_id,),
-            allowed_states=('deployed', ))
+            cert_instances=(deployed_ci,),
+            allowed_states=(CertState('deployed'), ))
     except MyException:
         pass
     return
 
-def deployCerts(certs,
-                instance_ids=None,
-                allowed_states=('issued',)):
+def deployCerts(cert_metas: Dict[str, Certificate],
+                cert_instances: Optional[Tuple[CertInstance]] = None,
+                allowed_states: Tuple[CertState]=(CertState('issued'),)) -> bool:
     """
-    Deploy a list of (certificates. keys and TLSA files, using paramiko/sftp).
-    Restart service at target host and reload nameserver.
-    May add TLSA RR to DNS fqdn.
-    
-    @param certs:           list of certificate meta data instances
-    @type certs:            dict with key = cert name and 
-                            value = serverPKI.cert.Certificate instance
-    @param instance_ids:    optional list of ids of specific instances
-    @type instance_ids:     list of int or None
-    @param allowed_states   states, required for ditribution (default=('issued',)).
-    @type allowed_states    tuple of strings
-    @rtype:                 bool, false if error found
-    @exceptions:
-    Some exceptions (to be replaced by error messages and false return)
+    Deploy a list of (certificates. keys and TLSA RRs, using paramiko/sftp) and dyn DNS (or zone files).
+    Restart service at target host and reload nameserver (if using zone files).
+    :param cert_metas: Dict of cert metas, telling which certs to deploy, key is cert subject name
+    :param cert_instances: Optional list of CertInstance instances
+    :param allowed_states: States describing CertInstance states to act on
+    :return: True if successfully deployed certs
     """
 
     error_found = False
     limit_hosts = False
+
+    opts = get_options()
 
     only_host = []
     if opts.only_host: only_host = opts.only_host
@@ -148,118 +140,132 @@ def deployCerts(certs,
     sld('limit_hosts={}, only_host={}, skip_host={}'.format(
                                             limit_hosts, only_host, skip_host))
     
-    for cert in certs.values():
+    for cert_meta in cert_metas.values():
          
-        if len(cert.disthosts) == 0: continue
+        if len(cert_meta.disthosts) == 0: continue
 
         the_instances = []
+        hashes = []
 
-        insts = instance_ids if instance_ids else [x for (x,y) in cert.active_instances()]
-        for i in insts:
-            result = cert.instance(i)
-            if result:
-                my_instance_id, state, cert_text, key_text, TLSA_text, cacert_text, encryption_algo = result
-                if state in allowed_states:
-                    the_instances.append(my_instance_id)
+        ##FIXME## highly speculative!
+        insts = cert_instances if cert_instances else [y for (x,y) in cert_meta.active_instances.items()]
+        for ci in insts:
+            if ci.state in allowed_states:
+                the_instances.append(ci)
 
         if len(the_instances) == 0:
             etxt = 'No valid cerificate for {} in DB - create it first\n' \
                    'States being considered are {}'. \
-                format(cert.name, [state for state in allowed_states])
+                format(cert_meta.name, [state for state in allowed_states])
             sli(etxt)
-            if instance_ids:  # let caller handle this error, if we have explicit inst ids
+            if cert_instances:  # let caller handle this error, if we have explicit inst ids
                 raise MyException(etxt)
             else: continue
 
         # more than 1 member of the_instances only expected with cert.instance(i).encryption_algo == 'both'
-        for i in the_instances:
-            result = cert.instance(i)
-            my_instance_id, state, cert_text, key_text, TLSA_text, cacert_text, encryption_algo = result
+        for ci in the_instances:
+
+            state = ci.state
+            cacert_text = cert_meta.cacert_PEM(ci)
 
             host_omitted = False
 
-            for fqdn,dh in cert.disthosts.items():
+            cksd = ci.the_cert_key_stores
+            for encryption_algo in cksd.keys():
+                cks = cksd[encryption_algo]
+                cert_text = cks.cert
+                key_text = cks.key
+                TLSA_text = cks.hash
+                hashes.append(TLSA_text)
 
-                if fqdn in skip_host:
-                    host_omitted = True
-                    continue
-                if limit_hosts and (fqdn not in only_host):
-                    host_omitted = True
-                    continue
-                dest_path = PurePath('/')
+                for fqdn,dh in cert_meta.disthosts.items():
 
-                sld('{}: {}'.format(cert.name, fqdn))
+                    if fqdn in skip_host:
+                        host_omitted = True
+                        continue
+                    if limit_hosts and (fqdn not in only_host):
+                        host_omitted = True
+                        continue
+                    dest_path = PurePath('/')
 
-                for jail in ( dh['jails'].keys() or ('',) ):   # jail is empty if no jails
+                    sld('{}: {}'.format(cert_meta.name, fqdn))
 
-                    if '/' in jail:
-                        sle('"/" in jail name "{}" not allowed with subject {}.'.format(jail, cert.name))
-                        error_found = True
-                        return False
+                    for jail in ( dh['jails'].keys() or ('',) ):   # jail is empty if no jails
 
-                    jailroot = dh['jailroot'] if jail != '' else '' # may also be empty
-                    dest_path = PurePath('/', jailroot, jail)
-                    sld('{}: {}: {}'.format(cert.name, fqdn, dest_path))
+                        if '/' in jail:
+                            sle('"/" in jail name "{}" not allowed with subject {}.'.format(jail, cert_meta.name))
+                            error_found = True
+                            return False
 
-                    the_jail = dh['jails'][jail]
+                        jailroot = dh['jailroot'] if jail != '' else '' # may also be empty
+                        dest_path = PurePath('/', jailroot, jail)
+                        sld('{}: {}: {}'.format(cert_meta.name, fqdn, dest_path))
 
-                    if len(the_jail['places']) == 0:
-                        sle('{} subject has no place attribute.'.format(cert.name))
-                        error_found = True
-                        return False
+                        the_jail = dh['jails'][jail]
 
-                    for place in the_jail['places'].values():
+                        if len(the_jail['places']) == 0:
+                            sle('{} subject has no place attribute.'.format(cert_meta.name))
+                            error_found = True
+                            return False
 
-                        sld('Handling jail "{}" and place {}'.format(jail, place.name))
+                        for place in the_jail['places'].values():
 
-                        fd_key = StringIO(key_text)
-                        fd_cert = StringIO(cert_text)
+                            sld('Handling jail "{}" and place {}'.format(jail, place.name))
 
-                        key_file_name = key_name(cert.name, cert.subject_type, encryption_algo)
-                        cert_file_name = cert_name(cert.name, cert.subject_type, encryption_algo)
+                            fd_key = StringIO(key_text)
+                            fd_cert = StringIO(cert_text)
 
-                        pcp = place.cert_path
-                        if '{}' in pcp:     # we have a home directory named like the subject
-                            pcp = pcp.format(cert.name)
-                        # make sure pcb does not start with '/', which would ignore dest_path:
-                        if PurePath(pcp).is_absolute():
-                            dest_dir = PurePath(dest_path, PurePath(pcp).relative_to('/'))
-                        else:
-                            dest_dir = PurePath(dest_path, PurePath(pcp))
+                            key_file_name = key_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
+                            cert_file_name = cert_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
 
-                        sld('Handling fqdn {} and dest_dir "{}" in deployCerts'.format(
-                            fqdn, dest_dir))
+                            pcp = place.cert_path
+                            if '{}' in pcp:     # we have a home directory named like the subject
+                                pcp = pcp.format(cert_meta.name)
+                            # make sure pcb does not start with '/', which would ignore dest_path:
+                            if PurePath(pcp).is_absolute():
+                                dest_dir = PurePath(dest_path, PurePath(pcp).relative_to('/'))
+                            else:
+                                dest_dir = PurePath(dest_path, PurePath(pcp))
 
-                        if place.key_path:
-                            key_dest_dir = PurePath(dest_path, place.key_path)
-                            distribute_cert(fd_key, fqdn, key_dest_dir, key_file_name, place, None)
+                            sld('Handling fqdn {} and dest_dir "{}" in deployCerts'.format(
+                                fqdn, dest_dir))
 
-                        elif place.cert_file_type == 'separate':
-                            distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
-                            if cert.cert_type == 'LE':
-                                chain_file_name = cert_cacert_chain_name(cert.name, cert.subject_type, encryption_algo)
-                                fd_chain = StringIO(cert_text + cacert_text)
-                                distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
+                            try:
 
-                        elif place.cert_file_type == 'combine key':
-                            cert_file_name = key_cert_name(cert.name, cert.subject_type, encryption_algo)
-                            fd_cert = StringIO(key_text + cert_text)
-                            if cert.cert_type == 'LE':
-                                chain_file_name = key_cert_cacert_chain_name(cert.name, cert.subject_type, encryption_algo)
-                                fd_chain = StringIO(key_text + cert_text + cacert_text)
-                                distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
+                                if place.key_path:
+                                    key_dest_dir = PurePath(dest_path, place.key_path)
+                                    distribute_cert(fd_key, fqdn, key_dest_dir, key_file_name, place, None)
 
-                        elif place.cert_file_type == 'combine both':
-                            cert_file_name = key_cert_cacert_name(cert.name, cert.subject_type, encryption_algo)
-                            fd_cert = StringIO(key_text + cert_text + cacert_text)
+                                elif place.cert_file_type == 'separate':
+                                    distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
+                                    if cert_meta.cert_type == 'LE':
+                                        chain_file_name = cert_cacert_chain_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
+                                        fd_chain = StringIO(cert_text + cacert_text)
+                                        distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
 
-                        elif place.cert_file_type == 'combine cacert':
-                            cert_file_name = cert_cacert_name(cert.name, cert.subject_type, encryption_algo)
-                            fd_cert = StringIO(cert_text + cacert_text)
-                            distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
+                                elif place.cert_file_type == 'combine key':
+                                    cert_file_name = key_cert_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
+                                    fd_cert = StringIO(key_text + cert_text)
+                                    if cert_meta.cert_type == 'LE':
+                                        chain_file_name = key_cert_cacert_chain_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
+                                        fd_chain = StringIO(key_text + cert_text + cacert_text)
+                                        distribute_cert(fd_chain, fqdn, dest_dir, chain_file_name, place, jail)
 
-                        # this may be redundant in case of LE, where the cert was in chained file
-                        distribute_cert(fd_cert, fqdn, dest_dir, cert_file_name, place, jail)
+                                elif place.cert_file_type == 'combine both':
+                                    cert_file_name = key_cert_cacert_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
+                                    fd_cert = StringIO(key_text + cert_text + cacert_text)
+
+                                elif place.cert_file_type == 'combine cacert':
+                                    cert_file_name = cert_cacert_name(cert_meta.name, cert_meta.subject_type, encryption_algo)
+                                    fd_cert = StringIO(cert_text + cacert_text)
+                                    distribute_cert(fd_key, fqdn, dest_dir, key_file_name, place, None)
+
+                                # this may be redundant in case of LE, where the cert was in chained file
+                                distribute_cert(fd_cert, fqdn, dest_dir, cert_file_name, place, jail)
+
+                            except IOError:         # distribute_cert may error out
+                                error_found = True
+                                break               # no cert - no TLSA
             
             sli('')
 
@@ -267,16 +273,17 @@ def deployCerts(certs,
                 continue
 
             if not opts.no_TLSA:
-                distribute_tlsa_rrs(cert, TLSA_text, None)
+                distribute_tlsa_rrs(cert_meta, hashes)
 
-            if not host_omitted and not cert.subject_type == 'CA':
-                update_state_of_instance(cert.db, my_instance_id, 'deployed')
+            if not host_omitted and not cert_meta.subject_type == 'CA':
+                ci.state = CertState('deployed')
+                cert_meta.save_instance(ci)
             else:
                 sln('State of cert {} not promoted to DEPLOYED, '
                     'because hosts where limited or skipped'.format(
-                                cert.name))
+                                cert_meta.name))
             # clear mail-sent-time if local cert.
-            if cert.cert_type == 'local': cert.update_authorized_until(None)
+            if cert_meta.cert_type == CertType('local'): cert_meta.update_authorized_until(None)
         
     updateSOAofUpdatedZones()
     return not error_found
@@ -298,13 +305,13 @@ def ssh_connection(dest_host):
     client.load_host_keys(expanduser('~/.ssh/known_hosts'))
     sld('Connecting to {}'.format(dest_host))
     try:
-        client.connect(dest_host, username=SSH_CLIENT_USER_NAME,
+        client.connect(dest_host, username=Misc.SSH_CLIENT_USER_NAME,
                             key_filename=expanduser('~/.ssh/id_rsa'))
     except Exception:
         sln('Failed to connect to host {}, because {} [{}]'.
             format(dest_host,
-            sys.exc_info()[0].__name__,
-            str(sys.exc_info()[1])))
+                   sys.exc_info()[0].__name__,
+                   str(sys.exc_info()[1])))
         raise
     else:
         sld('Connected to host {}'.format(dest_host))
@@ -433,25 +440,25 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
 
 
 def key_name(subject, subject_type, encryption_algo):
-    return str('%s_%s_%skey.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
+    return str('%s_%s_%skey.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == EncAlgoCKS('ec') else '')))
 
 def cert_name(subject, subject_type, encryption_algo):
-    return str('%s_%s_%scert.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
+    return str('%s_%s_%scert.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == EncAlgoCKS('ec') else '')))
 
 def cert_cacert_name(subject, subject_type, encryption_algo):
-    return str('%s_%s_%scert_cacert.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
+    return str('%s_%s_%scert_cacert.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == EncAlgoCKS('ec') else '')))
 
 def cert_cacert_chain_name(subject, subject_type, encryption_algo):
-    return str('%s_%s_%scert_cacert_chain.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
+    return str('%s_%s_%scert_cacert_chain.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == EncAlgoCKS('ec') else '')))
 
 def key_cert_cacert_chain_name(subject, subject_type, encryption_algo):
-    return str('%s_%s_key_%scert_cacert_chain.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
+    return str('%s_%s_key_%scert_cacert_chain.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == EncAlgoCKS('ec') else '')))
 
 def key_cert_name(subject, subject_type, encryption_algo):
-    return str('%s_%s_key_%scert.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
+    return str('%s_%s_key_%scert.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == EncAlgoCKS('ec') else '')))
 
 def key_cert_cacert_name(subject, subject_type, encryption_algo):
-    return str('%s_%s_key_%scert_cacert.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == 'ec' else '')))
+    return str('%s_%s_key_%scert_cacert.pem' % (subject, subject_type, ('ec_' if encryption_algo and encryption_algo == EncAlgoCKS('ec') else '')))
 
 
 def consolidate_TLSA(cert_meta):
@@ -464,55 +471,51 @@ def consolidate_TLSA(cert_meta):
     @rtype:             None
     @exceptions:
     """
-    prepublished_id = None
-    deployed_id = None
+    prepublished_ci = None
+    deployed_ci = None
     
-    inst_list = cert_meta.active_instances()
+    inst_list = cert_meta.active_instances  # returns dict with state as key
     if not inst_list: return
     
-    for inst_id, state in inst_list:
-        if state == 'prepublished':
-            if not prepublished_id: 
-                prepublished_id = inst_id
+    for state, ci in inst_list.items():
+        if state == CertState('prepublished'):
+            if not prepublished_ci:
+                prepublished_ci = ci
             else:
                 sln('consolidate_TLSA: More than one instance of {} in state'
                                 ' "prepublished"'.format(cert_meta.name))
         elif state == 'deployed':
-            if not deployed_id: 
-                deployed_id = inst_id
+            if not deployed_ci:
+                deployed_ci = ci
             else:
                 sln('consolidate_TLSA: More than one instance of {} in state'
                                 ' "deployed"'.format(cert_meta.name))
-    if not deployed_id:
+    if not deployed_ci:
         sli('consolidate_TLSA: No instance of {} in state "deployed"'
                                                     .format(cert_meta.name))
         return
     
-    prepublished_TLSA = None
-    if prepublished_id:
-        prepublished_TLSA = cert_meta.TLSA_hash(prepublished_id)
+    prepublished_TLSA = {}
+    if prepublished_ci:
+        prepublished_TLSA = cert_meta.TLSA_hash(prepublished_ci)
     
-    deployed_TLSA = cert_meta.TLSA_hash(deployed_id)
+    deployed_TLSA = cert_meta.TLSA_hash(deployed_ci)
 
-    distribute_tlsa_rrs(cert_meta, deployed_TLSA, prepublished_TLSA)
+    distribute_tlsa_rrs(cert_meta, tuple(deployed_TLSA.values()) + tuple(prepublished_TLSA.values()))
 
     
-def delete_TLSA(cert_meta):
-    
+def delete_TLSA(cert_meta: Certificate) -> None:
     """
-    Delete TLSA RR.
-    Deletes one TLSA RR per fqdn in DNS zone directory and updates
-    zone cache. "Delete" here means make tlsa file in zone directory empty.
-    @param cert_meta:   		Meta instance of certificates(s) being handled
-    @type cert_meta:    		cert.Certificate instance
-    
+    Delete all TLSA RRs per fqdn of all altnames either in flatfile (make include file empty) or in dyn dns
+    :param cert_meta:
+    :return:
     """
 
     if Pathes.tlsa_dns_master == '':       # DNS master on local host
         
-        if LE_ZONE_UPDATE_METHOD == 'zone_file':
+        if Misc.LE_ZONE_UPDATE_METHOD == 'zone_file':
 
-            for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta): 
+            for (zone, fqdn) in cert_meta.zone_and_FQDN_from_altnames():
                 filename = fqdn + '.tlsa'
                 dest = str(Pathes.zone_file_root / zone / filename)
     
@@ -521,10 +524,10 @@ def delete_TLSA(cert_meta):
                     sli('Truncating {}'.format(dest))
                 updateZoneCache(zone)
     
-        elif LE_ZONE_UPDATE_METHOD == 'ddns':
+        elif Misc.LE_ZONE_UPDATE_METHOD == 'ddns':
 
             zones = {}
-            for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta):
+            for (zone, fqdn) in cert_meta.zone_and_FQDN_from_altnames():
                 if zone in zones:
                     if fqdn not in zones[zone]: zones[zone].append(fqdn)
                 else:
@@ -541,24 +544,20 @@ def delete_TLSA(cert_meta):
                 rc = response.rcode()
                 if rc != 0:
                     sle('DNS update failed for zone {} with rcode: {}:\n{}'.
-                                        format(zone, rcode.to_text(rc), rcode))
+                                        format(zone, response.rcode.to_text(rc), response.rcode))
                     raise Exception('DNS update failed for zone {} with rcode: {}'.
                                         format(zone, response.rcode.to_text(rc)))
         
 
     
-def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
-    
+def distribute_tlsa_rrs(cert_meta: Certificate, hashes: Union[Tuple[str],List[str]]) -> None:
     """
     Distribute TLSA RR.
-    Puts one (ore two) TLSA RR per fqdn in DNS zone directory and updates
-    zone cache.
-    @param cert_meta:   		Meta instance of certificates(s) being handled
-    @type cert_meta:    		cert.Certificate instance
-    @param active_TLSA:   		TLSA hash of active TLSA
-    @type active_TLSA:    		string
-    @param prepublished_TLSA:   TLSA hash of optional pre-published TLSA
-    @type prepublished_TLSA:    string
+    Puts TLSA RR fqdn into DNS zone, by dynamic dns or editing zone file and updating zone cache.
+    If cert has altnames, one set of TLSA RRs is inserted per altname and per TLSA prefix.
+    :param cert_meta:
+    :param hashes: list of hashes, may include active and prepublishes hashes for all algos
+    :return:
     """
 
     if len(cert_meta.tlsaprefixes) == 0: return
@@ -567,7 +566,7 @@ def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
 
     if Pathes.tlsa_dns_master == '':       # DNS master on local host
         
-        if LE_ZONE_UPDATE_METHOD == 'zone_file':
+        if Misc.LE_ZONE_UPDATE_METHOD == 'zone_file':
 
             for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta): 
                 filename = fqdn + '.tlsa'
@@ -575,21 +574,19 @@ def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
                 sli('{} => {}'.format(filename, dest))
                 tlsa_lines = []
                 for prefix in cert_meta.tlsaprefixes.keys():
-                    tlsa_lines.append(str(prefix.format(fqdn) +
-                                             ' ' +active_TLSA + '\n'))
-                    if prepublished_TLSA:
+                    for hash in hashes:
                         tlsa_lines.append(str(prefix.format(fqdn) +
-                                             ' ' +prepublished_TLSA + '\n'))
+                                             ' ' +hash + '\n'))
                 with open(dest, 'w') as fd:
                     fd.writelines(tlsa_lines)
                 updateZoneCache(zone)
     
         
-        elif LE_ZONE_UPDATE_METHOD == 'ddns':
+        elif Misc.LE_ZONE_UPDATE_METHOD == 'ddns':
     
             tlsa_datatype = rdatatype.from_text('TLSA')
             zones = {}
-            for (zone, fqdn) in zone_and_FQDN_from_altnames(cert_meta):
+            for (zone, fqdn) in cert_meta.zone_and_FQDN_from_altnames():
                 if zone in zones:
                     if fqdn not in zones[zone]: zones[zone].append(fqdn)
                 else:
@@ -604,23 +601,18 @@ def distribute_tlsa_rrs(cert_meta, active_TLSA, prepublished_TLSA):
                             format(fields[0]))
                         the_update.delete(fields[0], tlsa_datatype)
                         
-                        sld('Adding TLSA: {} {} {} {}'.
-                            format(fields[0], int(fields[1]), fields[3],
-                                            fields[4] + ' ' +active_TLSA ))
-                        the_update.add(fields[0], int(fields[1]), fields[3],
-                                            fields[4] + ' ' +active_TLSA )
-                        if prepublished_TLSA:
-                            sld('Adding prepublish TLSA: {} {} {} {}'.
+                        for hash in hashes:
+                            sld('Adding TLSA: {} {} {} {}'.
                                 format(fields[0], int(fields[1]), fields[3],
-                                    fields[4] + ' ' +prepublished_TLSA ))
+                                                fields[4] + ' ' +hash ))
                             the_update.add(fields[0], int(fields[1]), fields[3],
-                                    fields[4] + ' ' +prepublished_TLSA )
-    
+                                                fields[4] + ' ' +hash )
+
                 response = dns_query.tcp(the_update,'127.0.0.1', timeout=10)
                 rc = response.rcode()
                 if rc != 0:
                     sle('DNS update failed for zone {} with rcode: {}:\n{}'.
-                                        format(zone, rcode.to_text(rc), rcode))
+                                        format(zone, response.rcode.to_text(rc), response.rcode))
                     raise Exception('DNS update add failed for zone {} with rcode: {}'.
                                         format(zone, response.rcode.to_text(rc)))
 

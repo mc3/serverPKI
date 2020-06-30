@@ -77,3 +77,8 @@ Changelog
 - New fields in DB for upcoming support of certs with elliptic alogorithm.
   (in addition to rsa). Run install/upgrade_to_2.sql in psql, connected to pki DB.
 
+0.9.9 (yet to be released)
+
+- Support for dynamic DNS update mode of operation supported
+- Support for dual algo certs (rsa + ec)
+- Support for OCSP_must_staple attribute
