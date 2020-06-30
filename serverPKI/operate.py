@@ -249,3 +249,4 @@ def hostname(name:str) -> bool:
     p = process=Popen('hostname', stdout=PIPE, text=True)
     stdout, stderr = p.communicate()
     return stdout.strip() == name
+
