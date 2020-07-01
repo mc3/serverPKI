@@ -21,14 +21,12 @@ def test_if_services_loaded(db_handle: db_conn):
     assert result == 5
 
 
-def test_run_from_command_line(db_handle: db_conn):
+def test_run_from_command_line(db_handle: db_conn, script_runner):
     test_if_services_loaded(db_handle)
 
-    p = Popen(('operate_serverPKI', '-f', config_path_for_pytest, '-v') ,
-              stdout=PIPE, stderr=PIPE, text=True)
-    stdout, stderr = p.communicate()
-    print(stderr)
-    print(stdout)
-    assert p.returncode == 0
-    assert '[1 certificates and CAs [] in DB]' in stdout.strip()
+    ret = script_runner.run('operate_serverPKI', '-f', config_path_for_pytest, '-v')
+    print(ret.stdout)
+    print(ret.stderr)
+    assert ret.success
+    assert '[1 certificates and CAs [] in DB]' in ret.stdout.strip()
 

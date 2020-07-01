@@ -82,3 +82,5 @@ Changelog
 - Support for dynamic DNS update mode of operation supported
 - Support for dual algo certs (rsa + ec)
 - Support for OCSP_must_staple attribute
+- New config file format
+

@@ -22,6 +22,7 @@ parse_options()
 _cd = Path(__file__).parent.resolve()
 _cf = (_cd / 'conf' / 'serverpki.conf').resolve()
 parse_config(test_config=str(_cf))       # use config for pytests
+print(_cf)
 
 config_path_for_pytest = str(_cf)
 (DBAccount, Misc, Pathes, X509atts) = get_config()
@@ -33,6 +34,14 @@ def setup_directories(only: typing.Optional[str] = None) -> None:
     :param only: Optional path to clear
     :return: None
     """
+    parse_options()
+    _cd = Path(__file__).parent.resolve()
+    _cf = (_cd / 'conf' / 'serverpki.conf').resolve()
+    print(_cf)
+    parse_config(test_config=str(_cf))  # use config for pytests
+
+    config_path_for_pytest = str(_cf)
+    (DBAccount, Misc, Pathes, X509atts) = get_config()
     if only:
         shutil.rmtree(only)
         os.makedirs(only, mode=0o750)
@@ -53,6 +62,51 @@ def get_hostname():
     status, stdout = run_command('hostname')
     return stdout.strip()
 
+def delete_and_cleanup_local_cert(allow_empty: bool, db_handle):
+
+    result = db_handle.query.first("""
+    DELETE FROM certificates WHERE  id in (SELECT certificate FROM subjects WHERE name = '{}')""".format(CLIENT_CERT_1))
+    assert result == 1 or allow_empty
+
+    result = db_handle.query.first("""
+    DELETE FROM PLACES WHERE name = '{}'""".format(TEST_PLACE_1))
+    assert result == 1 or allow_empty
+
+    result = db_handle.query.first("""
+    DELETE FROM DISTHOSTS WHERE fqdn = '{}'""".format(get_hostname()))
+    assert result == 1 or allow_empty
+
+def insert_local_cert_meta(db_handle):
+
+    delete_and_cleanup_local_cert(True, db_handle)
+
+    result = db_handle.query.first("""
+    INSERT INTO DISTHOSTS (fqdn) VALUES($1::TEXT)""", get_hostname())
+    assert result == 1
+
+    result = db_handle.query.first("""
+    INSERT INTO PLACES(name, cert_path) VALUES($1::TEXT, $2::TEXT)""",
+                                   TEST_PLACE_1, str(TEMP_DIR))
+    assert result == 1
+
+    result = db_handle.query.first("""
+    SELECT * FROM add_cert($1::TEXT::citext, 'client'::TEXT::subject_type, 'local'::TEXT::cert_type, 'rsa'::TEXT::cert_encryption_algo, 'False', NULL, NULL, NULL, $2::TEXT::citext, NULL, $3::TEXT::citext)
+    """, CLIENT_CERT_1, get_hostname(), TEST_PLACE_1)
+    print(result)
+
+
+def delete_and_cleanup_local_ca_cert(allow_empty: bool, db_handle) -> None:
+    """
+    Delete CA cert meta and instance. Also deletes any related local cert instances
+    :param allow_empty: Ignore nonexistant CA cert
+    :param db_handle:
+    :return:
+    """
+
+    result = db_handle.query.first("""
+    DELETE FROM certificates WHERE id in
+        (SELECT certificate FROM subjects WHERE name = '{}')""".format(Misc.SUBJECT_LOCAL_CA))
+    assert result == 1 or allow_empty
 
 class Psql(object):
 
@@ -216,3 +270,4 @@ def db_handle(psql_handle):
     db = Db()
     yield db.open()
     db = None
+
