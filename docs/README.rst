@@ -56,9 +56,12 @@ Prerequisites
 - bind 9 DNS server (9.16+ should be used)
 
   - If DNS is handled via zone files,
+
     - serverPKI must be run on the master (hidden primary) DNS server.
+
     - signed Zones being maintained by serverPKI must be run in auto-dnssec
       maintain + inline-signing operation mode.
+
     - Zone files must be writable by serverPKI process to allow publishing of
       acme_challenges and TLSA resource records for DANE
 

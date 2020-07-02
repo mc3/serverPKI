@@ -2,64 +2,73 @@
 Installation and Configuration
 ==============================
 
-.. toctree::
 
 
 Installation
 ============
         
+- Installation of PostgreSQL client package:
+- Installation of PostgreSQL server (if none exists) and related packages on DB server host::
+
+    pkg install databases/postgresql12-server
+    pkg install databases/ip4r
+
 - Installation of Python packages from PyPI::
 
      pip install serverPKI
 
 - Creation of DB user and DB
 
-  host db1, port 2222, user dba and user pki_op are examples::
+    host db1, port 2222, user dba and user pki_op are examples. dba must be pgsql superuser.
+    Create ~/.pgpass or client cert in ~/.postgresql::
 
      psql -h db1 -p 2222 -U dba postgres
-     serverpki=> CREATE ROLE pki_op LOGIN;
-     serverpki=> CREATE DATABASE serverpki;
-     serverpki=> GRANT CONNECT ON DATABASE serverpki TO pki_op;
-     serverpki=> \q
-     psql -h db1 -p 2222 -U dba serverpki < install/create_schema_dd.sql
-     psql -h db1 -p 2222 -U dba serverpki < install/create_schema_pki.sql
-     
-     psql -h db1 -p 2222 -U dba postgres
-     serverpki=> set search_path to pki,dd;
+     postgres=> CREATE ROLE pki_op LOGIN CREATEDB;
+     psql -h db1 -p 2222 -U pki_op postgres
+     postgres=> CREATE DATABASE pki_op;
+     psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/create_schema_dd.sql
+     psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/create_extension_citext.sql
+     psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/create_schema_pki.sql
+     # optional (for demo only):
+     psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/load_testdata.sql
+     psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/create_triggers_pki.sql
+     #
+     psql -h db1 -p 2222 -U pki_op
+     pki_op=> set search_path to pki,dd;
      SET
-     serverpki=> \d
-                   List of relations
-      Schema |         Name          |   Type   | Owner 
-     --------+-----------------------+----------+-------
-      pki    | certificates          | table    | dba
-      pki    | certificates_id_seq   | sequence | dba
-      pki    | certificates_services | table    | dba
-      pki    | certinstances         | table    | dba
-      pki    | certinstances_id_seq  | sequence | dba
-      pki    | certs                 | view     | dba
-      pki    | certs_ids             | view     | dba
-      pki    | disthosts             | table    | dba
-      pki    | disthosts_id_seq      | sequence | dba
-      pki    | inst                  | view     | dba
-      pki    | jails                 | table    | dba
-      pki    | jails_id_seq          | sequence | dba
-      pki    | places                | table    | dba
-      pki    | places_id_seq         | sequence | dba
-      pki    | revision              | table    | dba
-      pki    | revision_id_seq       | sequence | dba
-      pki    | services              | table    | dba
-      pki    | services_id_seq       | sequence | dba
-      pki    | subjects              | table    | dba
-      pki    | subjects_id_seq       | sequence | dba
-      pki    | targets               | table    | dba
-      pki    | targets_id_seq        | sequence | dba
-      20 rows)
-      
-      serverpki=> \q
+     pki_op=> \d
+                        List of relations
+      Schema |         Name          |   Type   |   Owner
+     --------+-----------------------+----------+-----------
+      pki    | certificates          | table    | serverPKI
+      pki    | certificates_id_seq   | sequence | serverPKI
+      pki    | certificates_services | table    | serverPKI
+      pki    | certinstances         | table    | serverPKI
+      pki    | certinstances_id_seq  | sequence | serverPKI
+      pki    | certkeydata           | table    | serverPKI
+      pki    | certkeydata_id_seq    | sequence | serverPKI
+      pki    | certs                 | view     | serverPKI
+      pki    | certs_ids             | view     | serverPKI
+      pki    | disthosts             | table    | serverPKI
+      pki    | disthosts_id_seq      | sequence | serverPKI
+      pki    | inst                  | view     | serverPKI
+      pki    | jails                 | table    | serverPKI
+      pki    | jails_id_seq          | sequence | serverPKI
+      pki    | places                | table    | serverPKI
+      pki    | places_id_seq         | sequence | serverPKI
+      pki    | revision              | table    | serverPKI
+      pki    | revision_id_seq       | sequence | serverPKI
+      pki    | services              | table    | serverPKI
+      pki    | services_id_seq       | sequence | serverPKI
+      pki    | subjects              | table    | serverPKI
+      pki    | subjects_id_seq       | sequence | serverPKI
+      pki    | targets               | table    | serverPKI
+      pki    | targets_id_seq        | sequence | serverPKI
+     (24 rows)
+     
+     serverpki=> \q
 
-  Additional updates must be run in order from install dir, like
-  psql -h db1 -p 2222 -U dba serverpki < install/upgrade_to_2.sql
-  
+
 
 Configuration
 =============
