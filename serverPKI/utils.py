@@ -853,7 +853,7 @@ def print_certs(db: db_conn, names) -> None:
         print()
 
         pt = PrettyTable()
-        pt.field_names = ['Serial', 'Cert Name', 'Type', 'State', 'OCSP m st', 'not before', 'not after',
+        pt.field_names = ['Serial', 'Cert Name', 'Type', 'State', 'CI CA', 'OCSP m st', 'not before', 'not after',
                           'ALGO', 'Hash', 'updated']
 
         pc_query = db.prepare('SELECT * FROM inst WHERE "name" IN (SELECT name FROM "print_certs")')
