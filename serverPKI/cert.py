@@ -84,11 +84,12 @@ q_all_cert_meta = """
   WHERE s1.name = $1
   ORDER BY s1.name, s2.name, d.fqdn;
 """
+# return row_ids of certinstances, ordered by row_id
 q_instances = """
 SELECT id
     FROM certinstances
     WHERE certificate = $1::INT
-    ORDER BY id DESC;
+    ORDER BY id;
 """
 
 q_insert_cacert = """
