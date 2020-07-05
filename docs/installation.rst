@@ -19,6 +19,10 @@ Installation
 
 - Creation of DB user and DB
 
+
+.. _Creation_of_DB_user_and_DB:
+
+
     host db1, port 2222, user dba and user pki_op are examples. dba must be pgsql superuser.
     Create ~/.pgpass or client cert in ~/.postgresql::
 
@@ -29,8 +33,10 @@ Installation
      psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/create_schema_dd.sql
      psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/create_extension_citext.sql
      psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/create_schema_pki.sql
+
      # optional (for demo only):
      psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/load_testdata.sql
+
      psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/create_triggers_pki.sql
      #
      psql -h db1 -p 2222 -U pki_op
@@ -73,24 +79,40 @@ Installation
 Configuration
 =============
 
+.. _Configuration:
+
+
 Copy install/example_config.py to /usr/local/etc/serverPKI/serverPKI_config.py
-or to VIRTUAL_ENV/etc/serverPKI_config.py and edit the copy.
+or to VIRTUAL_ENV/etc/serverPKI_config.py and edit the copy. The config file
+is in ini file format with nested sections.
+
 The following variables can be set:
 
+Pathes
+------
+
+.. _Configuration_Pathes:
+
+        Section containg filesystem path information
+
 home
-        Root of the work area and credential storage, usually somewhere at var
+        Root of the work area and credential storage, usually somewhere at var.
+        This variable must be set to a save place in order to use serverPKI
 
-dbAccounts
-        Credentials stored here. This is a dictionary with key 'serverpki'.
-        Nested dictionary contains credentials. See install/example_config.py.
+db
+        Some credentials stored here, like:
 
-ca_cert and ca_key
-        Filename of local CA cert and key in case an existing one must be
-        imported into the db. The files can be removed after import. Not used
-        if serverPKI itself creates the local CA cert.
+ca_cert, ca_key
+        Cert and key of the local (internal) CA, in case, there exists one
+        when you begin with serverPKI. Will be imported into DB with issuence
+        of 1st local cert. The flat files can be deleted then. Not needed, if
+        local CA cert created with "serverPKI  --issue-local-CAcert".
+
+.. _tutorial_ca_cert: ./tutorial.html#creating-our-first-local-certificate
+
 
 db_encryption_key
-        Path of file, containing passphrase for encrypted key storage in DB.
+        All keys in DB are encrypted with this key.
         After setting this up, encrypt keys in DB::
         
           operate_serverPKI --encrypt-keys -v
@@ -113,34 +135,90 @@ work_tlsa
 
 tlsa_dns_master
         Host of DNS master. Empty means: Local host. Must be empty for now.
+        Will be used with ddns with remote master in the future.
 
-dns_key
-        rndc key for triggering named reload.
+Next 6 variables are for historical DNS control via zone files and should not
+be used for new installations:
 
 zone_file_root
         zone files are kept in DSKM format:
             zone_file_root/example.com/example.com.zone
 
+dns_key
+        rndc key for triggering named reload.
+
+zone_tlsa_inc_mode, zone_tlsa_inc_uid, zone_tlsa_inc_gid
+        file permission and ownership for files, incuded by zone files.
+
 zone_file_include_name
         The filename of the file, included from zone file with the challenges.
     
+
 ddns_key_file
         The filename of a named dynamic dns key file, used to secure dns update
         transactions.
 
-X509atts.names and X509atts.extensions
-        Cert fields used for CA cert and server/ client certs.
 
-X509atts.lifetime and X509atts.bits
+X509atts
+--------
+
+.. _Configuration_X509atts:
+
+        Section of local X509 certificate standard attribute defaults
+
+names and extensions
+        Cert fields used for CA cert and server/client certs.
+
+lifetime and bits
         are used for server/client certs
 
-dbAccounts
-        Account data and credentials for the PostgreSQL DB.
+
+DBAccount
+---------
+
+.. _Configuration_DBAccount:
+
+        Dection with account data and credentials for the PostgreSQL DB.
         Passwords may be stored in pki_op's HOME in  HOME/.pgpass or
         client certs in HOME/.postgresql.crt and HOME/.postgresql.key
 
+dbHost
+        host name of DB server
+
+dbPort
+        port number of DB instance
+
+dbUser
+        DB role name, used for accessing the DB
+
+dbDbaUser
+        Role name for tasks requiring super user rights. Empty, if person
+        who runs program is DBA
+
+dbSslRequired
+        If "yes" then connectin will be made with TLS
+
+dbDatabase
+        name of databse, used for serverPKI (contains schemas dd and pki)
+
+dbSearchPath
+        search_path set at login
+
+dbCert
+        path of file containg cert for TLS
+
+dbCertKey
+        path of file containg key for TLS
+
+Misc
+----
+
+.. _Configuration_Misc:
+
+        Section with miscellaneous config parameters
+
 SSH_CLIENT_USER_NAME
-        user name for cert/key distribution
+        user name on target hosts for cert/key distribution
 
 LE_SERVER
         URL of Lets Encrypt server, either (for testing):
@@ -169,7 +247,7 @@ SUBJECT_LE_CA
     
 PRE_PUBLISH_TIMEDELTA
         New certs are published that many days before they become active (with
-        2nd TLSA RRs)
+        2nd TLSA RRs) for rollover
         
 LOCAL_ISSUE_MAIL_TIMEDELTA = timedelta(days=30)
         E-Mail to administrator will be sent that many days before expiration of

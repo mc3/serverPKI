@@ -61,6 +61,7 @@ Tables
     * 'server' - server subject
     * 'client' - client (or personal) subject
     * 'CA' - certificate authority
+    * 'reserved' - type of a placeholder, initially loaded
 
   * isAltName - true if subject is an alternate name
   * *certificate* - reference to Certificates
@@ -68,13 +69,15 @@ Tables
 .. index:: Certificates.cert_type, Certificates.disabled, 
 .. index:: Certificates.authorized_until, Certificates
 .. _Certificates:
-.. _Certificates.cert_type:
+.. _Certificates.type:
 .. _Certificates.disabled:
 .. _Certificates.authorized_until:
+.. _Certificates.encryption_algo:
+.. _Certificates.ocsp_must_staple:
 
 * **Certificates** - one entry per defined certificate (holds cert meta data)
 
-  * cert_type - type of certificate, one of
+  * type - type of certificate, one of
   
     * LE - to be issued by Let's Encrypt CA
     * local - local cert (to be issued by local CA)
@@ -86,6 +89,15 @@ Tables
       via DNS challenge after this date
     * if type is 'local': date and time of last mail to admin, to ask him to
       issue a new local cert
+
+  * encryption_algo - encryption algorithm to be used by certs issued in the future, one of
+
+    * rsa
+    * ec
+    * rsa_plus_ec
+
+  * ocsp_must_staple - if true then the OCSP staple protocoll will be required by the cert
+    (and server must be configured to support this)
 
 .. index:: Certinstances.state, Certinstances.cert, Certinstances.key
 .. index:: Certinstances.hash, Certinstances.not_before, Certinstances.not_after
@@ -110,26 +122,41 @@ Tables
     * prepublished - cert published in DNS (vis TLSA RR) prior to usage
     * deployed - cert is distributed and in use by server
     * revoked - cert is revoked
-    * cert is expired
-    * cert is archived (will be removed soon)
+    * expired - cert is expired
+    * archived - cert is archived (will be removed soon)
 
-  * cert - the certificate in PEM format
-  * key - the key in PEM format
-  * hash - the binascii presentation of the SHA256 hash of the certificate
   * not_before - start date and time for cert usage
   * not_after - end date and time for cert usage
   * *certificate* - reference to cert in Certificates
-  * *cacert* - reference to cacert instance in Certinstances.
-    If subject type is 'CA', there may be 2 kinds of cacerts:
-  
-    * LE - cacert of intermediate LE CA
-    * local - local cacert
+  * *cacert* - reference to cacert instance in Certinstances, describing
+    CA which issued this cert
 
-    There may be more than one tuple per cert type, if cacerts are renewed.
+There may be more than one tuple per cert type, if cacerts are renewed.
 
 Here is the state transition diagram:
 
 .. image:: States.png
+
+
+.. index:: Services.name, Services.port, Services.TLSAprefix, services
+.. _certKeyData:
+.. _certKeyData.encryption_algo:
+.. _certKeyData.cert:
+.. _certKeyData.key:
+.. _certKeyData.hash:
+
+* **c certKeyData** - the cert/key material (one tuple per algorithm).
+
+
+  * encryption_algo - encryption algorithm, used with this cert
+
+    * rsa
+    * ec
+
+  * cert - the certificate in binary PEM format
+  * key - the key in binary PEM format (encrypted, if DB encryption in use)
+  * hash - the binascii presentation of the SHA256 hash of the certificate
+
 
 .. index:: Services.name, Services.port, Services.TLSAprefix, services
 .. _Services:
@@ -255,6 +282,8 @@ Some views simplify common queries. For each view the result columns are listed.
   * Subject - :ref:`Subject type <subjects.type>`
   * Cert Name - :ref:`Subject name <subjects.name>`
   * Type - :ref:`Cert type <certificates.cert_type>`
+  * algo - :ref:`Cert encryption algorithm <certificates.algo>s`
+  * ocsp_ms - :ref:`Cert ocsp_must_staple attribute  <certificates.ocsp_ms>`
   * authorized - :ref:`authorized until <Certificates.authorized_until>`
   * Alt Name - :ref:`Alternative cert name <Subjects.name>`
   * TLSA - :ref:`Service name <Services.name>`
@@ -272,6 +301,8 @@ Some views simplify common queries. For each view the result columns are listed.
   * Subject Type - :ref:`Subject type <subjects.type>`
   * Cert Name - :ref:`Subject name <subjects.name>`
   * Type - :ref:`Cert type <certificates.cert_type>`
+  * algo - :ref:`Cert encryption algorithm <certificates.algo>s`
+  * ocsp_ms - :ref:`Cert ocsp_must_staple attribute  <certificates.ocsp_ms>`
   * authorized - :ref:`authorized until <Certificates.authorized_until>`
   * s2_id - subject id of Alternative cert name subject
   * Alt Name - :ref:`Alternative cert name <Subjects.name>`
@@ -289,13 +320,19 @@ Some views simplify common queries. For each view the result columns are listed.
   
 .. index:: inst
 
-* **inst** - display certificate instances
+* **inst** - display certificate instances (one row per issued cert instance per algorithm)
 
+  * id - serial of cert instance
   * name - :ref:`Subject name <subjects.name>`
+  * type - :ref:`Cert type <certificates.cert_type>`
   * state - :ref:`State of instance <Certinstances.state>`
+  * cacert - reference to cacert instance in Certinstances, describing
+    CA which issued this cert
+  * ocsp_must_staple - if true then the OCSP staple protocoll will be required by the cert
   * not_before - :ref:`Start date for cert usage <Certinstances.not_before>`
   * not_after - :ref:`End date for cert usage <Certinstances.not_after>`
-  * hash - :ref:`Hash of instance <Certinstances.hash>`
+  * algo - :ref:`Cert encryption algorithm <certificates.algo> of related CertKeyData row`
+  * hash - :ref:`Hash of cert instance <Certinstances.hash>` of related CertKeyData row
 
 
 .. index:: Functions
@@ -306,7 +343,7 @@ Functions
 ---------
 
 Functions are provided for common operations to abstract foreign key handling.
-All arguments are text (mostly case insensitive), exceptions are mentioned,
+All arguments are text (mostly case insensitive [=citext]), exceptions are mentioned (e.g. boolean),
 to omit an argument, use *null*.
 Functions may be called with select in psql::
 
@@ -324,16 +361,18 @@ Functions may be called with select in psql::
   * the_name - :ref:`Subject name <subjects.name>`
   * the_subject_type - :ref:`Subject type <subjects.type>`
   * the_cert_type - :ref:`Cert type <certificates.cert_type>`
+  * the_encryption_algo - :ref:`Cert encryption algorithm <certificates.algo> of related CertKeyData row`
+  * must_staple - if true then the OCSP staple protocoll will be required by the cert
   * the_altname - optional :ref:`Alternative cert name <Subjects.name>`
   * the_tlsa_name - optional :ref:`Service name <Services.name>`
   * the_tlsa_port - optional :ref:`Service port number <Services.port>`
-  * the_disthost_name - optionalcreate
+  * the_disthost_name - optional :ref: `Name of disthost <Disthosts.name>`
   * the_jail - optional :ref:`Jail name <Jails.name>`
   * the_place - optional :ref:`Place name <Places.name>`
 
 .. index:: remove_cert
 
-* **remove_cert** - delete a cert **and all issued cert instances from the database**
+* **remove_cert** - delete a cert **and all issued cert instances with there CertKeyData from the database**
 
   * the_cert_name - :ref:`Subject name <subjects.name>`
 
@@ -383,4 +422,30 @@ Functions may be called with select in psql::
   * the_disthost_name - :ref:`Disthost name <Disthosts.FQDN>` to identify the :ref:`target <Targets>`
   * the_jail - optional :ref:`Jail name <Jails.name>` to identify the :ref:`target <Targets>`
   * the_place - optional :ref:`Place name <Places.name>` to identify the :ref:`target <Targets>`
+
+
+
+.. index:: Manually inserting and deleting meta data
+
+.. _manually_inserting_and_deleting_meta_data:
+
+Manually inserting and deleting meta data
+-----------------------------------------
+
+Example: Inserting a disthost, querying it and deleting it::
+
+    pki_op=# insert into disthosts (fqdn,jailroot) values('demo-disthost.ma.do.main', '/usr/jails');
+    INSERT 0 1
+    Time: 4,901 ms
+    pki_op=# select * from disthosts where fqdn='demo-disthost.ma.do.main';
+     id |           fqdn           |  jailroot  |          updated           |          created           | remarks
+    ----+--------------------------+------------+----------------------------+----------------------------+---------
+     24 | demo-disthost.ma.do.main | /usr/jails | 2016-07-30 13:48:57.442189 | 2016-07-30 13:48:57.431786 |
+    (1 row)
+
+    Time: 1,242 ms
+    pki_op=# delete from disthosts where id=24;
+    DELETE 1
+    Time: 2,556 ms
+    pki_op=#
 

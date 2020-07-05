@@ -89,90 +89,104 @@ Management of cert instances
 
 These are the command line options. Arguments are in capital letters::
 
-  # operate_serverPKI --help
-  Usage: operate_serverPKI [options]
+    Usage: operate_serverPKI [options]
 
-  Server PKI Operations
+    Server PKI 0.9.9
 
-  Options:
-  -h, --help            show this help message and exit
-  -S, --schedule-actions
-                        Scan configuration and schedule necessary actions of
-                        selected certs/hosts. This may trigger issuence or
-                        distribution of certs/TLSA-RRS. With this options "--
-                        create-certs" and "--distribute-certs" are ignored.
-                        Any state transitions may happen
-  -K, --consolidate-certs
-                        Consolidate targets to be in sync with DB. This
-                        affects certs in state "deployed".
-  -T, --consolidate-TLSAs
-                        Consolidate TLSA-RR to be in sync with DB. This
-                        affects certs in state "deployed" or "prepublished".
-  -R, --remove-TLSAs    Remove TLSA-RRs i.e. make them empty.
-  -C, --create-certs    Scan configuration and create all certs, which are not
-                        disbled or excluded. State will be "issued" of created
-                        certs.
-  -r REMAINING_DAYS, --renew-local-certs=REMAINING_DAYS
-                        Scan configuration for local certs in state deployed
-                        which will expire within REMAINING_DAYS days. Include
-                        these certs in a --create-certs operation. If combined
-                        with "--distribute-certs", do not create certs, but
-                        instead distribute certs, which would expire within
-                        REMAINING_DAYS days and are issued no longer than
-                        REMAINING_DAYS in the past.
-  -D, --distribute-certs
-                        Scan configuration and distribute (to their target
-                        host) all certs which are in state "issued" and
-                        currently valid and not disabled or excluded. Changes
-                        state to "deployed". Corresponding TLSA RR are also
-                        installed, if not suppressed with --no-TLSA-records-
-  -E CERT_SERIAL, --export-cert-and-key=CERT_SERIAL
-                        Export certificate and key with CERT_SERIAL to work
-                        directory. This action may not be combined with other
-                        actions.
-  --encrypt-keys        Encrypt all keys in DB.Configuration parameter
-                        db_encryption_key must point at a file, containing a
-                        usable passphrase.
-  --decrypt-keys        Replace all keys in the DB by their clear text
-                        version.Configuration parameter db_encryption_key must
-                        point at a file, containing a usable passphrase.
-  -I, --issue-local-CAcert
-                        Issue a new local CA cert, used for issuing future
-                        local server/client certs.
-  -a, --all             All certs in configuration should be included in
-                        operation, even if disabled.
-  -i CERT_TO_BE_INCLUDED, --include=CERT_TO_BE_INCLUDED
-                        Specify, which cert to be included, even if disabled,
-                        in list of certs to be created or distributed. Is
-                        cumulative if multiple times provided.
-  -e CERT_TO_BE_EXCLUDED, --exclude=CERT_TO_BE_EXCLUDED
-                        Specify, which cert to be excluded from list of certs
-                        to be created or distributed. Is cumulative if
-                        multiple times provided.
-  -o ONLY_CERT, --only=ONLY_CERT
-                        Specify from which cert(s) the list of certs to be
-                        created or distributed. Is cumulative if multiple
-                        times provided.
-  -s SKIP_HOST, --skip-disthost=SKIP_HOST
-                        Specify, which disthosts should not receive
-                        distributions. Is cumulative if multiple times
-                        provided.
-  -l ONLY_HOST, --limit-to-disthost=ONLY_HOST
-                        Specify, which disthosts should receive distributions
-                        only (others are excluded). Is cumulative if multiple
-                        times provided.
-  -N, --no-TLSA-records
-                        Do not distribute/change TLSA resource records.
-  -n, --check-only      Do syntax check of configuration data. Produce a
-                        listing of cert meta and related cert instances if
-                        combined with  --verbose. Listed certs may be selected
-                        with --only.
-  -d, --debug           Turn on debugging.
-  -q, --quiet           Be quiet on command line. Do only logging. (for cron
-                        jobs).
-  -v, --verbose         Be more verbose.
+    Options:
+      -h, --help            show this help message and exit
 
-This script is run by cron (typically once a hour) like::
+      Actions to issue and replace certificates.:
+        -C, --create-certs  Scan configuration and create all certs, which are not
+                            disbled or excluded. State will be "issued" of created
+                            certs. Action modifiers may be used to select a subset
+                            of certs to act on.
+        -r REMAINING_DAYS, --renew-local-certs=REMAINING_DAYS
+                            Scan configuration for local certs in state deployed
+                            which will expire within REMAINING_DAYS days. Include
+                            these certs in a --create-certs operation. If combined
+                            with "--distribute-certs", do not create certs, but
+                            instead distribute certs, which would expire within
+                            REMAINING_DAYS days and are issued no longer than
+                            REMAINING_DAYS in the past.
+        -S, --schedule-actions
+                            Scan configuration and schedule necessary actions of
+                            selected certs/hosts. This may trigger issuence or
+                            distribution of certs/TLSA-RRS. With this options "--
+                            create-certs" and "--distribute-certs" are ignored.
+                            Any state transitions may happen
+
+      Actions to deploy or export certificates and deploy or delete DNS TLSA resource records.:
+        -D, --distribute-certs
+                            Scan configuration and distribute (to their target
+                            host) all certs which are in state "issued" and
+                            currently valid and not disabled or excluded. Changes
+                            state to "deployed". Corresponding TLSA RR are also
+                            installed, if not suppressed with --no-TLSA-records-
+        -K, --consolidate-certs
+                            Consolidate targets to be in sync with DB. This
+                            affects certs in state "deployed"  and effectivly re-
+                            distributes certs.
+        -T, --consolidate-TLSAs
+                            Consolidate TLSA-RR to be in sync with DB. This
+                            affects certs in state "deployed" or "prepublished".
+        -R, --remove-TLSAs  Remove TLSA-RRs i.e. make them empty.
+        -E CERT_SERIAL, --export-cert-and-key=CERT_SERIAL
+                            Export certificate and key with CERT_SERIAL to work
+                            directory. CERT_SERIAL may be obtained from DB (column
+                            "id" with command operate_serverPKI -n -v) This action
+                            may not be combined with other actions.
+
+      Action modifiers, to select subset of certificates whose meta data is stored in the DB or to set verbosity of messages.:
+        -a, --all           All certs in configuration should be included in
+                            operation, even if disabled.
+        -i CERT_TO_BE_INCLUDED, --include=CERT_TO_BE_INCLUDED
+                            Specify, which cert to be included, even if disabled,
+                            in list of certs to be created or distributed. Is
+                            cumulative if multiple times provided.
+        -e CERT_TO_BE_EXCLUDED, --exclude=CERT_TO_BE_EXCLUDED
+                            Specify, which cert to be excluded from list of certs
+                            to be created or distributed. Is cumulative if
+                            multiple times provided.
+        -o ONLY_CERT, --only=ONLY_CERT
+                            Specify from which cert(s) the list of certs to be
+                            created or distributed. Is cumulative if multiple
+                            times provided.
+        -s SKIP_HOST, --skip-disthost=SKIP_HOST
+                            Specify, which disthosts should not receive
+                            distributions. Is cumulative if multiple times
+                            provided.
+        -l ONLY_HOST, --limit-to-disthost=ONLY_HOST
+                            Specify, which disthosts should receive distributions
+                            only (others are excluded). Is cumulative if multiple
+                            times provided.
+        -N, --no-TLSA-records
+                            Do not distribute/change TLSA resource records.
+
+      Maintenance and administrative actions.:
+        --encrypt-keys      Encrypt all keys in DB.Configuration parameter
+                            db_encryption_key must point at a file, containing a
+                            usable passphrase.
+        --decrypt-keys      Replace all keys in the DB by their clear text
+                            version.Configuration parameter db_encryption_key must
+                            point at a file, containing a usable passphrase.
+        -I, --issue-local-CAcert
+                            Issue a new local CA cert, used for issuing future
+                            local server/client certs.
+        --register          Register a new account at LetsEncrypt, This action may
+                            not be combined with other actions.
+        -n, --check-only    Do syntax check of configuration data. Produce a
+                            listing of cert meta and related cert instances if
+                            combined with  --verbose. Listed certs may be selected
+                            with --only.
+        -d, --debug         Turn on debugging.
+        -q, --quiet         Be quiet on command line. Do only logging. (for cron
+                            jobs).
+        -v, --verbose       Be more verbose.
+        -f CONFIG_FILE, --config_file=CONFIG_FILE
+                            Path of an alternate configuration file.
+
+This script is run by cron (typically once an hour) like::
 
     pki_op  /usr/local/py_venv/PKI_OP_published/bin/operate_serverPKI -S -q -a
     
@@ -189,21 +203,24 @@ attributes, which would be renewed, if combined with the "-n" option, Like so::
 Listing of cert meta and related cert instances may be obtained with the combination
 of --check-only with  --verbose. Listed certs may be selected with --only, Like so::
 
-  # su -l pki_dev -c "/usr/local/py_venv/pki_dev_p37/bin/python /usr/local/py_venv/pki_dev_p37/bin/operate_serverPKI  -v -n -o ajr"
-  [operateCA started with options only_cert(ajr) check_only verbose ]
-  [43 certificates in configuration]
-  [No syntax errors found in configuration.]
-  +---------+-----------+-------+------------+----------+------+------+-----------+------+-----------+
-  | Subject | Cert Name |  Type | authorized | Alt Name | TLSA | Port | Dist Host | Jail |   Place   |
-  +---------+-----------+-------+------------+----------+------+------+-----------+------+-----------+
-  |  client |    Jon    | local |    None    |   None   | None | None | some.host | None | mac_pgsql |
-  +---------+-----------+-------+------------+----------+------+------+-----------+------+-----------+
-  
-  +--------+-----------+--------+----------------------------+----------------------------+------------------------+----------------------------+
-  | Serial | Cert Name | State  |         not before         |         not after          |        hash            |          updated           |
-  +--------+-----------+--------+----------------------------+----------------------------+------------------------+----------------------------+
-  |   74   |    Jon    | issued | 2019-02-17 18:29:39.100141 | 2020-02-28 18:29:39.100173 | 8B2F2A69B8F(truncated) | 2019-02-18 18:29:32.637532 |
-  +--------+-----------+--------+----------------------------+----------------------------+------------------------+----------------------------+
+    # su -l pki_dev -c "/usr/local/py_venv/pki_dev_p37/bin/python /usr/local/py_venv/pki_dev_p37/bin/operate_serverPKI  -v -n -o -a"
+    [operateCA [serverPKI-0.9.9] started with options all check_only verbose config_file( /Users/ajr/Projects/SERVICES/serverPKI/serverPKI/tests/conf/serverpki.conf) ]
+    [3 certificates and CAs ['Local CA'] in DB]
+    [No syntax errors found in configuration.]
+    +---------+-----------+-------+------+-----------+------------+----------+------+------+-------------------------+------+---------+
+    | Subject | Cert Name |  Type | Algo | OCSP m st | authorized | Alt Name | TLSA | Port |        Dist Host        | Jail |  Place  |
+    +---------+-----------+-------+------+-----------+------------+----------+------+------+-------------------------+------+---------+
+    |  client |  client1  | local | rsa  |   False   |    None    |   None   | None | None | axels-imac.in.chaos1.de | None | place_1 |
+    |    CA   |  Local CA | local | rsa  |   False   |    None    |   None   | None | None |           None          | None |   None  |
+    |    CA   |  No cert  | local | rsa  |   False   |    None    |   None   | None | None |           None          | None |   None  |
+    +---------+-----------+-------+------+-----------+------------+----------+------+------+-------------------------+------+---------+
+
+    +--------+-----------+-------+--------+-------+-----------+---------------------+---------------------+------+------------------------------------------------------------------+----------------------------+
+    | Serial | Cert Name |  Type | State  | CI CA | OCSP m st |      not before     |      not after      | ALGO |                               Hash                               |          updated           |
+    +--------+-----------+-------+--------+-------+-----------+---------------------+---------------------+------+------------------------------------------------------------------+----------------------------+
+    |   3    |  Local CA | local | issued |   3   |   False   | 2020-07-04 00:00:00 | 2030-08-02 00:00:00 | rsa  | CF32D82E6A0D36258AAF05CBE62E4834C7EA254FEC5E0A88B08B3C773F2D5989 | 2020-07-05 13:34:37.768547 |
+    |   4    |  Local CA | local | issued |   4   |   False   | 2020-07-04 00:00:00 | 2030-08-02 00:00:00 | rsa  | 69DF3EAB1FD2D55A9BA42C8F590757B63EFDCF63D16EB7F83EC02B6ACC5A5280 | 2020-07-05 13:34:38.527877 |
+    +--------+-----------+-------+--------+-------+-----------+---------------------+---------------------+------+------------------------------------------------------------------+----------------------------+
 
 
 Displayed serial number may be used for exporting a key pair with --export.

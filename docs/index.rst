@@ -10,6 +10,7 @@ database.
 
 
 .. toctree::
+
   :maxdepth: 2
 
   README
