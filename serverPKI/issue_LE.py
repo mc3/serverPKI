@@ -61,7 +61,7 @@ from automatoes import errors as manuale_errors
 
 # --------------- local imports --------------
 from serverPKI.cacert import create_CAcert_meta
-from serverPKI.cert import Certificate, CertInstance, CertKeyStore, EncAlgo, EncAlgoCKS, CertState, CM
+from serverPKI.cert import Certificate, CertInstance, CertKeyStore, EncAlgo, EncAlgoCKS, CertState
 from serverPKI.utils import sld, sli, sln, sle,  Pathes, X509atts, Misc
 from serverPKI.utils import updateSOAofUpdatedZones, get_options
 from serverPKI.utils import updateZoneCache, print_order, ddns_update
@@ -263,7 +263,7 @@ def _get_intermediate_instance(db: db_conn, int_cert: x509.Certificate) -> CertI
     # obtain our cert meta - check, if it exists
 
     if Misc.SUBJECT_LE_CA in Certificate.names(db):
-        cm = CM(db, Misc.SUBJECT_LE_CA)                 # yes: we have meta but no instance
+        cm = Certificate.create_or_load_cert_meta(db, Misc.SUBJECT_LE_CA)                 # yes: we have meta but no instance
         sln('Cert meta for intermediate cert exists, but no instance.')
     else:                                               # no: this ist 1st cert with this CA
         sln('Cert meta for intermediate does not exist, creating {}.'.format(Misc.SUBJECT_LE_CA))

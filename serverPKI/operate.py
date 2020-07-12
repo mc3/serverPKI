@@ -26,7 +26,7 @@ from paramiko import util
 from postgresql import driver as db_conn
 
 from serverPKI.cacert import issue_local_CAcert
-from serverPKI.cert import Certificate, CertType, CM
+from serverPKI.cert import Certificate, CertType
 from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA, export_instance
 from serverPKI.db import DbConnection as dbc
 from serverPKI.issue_LE import issue_LE_cert
@@ -74,13 +74,16 @@ def execute_from_command_line():
 
     read_db_encryption_key(db)
 
+    # in case of restarting serverPKI
+    Certificate.clear_list_of_known_cert_metas()
+
     all_cert_names = Certificate.names(db)
     all_disthost_names = Certificate.disthost_names(db)
     # preload CMs, CIs and CKSs of our CAs
     cas = []
     for name in (Misc.SUBJECT_LOCAL_CA, Misc.SUBJECT_LE_CA):
         if name in all_cert_names:      # does CA exist in DB?
-            cm = CM(db, name)
+            cm = Certificate.create_or_load_cert_meta(db, name)
             cas.append(name)
 
     sli('{} certificates and CAs {} in DB'.format(len(all_cert_names), cas))
@@ -156,7 +159,7 @@ def execute_from_command_line():
     our_cert_names = sorted(list(cert_name_set))
 
     for name in our_cert_names:
-        cm = CM(db, name)
+        cm = Certificate.create_or_load_cert_meta(db, name)
         if cm.in_db: our_certs[name] = cm
 
     if opts.check_only and not opts.schedule:

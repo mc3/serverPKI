@@ -56,8 +56,7 @@ def issue_local_cert(cert_meta: Certificate) -> Optional[CertInstance]:
     :param cert_meta:   Cert meta instance to issue an certificate for
     :rtype:             cert instance id in DB of new cert or None
     """
-
-    (cacert, cakey, cacert_ci) = get_cacert_and_key(cert_meta.db)
+    cacert, cakey, cacert_ci = get_cacert_and_key(cert_meta.db)
 
     sli('Creating key ({} bits) and cert for {} {}. Using CA cert {}'.format(
         int(X509atts.bits),

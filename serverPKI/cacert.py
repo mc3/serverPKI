@@ -40,7 +40,7 @@ from cryptography.hazmat.primitives import hashes
 from postgresql import driver as db_conn
 
 # --------------- local imports --------------
-from serverPKI.cert import Certificate, CM, CertInstance, CertType, EncAlgoCKS, CertState
+from serverPKI.cert import Certificate, CertInstance, CertType, EncAlgoCKS, CertState
 from serverPKI.utils import sld, sli, sln, sle,  Pathes, X509atts, Misc
 
 # ----------------- globals --------------------
@@ -85,7 +85,8 @@ def get_cacert_and_key(db: db_conn) -> Tuple[x509.Certificate, rsa.RSAPrivateKey
     and Certinstances and store them in globals local_cacert, local_cakey and local_cacert_instance
     Does exit(1) if CA key could not be loaded.
     :param db:  Opened DB connection
-    :return: Tuple of cacert, cakey and cacert instance
+    :return:    Tuple of cacert, cakey and cacert instance and globals
+                local_cacert, local_cakey, local_cacert_instance setup
     """
 
     global local_cacert, local_cakey, local_cacert_instance
@@ -93,178 +94,210 @@ def get_cacert_and_key(db: db_conn) -> Tuple[x509.Certificate, rsa.RSAPrivateKey
     if local_cacert and local_cakey and local_cacert_instance:
         return (local_cacert, local_cakey, local_cacert_instance)
 
-    cm = CM(db, name=Misc.SUBJECT_LOCAL_CA)
-    if cm.in_db:                # loaded from DB?
-        cksd = cks = None
-        ci = cm.most_recent_active_instance
-        cks = None
-        if ci:  # we have a active CA cert in db
-            cksd = ci.cksd
-        if cksd:
-            cks = cksd[EncAlgoCKS('rsa')]  # multiple algo certs not supprted as CA cert
-        if not cks:
-            sln('Missed cacert in db, where it should be: {} ci.rowid ={}, cks.row_is={}'.format(
-                ci.cm.name, ci.row_id, cks.row_id))
-        if cks:
+    cacert, cakey, ci = None
+
+    cm = Certificate.create_or_load_cert_meta(db, name=Misc.SUBJECT_LOCAL_CA)
+    if cm.in_db:  # loaded from DB?
+        ci = cm.most_recent_active_instance  # YES: load its active CI
+        if ci:  # one there, which is valid today?
+            cks = ci.the_cert_key_stores.values()[0]  # expecting only one algorithm
             cacert_pem = cks.cert_for_ca
             cakey_pem = cks.key_for_ca
             algo = cks.algo
-            ##sld('cert:\d{}\nkey:\n{}'.format(cacert_pem.decode('utf-8'), cakey_pem.decode('utf-8')))
             cacert = x509.load_pem_x509_certificate(
                 data=cacert_pem,
                 backend=default_backend()
             )
             cakey = _load_cakey(cakey_pem)
-            if not cakey:
+            if not cakey:  # operator aborted pass phrase input
                 sle('Can''t create certificates without passphrase')
                 exit(1)
             local_cacert, local_cakey, local_cacert_instance = cacert, cakey, ci
             return (cacert, cakey, ci)
 
-    # no usable CA cert in DB
+        sln('Missed active cacert instance or store in db, where it should be: {}'.format(cm.name))
 
-    sli('No usable local CA cert in DB')
-    sld('Missing or multiple cert key store in CertInstance of local CA')
-    # do we have a historical CA cert on disk?
-    if Path(Pathes.ca_cert).exists() and Path(Pathes.ca_key).exists:
-        sli('Using CA key at {}'.format(Pathes.ca_key))
-        sli('Will be stored in DB')
-        with Path.open(Pathes.ca_cert, 'rb') as f:
-            cacert_pem = f.read()
-        cacert = x509.load_pem_x509_certificate(cacert_pem, default_backend())
-        with Path.open(Pathes.ca_key, 'rb') as f:
-            cakey_pem = f.read()
-        cakey = _load_cakey(cakey_pem)
-        return create_local_ca_cert(db, cacert, cakey)  # create instance in DB
+    if not cm:
+        # CM not in DB, create rows in Subjects and Certificates for it
+        cm = create_CAcert_meta(db=db,
+                                name=Misc.SUBJECT_LOCAL_CA,
+                                cert_type=CertType('local'))
 
-    else:  # no - crate one and  instance in DB
-        sln('No CA cert found. Creating one.')
-        return create_local_ca_cert(db, None, None)
+        # Try to load active historical CA cert from flat file
+        result = load_historical_cert_from_flatfile()
+        if result:  # loaded and stored in DB
+            return result  # globals already setup
+        else:  # none found in flat file - issue a new one
+            result = create_local_ca_cert(db, cm)
+            if result:  # issued and stored in DB
+                return result  # globals already setup
+            else:
+                sle('Failed to issue CA cert')
+                sys.exit(1)
 
+    if not ci:  # no most_recent_active_instance found above, issue one
+        result = create_local_ca_cert(db, cm)
+        if result:
+            return result
+        else:
+            sle('Failed to issue CA cert')
+            sys.exit(1)
 
-def create_local_ca_cert(db: db_conn,
-                         cacert: Optional[x509.Certificate],
-                         cakey: Optional[rsa.RSAPrivateKeyWithSerialization]) -> Tuple[x509.Certificate,
-                                                                                       rsa.RSAPrivateKeyWithSerialization,
-                                                                                       CertInstance]:
+def create_local_ca_cert(db: db_conn, cm: Certificate) -> Tuple[x509.Certificate,
+                                               rsa.RSAPrivateKeyWithSerialization,
+                                               CertInstance]:
     """
     Create a new local CA cert (use an existing one, if one in db)
     Make it available in globals local_cacert, local_cakey and local_cacert_instance
 
     :param db:      Opened DB connection
-    :param cacert:  Optional existing CA cert
-    :param cakey:   Key for cacert, if this provided
-    :return:        Tuple of cacert, cakey and cacert instance
+    :param cm:      CA cert Certifcate meta instance
+    :return:        Tuple of cacert, cakey and cacert instance and globals
+                    local_cacert, local_cakey, local_cacert_instance setup
     """
 
     global local_cacert, local_cakey, local_cacert_instance
 
-    # create rows for cacert meta (in certificates and subjects)
-    cm = create_CAcert_meta(db=db, name=Misc.SUBJECT_LOCAL_CA, cert_type=CertType('local'))
-    ci = cm.most_recent_active_instance
-    if not ci:  # no ca cert in db
-        sli('Local CA cert not in DB or has expired, creating a new one')
+    # Read pass phrase from user
+    match = False
+    while not match:
+        sli('Please enter passphrase for new CA cert (ASCII only).')
+        try:
+            pp1 = getpass.getpass(prompt='passphrase: ')
+        except UnicodeDecodeError:
+            sle('None-ASCII character found.')
+            continue
+        if pp1 == '':
+            sln('Passphrases must not be empty.')
+            continue
+        sli('Please enter it again.')
+        try:
+            pp2 = getpass.getpass(prompt='passphrase: ')
+        except UnicodeDecodeError:
+            pass
+        if pp1 == pp2:
+            match = True
+        else:
+            sln('Both passphrases differ.')
 
-        if not cakey or not cacert:  # we got no cert - crate one
+    # Generate our key
+    cakey = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=Misc.LOCAL_CA_BITS,
+        backend=default_backend()
+    )
 
-            # Read pass phrase from user
-            match = False
-            while not match:
-                sli('Please enter passphrase for new CA cert (ASCII only).')
-                try:
-                    pp1 = getpass.getpass(prompt='passphrase: ')
-                except UnicodeDecodeError:
-                    sle('None-ASCII character found.')
-                    continue
-                if pp1 == '':
-                    sln('Passphrases must not be empty.')
-                    continue
-                sli('Please enter it again.')
-                try:
-                    pp2 = getpass.getpass(prompt='passphrase: ')
-                except UnicodeDecodeError:
-                    pass
-                if pp1 == pp2:
-                    match = True
-                else:
-                    sln('Both passphrases differ.')
+    # compose cert
 
-            # Generate our key
-            cakey = rsa.generate_private_key(
-                public_exponent=65537,
-                key_size=Misc.LOCAL_CA_BITS,
-                backend=default_backend()
-            )
+    # Various details about who we are. For a self-signed certificate the
+    # subject and issuer are always the same.
+    serial = randbits(32)
+    name_dict = X509atts.names
+    subject = issuer = x509.Name([
+        x509.NameAttribute(x509.NameOID.COUNTRY_NAME, name_dict['C']),
+        x509.NameAttribute(x509.NameOID.LOCALITY_NAME, name_dict['L']),
+        x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, name_dict['O']),
+        x509.NameAttribute(x509.NameOID.COMMON_NAME, name_dict['CN']),
+    ])
 
-            # compose cert
+    not_after = datetime.datetime.utcnow() + datetime.timedelta(
+        days=Misc.LOCAL_CA_LIFETIME)
+    not_before = datetime.datetime.utcnow() - datetime.timedelta(
+        days=1)
+    ci = cm.create_instance(not_before=not_before,
+                            not_after=not_after,
+                            state=CertState('issued'))
 
-            # Various details about who we are. For a self-signed certificate the
-            # subject and issuer are always the same.
-            serial = randbits(32)
-            name_dict = X509atts.names
-            subject = issuer = x509.Name([
-                x509.NameAttribute(x509.NameOID.COUNTRY_NAME, name_dict['C']),
-                x509.NameAttribute(x509.NameOID.LOCALITY_NAME, name_dict['L']),
-                x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, name_dict['O']),
-                x509.NameAttribute(x509.NameOID.COMMON_NAME, name_dict['CN']),
-            ])
+    ski = x509.SubjectKeyIdentifier.from_public_key(cakey.public_key())
 
-            not_after = datetime.datetime.utcnow() + datetime.timedelta(
-                days=Misc.LOCAL_CA_LIFETIME)
-            not_before = datetime.datetime.utcnow() - datetime.timedelta(
-                days=1)
-            ci = cm.create_instance(not_before=not_before, not_after=not_after, state=CertState('issued'))
+    cacert = x509.CertificateBuilder().subject_name(
+        subject
+    ).issuer_name(
+        issuer
+    ).public_key(
+        cakey.public_key()
+    ).serial_number(serial
+                    ).not_valid_before(
+        not_before
+    ).not_valid_after(
+        # Our certificate will be valid for 10 days
+        not_after
+    ).add_extension(
+        # CA and no intermediate CAs
+        x509.BasicConstraints(
+            ca=True,
+            path_length=0),
+        critical=True
+    ).add_extension(
+        ski,
+        critical=False,
+        # Sign our certificate with our private key
+    ).add_extension(
+        x509.KeyUsage(
+            digital_signature=True,
+            key_cert_sign=True,
+            crl_sign=True,
+            key_encipherment=False,
+            content_commitment=False,
+            data_encipherment=False,
+            key_agreement=False,
+            encipher_only=False,
+            decipher_only=False),
+        critical=True
+    ).sign(cakey, hashes.SHA512(), default_backend())
 
-            ski = x509.SubjectKeyIdentifier.from_public_key(cakey.public_key())
+    sli('CA cert serial {} with {} bit key, valid until {} created.'.format(
+        serial,
+        Misc.LOCAL_CA_BITS,
+        not_after.isoformat()
+    ))
+    ci.store_cert_key(algo='rsa', cert=cacert, key=cakey)
+    cm.save_instance(ci)
 
-            cacert = x509.CertificateBuilder().subject_name(
-                subject
-            ).issuer_name(
-                issuer
-            ).public_key(
-                cakey.public_key()
-            ).serial_number(serial
-                            ).not_valid_before(
-                not_before
-            ).not_valid_after(
-                # Our certificate will be valid for 10 days
-                not_after
-            ).add_extension(
-                # CA and no intermediate CAs
-                x509.BasicConstraints(
-                    ca=True,
-                    path_length=0),
-                critical=True
-            ).add_extension(
-                ski,
-                critical=False,
-                # Sign our certificate with our private key
-            ).add_extension(
-                x509.KeyUsage(
-                    digital_signature=True,
-                    key_cert_sign=True,
-                    crl_sign=True,
-                    key_encipherment=False,
-                    content_commitment=False,
-                    data_encipherment=False,
-                    key_agreement=False,
-                    encipher_only=False,
-                    decipher_only=False),
-                critical=True
-            ).sign(cakey, hashes.SHA512(), default_backend())
-
-            sli('CA cert serial {} with {} bit key, valid until {} created.'.format(
-                serial,
-                Misc.LOCAL_CA_BITS,
-                not_after.isoformat()
-            ))
-        ci.store_cert_key(algo='rsa', cert=cacert, key=cakey)
-        cm.save_instance(ci)
-
-    local_cacert = cacert
-    local_cakey = cakey
-    local_cacert_instance = ci
+    local_cacert, local_cakey, local_cacert_instance = cacert, cakey, ci
     return (cacert, cakey, ci)
+
+
+def load_historical_cert_from_flatfile() -> Optional[Tuple[x509.Certificate,
+                                                           rsa.RSAPrivateKeyWithSerialization,
+                                                           CertInstance]]:
+    """
+    Load a historical CA cert from flat file
+    Make it available in globals local_cacert, local_cakey and local_cacert_instance
+
+    :return:        Tuple of cacert, cakey and cacert instance and globals
+                    local_cacert, local_cakey, local_cacert_instance setup
+    """
+
+    global local_cacert, local_cakey, local_cacert_instance
+
+    # do we have a historical CA cert on disk?
+    if Path(Pathes.ca_cert).exists() and Path(Pathes.ca_key).exists:
+        sli('Using CA key at {}'.format(Pathes.ca_key))  # yes
+        sli('Will be stored in DB')
+        with open(Pathes.ca_cert, 'rb') as f:
+            cacert_pem = f.read()
+        cacert = x509.load_pem_x509_certificate(cacert_pem, default_backend())
+
+        if not (cacert.not_valid_before < datetime.datetime.now() and
+                cacert.not_valid_after > datetime.datetime.now()):
+
+            sli('Historical cert on flatfile is outdated')
+            return None
+        else:
+            with open(Pathes.ca_key, 'rb') as f:
+                cakey_pem = f.read()
+            cakey = _load_cakey(cakey_pem)
+            ci = cm.create_instance(not_before=cacert.not_valid_before,
+                                    not_after=cacert.not_valid_after,
+                                    state=CertState('issued'))
+            ci.store_cert_key(algo='rsa', cert=cacert, key=cakey)
+            cm.save_instance(ci)
+
+            local_cacert, local_cakey, local_cacert_instance = cacert, cakey, ci
+            return (cacert, cakey, ci)
+    else:
+        return None
 
 
 # --------------- load private key and query passphrase --------------

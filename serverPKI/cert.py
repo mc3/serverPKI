@@ -171,26 +171,39 @@ class PlaceCertFileType(str):
         return str.__new__(cls, content)
 
 
-# --------------- public class Certificate --------------
-
-_all_CMs = {}
-
-def CM(db: db_conn, name: str) -> 'Certificate':
-    """
-    Obtain a Certificate (cert meta) instance
-    :param db: opened DB connection
-    :param name: cert name
-    :return:
-    """
-    if name in _all_CMs:
-        return _all_CMs[name]
-    return Certificate(db, name)
+# --------------- public class Certificate (=Certifcate Meta) --------------
 
 class Certificate(object):
     """
     Certificate meta data class.
     In-memory representation of DB backed meta information.
     """
+
+    _all_CMs = {}
+
+    @staticmethod
+    def clear_list_of_known_cert_metas():
+        """
+        Clear static lists for 2nd invocation per import (be pytest)
+        :return:
+        """
+        Certificate._all_CMs = {}
+        CertKeyStore._cert_key_stores = {}
+
+
+    @staticmethod
+    def create_or_load_cert_meta(db: db_conn, name: str) -> 'Certificate':
+        """
+        Obtain a Certificate (cert meta) instance
+        :param db: opened DB connection
+        :param name: cert name
+        :return:
+        """
+        if name in Certificate._all_CMs:
+            return Certificate._all_CMs[name]
+        return Certificate(db, name)
+
+
 
     @staticmethod
     def fqdn_from_instance_serial(db: db_conn, serial: int):
@@ -229,12 +242,12 @@ class Certificate(object):
 
         global ps_insert_cacert, ps_insert_cacert_subject
 
-        cm = CM(db, name)
+        cm = Certificate.create_or_load_cert_meta(db, name)
         if cm.in_db:                             # do we have a row in db?
             return cm                            # yes, return existing meta instance
-        del _all_CMs[name]                       # delete incomplete cached cert meta
+        del Certificate._all_CMs[name]           # delete incomplete cached cert meta
         assert cert_type, '?Missing cert_type for of new CA CM'
-        sln('Inserting CA cert meta {}, cert type {} into DB'.format(name, cert_type))
+        sln('Inserting CA cert meta={}, cert type={} into DB'.format(name, cert_type))
         if not ps_insert_cacert:
             ps_insert_cacert = db.prepare(q_insert_cacert)
         certificates_row_id = ps_insert_cacert.first(cert_type)
@@ -245,7 +258,7 @@ class Certificate(object):
         subjects_row_id = ps_insert_cacert_subject.first('CA', name, certificates_row_id)
         if not subjects_row_id:
             raise AssertionError('CA_cert_meta: ps_insert_cacert_subject failed')
-        cm = CM(db, name)                        # should load the rows just created
+        cm = Certificate.create_or_load_cert_meta(db, name)                        # should load the rows just created
         if cm.in_db and cm.cert_type == cert_type:
             return cm
         sle('Inserting of CA cert meta {} into DB failed'.format(name))
@@ -281,11 +294,8 @@ class Certificate(object):
         return names
 
     def __del__(self):
-        global _all_CMs
-        if not _all_CMs:
-            return
-        if self.name in _all_CMs:
-            del _all_CMs[self.name]
+        if self.name in Certificate._all_CMs:
+            del Certificate._all_CMs[self.name]
 
     def __init__(self, db: db_conn, name: str):
         """
@@ -295,14 +305,14 @@ class Certificate(object):
         :param serial: row_id of instance, whose cert meta we are creating  # FIXME # ???
         """
 
-        global ps_all_cert_meta, ps_instances, _all_CMs
+        global ps_all_cert_meta, ps_instances
 
-        if name in _all_CMs:
+        if name in Certificate._all_CMs:
             raise AssertionError('Attempt to instantiate Certificate instance {} twice'.format(name))
 
         self.db = db
         self.name = name
-        _all_CMs[name] = self
+        Certificate._all_CMs[name] = self
 
         self.altnames = []
         self.tlsaprefixes = {}
@@ -739,7 +749,7 @@ class CertInstance(object):
                         self.ca_cert_ci = self                          # yes - we are issued from our self
                     else:
                         ca_cert_fqdn = Certificate.fqdn_from_instance_serial(cert_meta.db, row['ca_cert_ci_id'])
-                        ca_cert_meta = CM(cert_meta.db, ca_cert_fqdn)   # This have been loaded already by operate.execute_from_command_line
+                        ca_cert_meta = Certificate.create_or_load_cert_meta(cert_meta.db, ca_cert_fqdn)   # This have been loaded already by operate.execute_from_command_line
                         self.ca_cert_ci = ca_cert_meta.instance_from_row_id(row['ca_cert_ci_id'])
                         assert self.ca_cert_ci, '? No CI for CA cert found, while loading CI of {}:{}'.format(cert_meta.name, self.row_id)
                     sld('Loaded CertInstance row_id={}, state={}, ocsp_ms={}, not_before={}, not_after={}, ca_cert_ci_id={}'
@@ -970,7 +980,7 @@ class CertKeyStore(object):
         """
 
         hash = CertKeyStore.hash_from_cert(cert)
-        cm = CM(db=db, name=name)
+        cm = Certificate.create_or_load_cert_meta(db=db, name=name)
         if not cm.in_db:           # make shure cert meta has been loaded (with all dependant  ci,cks)
             return None            # No cert meta with that name
         if hash in CertKeyStore._cert_key_stores:

@@ -37,7 +37,7 @@ from dns import query as dns_query
 from paramiko import SSHClient, HostKeys, AutoAddPolicy
 from postgresql import driver as db_conn
 
-from serverPKI.cert import Certificate, CM, CertInstance, EncAlgoCKS, CertState, CertType, PlaceCertFileType, SubjectType
+from serverPKI.cert import Certificate, CertInstance, EncAlgoCKS, CertState, CertType, PlaceCertFileType, SubjectType
 from serverPKI.utils import get_options
 from serverPKI.utils import sld, sli, sln, sle,  Pathes, Misc
 from serverPKI.utils import updateSOAofUpdatedZones, ddns_update
@@ -56,7 +56,7 @@ def export_instance(db: db_conn) -> bool:
     opts = get_options()
 
     name = Certificate.fqdn_from_instance_serial(db, opts.cert_serial)
-    cert_meta = CM(db, name)
+    cert_meta = Certificate.create_or_load_cert_meta(db, name)
     for ci in cert_meta.cert_instances:
         if ci.row_id == opts.cert_serial:
             for cks in ci.cksd.values():
