@@ -41,10 +41,7 @@ def test_issue_CAcert_from_scratch(db_handle, monkeypatch, script_runner):
     print(ret.stdout)
     print(ret.stderr)
 
-def test_issue_local_cert_from_ca_cert_in_flatfile(db_handle, monkeypatch, script_runner):
-
-    # cleanup work directory
-    setup_directories()
+def test_issue_local_cert_from_ca_cert_in_flatfile(db_handle, monkeypatch, script_runner, setup_directories):
 
     def mock_getpass(prompt: str):
         return CA_CERT_PASS_PHASE
@@ -61,7 +58,7 @@ def test_issue_local_cert_from_ca_cert_in_flatfile(db_handle, monkeypatch, scrip
     os.rename(Pathes.work + '/cert-5-rsa.pem', Pathes.ca_cert)
     os.rename(Pathes.work + '/key-5-rsa.pem', Pathes.ca_key)
 
-    # delete ca cert in db
+    # delete ca cert in
     delete_and_cleanup_local_ca_cert(False, db_handle)
 
     # delete and re-insert local cert meta

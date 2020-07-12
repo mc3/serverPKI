@@ -1,6 +1,6 @@
 import sys, os, pty
 import getpass
-
+from pathlib import Path
 from postgresql import driver as db_conn
 
 from serverPKI.utils import Misc, Pathes
@@ -25,8 +25,6 @@ def test_cert_meta_creation(db_handle):
     rows = db_handle.query("""
     SELECT "Subject", "Cert Name","Type","algo", "Dist Host", "Place" FROM certs""")
 
-    assert len(rows) == 2
-
     for row in rows:
         assert row['Subject'] in ('CA', 'client')     # 'reserved' comes from initial setup
         if row['Subject'] == 'client':
@@ -35,6 +33,9 @@ def test_cert_meta_creation(db_handle):
                     row['algo'] == 'rsa' and
                     row['Dist Host'] == get_hostname() and
                     row['Place'] == TEST_PLACE_1)
+
+    assert len(rows) == 3
+
 
 
 def test_issue_local_cert_from_ca_cert_in_db(db_handle, monkeypatch, script_runner):

@@ -27,8 +27,8 @@ print(_cf)
 config_path_for_pytest = str(_cf)
 (DBAccount, Misc, Pathes, X509atts) = get_config()
 
-
-def setup_directories(only: typing.Optional[str] = None) -> None:
+@pytest.fixture(scope="package")
+def setup_directories():
     """
     Make sure work and db directories exist and clear them.
     :param only: Optional path to clear
@@ -42,13 +42,12 @@ def setup_directories(only: typing.Optional[str] = None) -> None:
 
     config_path_for_pytest = str(_cf)
     (DBAccount, Misc, Pathes, X509atts) = get_config()
-    if only:
-        shutil.rmtree(only)
-        os.makedirs(only, mode=0o750)
-    else:
+    try:
         shutil.rmtree(Pathes.home)
-        os.makedirs(Pathes.work, mode=0o750)
-        os.makedirs(Pathes.db, mode=0o750)
+    except Exception:
+        pass
+    os.makedirs(Pathes.work, mode=0o750)
+    os.makedirs(Pathes.db, mode=0o750)
 
 def run_command(cmd):
     p = process = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
