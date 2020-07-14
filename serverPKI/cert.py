@@ -130,6 +130,26 @@ ps_fqdn_from_serial = None
 
 # ------------- public functions --------------
 
+def init_module_cert():
+
+    Certificate._all_CMs = {}
+    CertKeyStore._cert_key_stores = {}
+
+    ps_all_cert_meta = None
+    ps_instances = None
+    ps_insert_cacert = None
+    ps_insert_cacert_subject = None
+    ps_update_authorized_until = None
+    ps_fqdn_from_serial = None
+    ps_load_instance = None
+    ps_delete_instance = None
+    ps_store_instance = None
+    ps_store_cacert_instance = None
+    ps_update_instance = None
+    ps_store_certkeydata = None
+    ps_update_certkeydata = None
+    ps_hash = None
+
 
 # ------------------------ Some string checking classes -------------------------
 # From: https://stackoverflow.com/questions/7255655/how-to-subclass-str-in-python?answertab=votes#tab-top
@@ -180,15 +200,6 @@ class Certificate(object):
     """
 
     _all_CMs = {}
-
-    @staticmethod
-    def clear_list_of_known_cert_metas():
-        """
-        Clear static lists for 2nd invocation per import (be pytest)
-        :return:
-        """
-        Certificate._all_CMs = {}
-        CertKeyStore._cert_key_stores = {}
 
 
     @staticmethod
@@ -245,7 +256,7 @@ class Certificate(object):
         cm = Certificate.create_or_load_cert_meta(db, name)
         if cm.in_db:                             # do we have a row in db?
             return cm                            # yes, return existing meta instance
-        del Certificate._all_CMs[name]           # delete incomplete cached cert meta
+        del Certificate._all_CMs[name]           # FIXME: delete incomplete cached cert meta
         assert cert_type, '?Missing cert_type for of new CA CM'
         sln('Inserting CA cert meta={}, cert type={} into DB'.format(name, cert_type))
         if not ps_insert_cacert:
@@ -1031,7 +1042,7 @@ class CertKeyStore(object):
                 AssertionError('CertKeyStore: Argument id is omitted and arument cert'
                                'is not a x509.Certificate instance')
             self._cert = cert.public_bytes(Encoding.PEM)
-            self._key = self._encrypt_key(key) if key else b''
+            self._key = self._encrypt_key(key) if key else b''  ## FIXME
             self.hash = self.hash_from_cert(cert)
 
             self._save()

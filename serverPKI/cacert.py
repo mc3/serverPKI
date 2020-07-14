@@ -43,7 +43,6 @@ from postgresql import driver as db_conn
 from serverPKI.cert import Certificate, CertInstance, CertType, EncAlgoCKS, CertState
 from serverPKI.utils import sld, sli, sln, sle,  Pathes, X509atts, Misc
 
-# ----------------- globals --------------------
 
 # most recent local CA cert and key, used for issuence of new server/client certs
 local_cacert: Optional[x509.Certificate] = None
@@ -53,11 +52,34 @@ local_cacert_instance: Optional[CertInstance] = None
 
 # --------------- classes --------------
 
+class LocalCaCertCache(object):
+    cert: Optional[x509.Certificate] = None
+    key: Optional[rsa.RSAPrivateKeyWithSerialization] = None
+    ci: Optional[CertInstance] = None
+
+
 class DBStoreException(Exception):
     pass
 
 
 # --------------- public functions --------------
+
+def cache_cacert(cacert: x509.Certificate,
+                 cakey: rsa.RSAPrivateKeyWithSerialization,
+                 ci: CertInstance) -> None:
+    """
+    Should be called (only) in function, where cacert has been created or loaded.
+    :param cacert:  New CA cert
+    :param cakey:   Corresponding key
+    :param ci:      Corresponding Certificate Instance in DB
+    :return:
+    """
+    # Store new CA cert in cache
+    LocalCaCertCache.cert = cacert
+    LocalCaCertCache.key = cakey
+    LocalCaCertCache.ci = ci
+
+    return
 
 def issue_local_CAcert(db: db_conn) -> bool:
     """
@@ -67,8 +89,14 @@ def issue_local_CAcert(db: db_conn) -> bool:
     """
 
     sli('Creating local CA certificate.')
+    cm = Certificate.create_or_load_cert_meta(db, name=Misc.SUBJECT_LOCAL_CA)
+    if not cm.in_db:                            # loaded from DB?
+        # CM not in DB, create rows in Subjects and Certificates for it
+        cm = create_CAcert_meta(db=db,
+                                name=Misc.SUBJECT_LOCAL_CA,
+                                cert_type=CertType('local'))
     try:
-        create_local_ca_cert(db, None, None)
+        create_local_ca_cert(db, cm)
     except Exception as e:
         sle('Failed to create local CA cert, because: {}'.format(str(e)))
         return False
@@ -82,25 +110,25 @@ def get_cacert_and_key(db: db_conn) -> Tuple[x509.Certificate, rsa.RSAPrivateKey
 
     If necessary, create a local CAcert or read a historical one from disk.
     Store it in DB, creating necessary rows in Subjects, Certificates
-    and Certinstances and store them in globals local_cacert, local_cakey and local_cacert_instance
+    and Certinstances and store them in LocalCaCertCache
     Does exit(1) if CA key could not be loaded.
     :param db:  Opened DB connection
     :return:    Tuple of cacert, cakey and cacert instance and globals
                 local_cacert, local_cakey, local_cacert_instance setup
     """
 
-    global local_cacert, local_cakey, local_cacert_instance
+    if LocalCaCertCache.cert and LocalCaCertCache.key and LocalCaCertCache.ci:
+        return (LocalCaCertCache.cert, LocalCaCertCache.key, LocalCaCertCache.ci)
 
-    if local_cacert and local_cakey and local_cacert_instance:
-        return (local_cacert, local_cakey, local_cacert_instance)
-
-    cacert, cakey, ci = None
+    cacert = None
+    cakey = None
+    ci = None
 
     cm = Certificate.create_or_load_cert_meta(db, name=Misc.SUBJECT_LOCAL_CA)
     if cm.in_db:  # loaded from DB?
         ci = cm.most_recent_active_instance  # YES: load its active CI
         if ci:  # one there, which is valid today?
-            cks = ci.the_cert_key_stores.values()[0]  # expecting only one algorithm
+            cks = list(ci.the_cert_key_stores.values())[0]  # expecting only one algorithm
             cacert_pem = cks.cert_for_ca
             cakey_pem = cks.key_for_ca
             algo = cks.algo
@@ -112,24 +140,24 @@ def get_cacert_and_key(db: db_conn) -> Tuple[x509.Certificate, rsa.RSAPrivateKey
             if not cakey:  # operator aborted pass phrase input
                 sle('Can''t create certificates without passphrase')
                 exit(1)
-            local_cacert, local_cakey, local_cacert_instance = cacert, cakey, ci
+            # CA cert loaded, cache it and return
+            cache_cacert (cacert, cakey, ci)
             return (cacert, cakey, ci)
 
         sln('Missed active cacert instance or store in db, where it should be: {}'.format(cm.name))
 
-    if not cm:
-        # CM not in DB, create rows in Subjects and Certificates for it
+    else:           # CM not in DB, create rows in Subjects and Certificates for it
         cm = create_CAcert_meta(db=db,
                                 name=Misc.SUBJECT_LOCAL_CA,
                                 cert_type=CertType('local'))
 
         # Try to load active historical CA cert from flat file
-        result = load_historical_cert_from_flatfile()
-        if result:  # loaded and stored in DB
+        result = load_historical_cert_from_flatfile(cm)
+        if result:  # loaded, cached and stored in DB
             return result  # globals already setup
         else:  # none found in flat file - issue a new one
             result = create_local_ca_cert(db, cm)
-            if result:  # issued and stored in DB
+            if result:  # issued, cached and stored in DB
                 return result  # globals already setup
             else:
                 sle('Failed to issue CA cert')
@@ -137,7 +165,7 @@ def get_cacert_and_key(db: db_conn) -> Tuple[x509.Certificate, rsa.RSAPrivateKey
 
     if not ci:  # no most_recent_active_instance found above, issue one
         result = create_local_ca_cert(db, cm)
-        if result:
+        if result:  # issued, cached and stored in DB
             return result
         else:
             sle('Failed to issue CA cert')
@@ -254,11 +282,12 @@ def create_local_ca_cert(db: db_conn, cm: Certificate) -> Tuple[x509.Certificate
     ci.store_cert_key(algo='rsa', cert=cacert, key=cakey)
     cm.save_instance(ci)
 
-    local_cacert, local_cakey, local_cacert_instance = cacert, cakey, ci
+    # CA cert loaded, cache it and return
+    cache_cacert(cacert, cakey, ci)
     return (cacert, cakey, ci)
 
 
-def load_historical_cert_from_flatfile() -> Optional[Tuple[x509.Certificate,
+def load_historical_cert_from_flatfile(cm: Certificate) -> Optional[Tuple[x509.Certificate,
                                                            rsa.RSAPrivateKeyWithSerialization,
                                                            CertInstance]]:
     """
@@ -294,7 +323,8 @@ def load_historical_cert_from_flatfile() -> Optional[Tuple[x509.Certificate,
             ci.store_cert_key(algo='rsa', cert=cacert, key=cakey)
             cm.save_instance(ci)
 
-            local_cacert, local_cakey, local_cacert_instance = cacert, cakey, ci
+            # CA cert loaded, cache it and return
+            cache_cacert (cacert, cakey, ci)
             return (cacert, cakey, ci)
     else:
         return None

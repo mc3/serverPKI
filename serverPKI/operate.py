@@ -25,8 +25,8 @@ from subprocess import Popen, PIPE
 from paramiko import util
 from postgresql import driver as db_conn
 
-from serverPKI.cacert import issue_local_CAcert
-from serverPKI.cert import Certificate, CertType
+from serverPKI.cacert import issue_local_CAcert, LocalCaCertCache
+from serverPKI.cert import Certificate, CertType, init_module_cert
 from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA, export_instance
 from serverPKI.db import DbConnection as dbc
 from serverPKI.issue_LE import issue_LE_cert
@@ -75,7 +75,11 @@ def execute_from_command_line():
     read_db_encryption_key(db)
 
     # in case of restarting serverPKI
-    Certificate.clear_list_of_known_cert_metas()
+    init_module_cert()
+
+    LocalCaCertCache.cert = None
+    LocalCaCertCache.key = None
+    LocalCaCertCache.ci = None
 
     all_cert_names = Certificate.names(db)
     all_disthost_names = Certificate.disthost_names(db)
