@@ -305,8 +305,7 @@ def ssh_connection(dest_host):
     client.load_host_keys(expanduser('~/.ssh/known_hosts'))
     sld('Connecting to {}'.format(dest_host))
     try:
-        client.connect(dest_host, username=Misc.SSH_CLIENT_USER_NAME,
-                            key_filename=expanduser('~/.ssh/id_rsa'))
+         client.connect(dest_host, username=Misc.SSH_CLIENT_USER_NAME)
     except Exception:
         sln('Failed to connect to host {}, because {} [{}]'.
             format(dest_host,
