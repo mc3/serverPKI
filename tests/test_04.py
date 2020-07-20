@@ -25,23 +25,19 @@ def test_issue_local_cert_from_ca_cert_in_flatfile(db_handle, monkeypatch, scrip
     # export ca cert+key (row_id is 3) to work directory
     ret = script_runner.run('operate_serverPKI', '--export-cert-and-key', '3', '-f', config_path_for_pytest)
     assert ret.success
-    print(ret.stdout)
-    print(ret.stderr)
 
     # rename exported files to destination
     os.rename(Pathes.work + '/cert-3-rsa.pem', Pathes.ca_cert)
     os.rename(Pathes.work + '/key-3-rsa.pem', Pathes.ca_key)
 
-    # delete ca cert in db
-    delete_and_cleanup_local_ca_cert(False, db_handle)
-
     # delete and re-insert local cert meta
     delete_and_cleanup_local_cert(True, db_handle)
     insert_local_cert_meta(db_handle)
 
+    # delete ca cert in db
+    delete_and_cleanup_local_ca_cert(False, db_handle)
+
     # now issue local cert
     ret = script_runner.run('operate_serverPKI', '--create-certs', '-o', CLIENT_CERT_1, '-v', '-f', config_path_for_pytest)
     assert ret.success
-    print(ret.stdout)
-    print(ret.stderr)
 

@@ -49,8 +49,8 @@ def setup_directories():
     os.makedirs(Pathes.work, mode=0o750)
     os.makedirs(Pathes.db, mode=0o750)
 
-def run_command(cmd):
-    p = process = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
+def run_command(cmd, shell=False):
+    p = process = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True, shell=shell)
     stdout, stderr = p.communicate()
     print(stdout)
     print(stderr)
@@ -83,8 +83,9 @@ def insert_local_cert_meta(db_handle):
     INSERT INTO DISTHOSTS (fqdn) VALUES($1::TEXT)""", get_hostname())
     assert result == 1
 
+    # mode 438 = 0o666 to allow current user to read
     result = db_handle.query.first("""
-    INSERT INTO PLACES(name, cert_path) VALUES($1::TEXT, $2::TEXT)""",
+    INSERT INTO PLACES(name, mode, cert_path) VALUES($1::TEXT, 438, $2::TEXT)""",
                                    TEST_PLACE_1, str(TEMP_DIR))
     assert result == 1
 

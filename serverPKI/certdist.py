@@ -370,10 +370,9 @@ def distribute_cert(fd, dest_host, dest_dir, file_name, place, jail):
                 sld('Setting mode to 0o400 of {}:{}/{}'.format(
                                     dest_host, dest_dir, file_name))
                 mode = 0o400
-                # won't work 288(10) gives 400(8)
                 if place.mode:
                     mode = place.mode
-                    sln('Setting mode of key at target to 0o400 - should be {}'.format(oct(place.mode)))
+                    sld('Setting mode of key at target to {}'.format(oct(place.mode)))
                 sftp.chmod(file_name, mode)
                 if place.pgLink:
                     try:

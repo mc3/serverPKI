@@ -57,7 +57,4 @@ def test_issue_local_cert_from_ca_cert_in_db(db_handle, monkeypatch, script_runn
     # now issue local cert
     ret = script_runner.run('operate_serverPKI', '--create-certs', '-o', CLIENT_CERT_1, '-v', '-f', config_path_for_pytest)
     assert ret.success
-    print(ret.stdout)
-    print(ret.stderr)
 
-    delete_and_cleanup_local_cert(False, db_handle)
