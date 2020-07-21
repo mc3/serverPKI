@@ -107,10 +107,9 @@ def issue_local_cert(cert_meta: Certificate) -> Optional[CertInstance]:
     )
 
     try:
-        ska = cacert.extensions.get_extension_for_class(x509.SubjectKeyIdentifier)
         builder = builder.add_extension(
             x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
-                ska),
+                x509.SubjectKeyIdentifier.from_public_key(cakey.public_key())),
             critical=False,
         )
     except x509.extensions.ExtensionNotFound:
