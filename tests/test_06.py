@@ -11,31 +11,6 @@ from .parameters import CLIENT_CERT_1, TEST_PLACE_1, CA_CERT_PASS_PHASE
 
 
 
-def test_cert_meta_creation(db_handle):
-    """
-    Given:  A clean DB
-    When:   Cert meta for local cert inserted into DB
-    Then:   It should be queried
-    :param db_handle:
-    :return:
-    """
-
-    rows = db_handle.query("""
-    SELECT "Subject", "Cert Name","Type","algo", "Dist Host", "Place" FROM certs""")
-
-    for row in rows:
-        assert row['Subject'] in ('CA', 'client')     # 'reserved' comes from initial setup
-        if row['Subject'] == 'client':
-            assert (row['Cert Name'] == CLIENT_CERT_1 and
-                    row['Type'] == 'local' and
-                    row['algo'] == 'rsa' and
-                    row['Dist Host'] == get_hostname() and
-                    row['Place'] == TEST_PLACE_1)
-
-    assert len(rows) == 3
-
-
-
 def test_issue_local_cert_from_ca_cert_in_db(db_handle, monkeypatch, script_runner):
     """
     Given:  A CA cert in DB
@@ -60,14 +35,39 @@ def test_issue_local_cert_from_ca_cert_in_db(db_handle, monkeypatch, script_runn
     assert ret.success
 
 
-def test_distribute_local_cert(script_runner, setup_directories):
+def test_encrypt_keys_encryption_key_missing(script_runner, setup_directories):
     """
     Given:  Issued local cert "CLIENT_CERT_1' in DB
-    Then:   Distribute cert and key to
+    And:    No db_encryption_key in configured place
+    Then:   Issue error message
     :param script_runner:
     :param setup_directories:
     :return:
     """
+
+
+    # now try to encrypt keys
+    ret = script_runner.run('operate_serverPKI', ' --encrypt-keys', '-v', '-f', config_path_for_pytest)
+    print(ret.stdout)
+    print(ret.stderr)
+    assert ret==1
+
+
+
+def test_encrypt_keys_encryption_key_available(script_runner, setup_directories):
+
+    # create db_encryption_key
+    (rc, stdout) = run_command('ssh-keygen -t ed25519 -m PEM -f '
+        + str(TEMP_DIR) + '/db/db_encryption_key.pem -P ""', shell=True)
+    assert rc==0
+    print(stdout)
+
+
+    # now try to encrypt keys
+    ret = script_runner.run('operate_serverPKI', ' --encrypt-keys', '-v', '-f', config_path_for_pytest)
+    print(ret.stdout)
+    print(ret.stderr)
+    assert ret==0
 
 
     # now distribute local cert

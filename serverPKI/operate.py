@@ -27,6 +27,8 @@ from postgresql import driver as db_conn
 
 from serverPKI.cacert import issue_local_CAcert, LocalCaCertCache
 from serverPKI.cert import Certificate, CertType, init_module_cert
+from serverPKI.cert import read_db_encryption_key, encrypt_all_keys, decrypt_all_keys
+
 from serverPKI.certdist import deployCerts, consolidate_TLSA, consolidate_cert, delete_TLSA, export_instance
 from serverPKI.db import DbConnection as dbc
 from serverPKI.issue_LE import issue_LE_cert
@@ -37,7 +39,6 @@ from serverPKI.utils import parse_options, parse_config, get_config
 from serverPKI.utils import get_name_string, get_version_string, options_set, check_actions
 from serverPKI.utils import names_of_local_certs_to_be_renewed, print_certs
 from serverPKI.utils import options_set, check_actions, updateSOAofUpdatedZones
-from serverPKI.utils import read_db_encryption_key, encrypt_all_keys, decrypt_all_keys
 from serverPKI.utils import sld, sli, sln, sle
 from serverPKI.schedule import scheduleCerts
 
