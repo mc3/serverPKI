@@ -323,12 +323,12 @@ def parse_options():
 
     group = optparse.OptionGroup(parser, 'Maintenance and administrative actions.')
 
-    group.add_option('--encrypt-keys', action='store_true', dest='encrypt',
+    group.add_option('--encrypt-keys', '-X', action='store_true', dest='encrypt',
                      help='Encrypt all keys in DB.'
                           'Configuration parameter db_encryption_key must point '
                           'at a file, containing a usable passphrase.')
 
-    group.add_option('--decrypt-keys', action='store_true', dest='decrypt',
+    group.add_option('--decrypt-keys', '-Y', action='store_true', dest='decrypt',
                      help='Replace all keys in the DB by their clear text version.'
                           'Configuration parameter db_encryption_key must point '
                           'at a file, containing a usable passphrase.')
@@ -338,7 +338,7 @@ def parse_options():
                      help='Issue a new local CA cert, used for issuing future '
                           'local server/client certs.')
 
-    group.add_option('--register', dest='register', action='store_true',
+    group.add_option('--register', '-Z', dest='register', action='store_true',
                      help='Register a new account at LetsEncrypt,'
                           ' This action may not be combined with other actions.')
 

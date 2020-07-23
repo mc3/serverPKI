@@ -1144,7 +1144,7 @@ class CertKeyStore(object):
                 self._key,
                 self.hash
             )
-            if updates != 1:
+            if updates[1] != 1:
                 raise DBStoreException('?Failed to update CertKeyStore in DB')
         else:
             if not ps_store_certkeydata:
@@ -1194,7 +1194,7 @@ class CertKeyStore(object):
         :param encrypted_key_bytes: encrypted key in binary PEM format
         :return: key as bytes
         """
-
+        """
         if not db_encryption_in_use:
             return encrypted_key_bytes
         else:
@@ -1204,6 +1204,14 @@ class CertKeyStore(object):
                 backend=default_backend())
             key_pem = decrypted_key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
         return key_pem
+        """
+        ek = db_encryption_key if db_encryption_in_use else None
+        decrypted_key = load_pem_private_key(
+            encrypted_key_bytes,
+            password=ek,
+            backend=default_backend())
+        key_pem = decrypted_key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
+        return key_pem
 
 
 # ---------------  db encrypt/decrypt functions  --------------
@@ -1212,7 +1220,7 @@ db_encryption_key = None
 db_encryption_in_use = None
 
 
-def read_db_encryption_key(db):
+def read_db_encryption_key(db) -> bool:
     """
     Read DB encryption password from disk and checks encryption status of DB
     If password could be read and Revision.keysEncrypted in DB is True, the
@@ -1317,43 +1325,51 @@ def load_all_CMs(db: db_conn):
         cm = Certificate.create_or_load_cert_meta(db, name)
 
 
-def encrypt_all_keys(db: db_conn):
+def encrypt_all_keys(db: db_conn) -> bool:
+    """
+    Encrypt keys in DB, using configured DB encryption key.
+    Run in one trynsaction.
+    :param db:  Open DB handle
+    :return:    True if successfully encrypted all keys
+    """
     global db_encryption_in_use, db_encryption_key
 
-    if not db_encryption_key:
-        sle('Needing db_encryption_key to encrypt all keys (see config).')
-        sli('Create it like so: ssh-keygen -t ed25519 -m PEM -f {}'.format(Pathes.db_encryption_key))
-        sli('<ENTER> for empty passphrase.')
-        return False
-    try:
-        result = get_revision(db)
-    except MyException:
-        return False
-    (schemaVersion, keysEncrypted) = result
-    if keysEncrypted:
-        sle('Cert keys are already encrypted.')
-        return False
-
-    encryption_type = BestAvailableEncryption(db_encryption_key)
-    db_encryption_in_use = True     # activate cks._encrypt_key()
+    load_all_CMs(db)                                # CMS are loaded n transactions
 
     with db.xact(isolation='SERIALIZABLE', mode='READ WRITE'):
 
         result = get_revision(db)
         (schemaVersion, keysEncrypted) = result
+        if keysEncrypted:
+            sle('Cert keys are already encrypted.')
+            return False
+
         set_revision(db, schemaVersion, True)       # set "keysEncrypted" to load key
         read_db_encryption_key(db)
-
+        if not db_encryption_key:
+            sle('Needing db_encryption_key to encrypt all keys (see config).')
+            sli('Create it like so: ssh-keygen -t ed25519 -m PEM -f {}'.format(Pathes.db_encryption_key))
+            sli('<ENTER> for empty passphrase.')
+            db_encryption_in_use = False
+            return False
+            
+        # all CMs should have been loaded above,
+        # otherwise we get an OperationError exception "configured transaction used inside a transaction block".
+        # In this rare case, user should repeat the command and avoid concurrent operations. (-;
         load_all_CMs(db)
 
         for cks in CertKeyStore._cert_key_stores.values():
             if cks.ci.cm.subject_type == SubjectType('CA'): # CA key?
                 continue                                    # yes: do not encrypt it again
             sld('Encrypting cleartext key from CKS {}'.format(cks.row_id))
-            cks._key = cks._encrypt_key(cks._key)
+
+            k = load_pem_private_key(
+                cks._key,
+                password=None,
+                backend=default_backend())
+            cks._key = cks._encrypt_key(k)                  # db_encryption_in_use was set by read_db_encryption_key()
             cks._save()
 
-    db_encryption_in_use = True
     return True
 
 
