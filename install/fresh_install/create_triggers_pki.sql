@@ -193,6 +193,7 @@ CREATE TRIGGER Update_updated_Subjects BEFORE UPDATE
 
                         -- Views --------------------------------------------
 
+DROP VIEW IF EXISTS pki.certs;
 CREATE OR REPLACE VIEW pki.certs AS
  SELECT s1.type AS "Subject",
     s1.name AS "Cert Name",
@@ -217,7 +218,8 @@ CREATE OR REPLACE VIEW pki.certs AS
      LEFT JOIN pki.places p ON ((t.place = p.id)))
   ORDER BY s1.name, s2.name, d.fqdn;
 
-CREATE VIEW certs_ids AS
+DROP VIEW IF EXISTS pki.certs_ids;
+CREATE OR REPLACE VIEW pki.certs_ids AS
  SELECT c.id AS c_id,
     s1.id AS s1_id,
     s1.type AS "Subject Type",
@@ -250,7 +252,8 @@ CREATE VIEW certs_ids AS
   ORDER BY c.id, s1.id, s2.id;
 
 
-CREATE VIEW inst AS
+DROP VIEW IF EXISTS pki.inst;
+CREATE OR REPLACE VIEW pki.inst AS
  SELECT i.id,
     s.name,
     c.type,
@@ -272,7 +275,7 @@ CREATE VIEW inst AS
                         -- Functions -------------------------------------------
                         
 -- SELECT * FROM add_cert('myserver.at.do.main', 'server','LE', NULL, NULL, NULL, NULL, NULL, NULL);
-CREATE FUNCTION add_cert(the_name citext, the_subject_type dd.subject_type, the_cert_type dd.cert_type, the_encryption_algo dd.cert_encryption_algo, must_staple BOOLEAN, the_altname citext, the_tlsa_name citext, the_tlsa_port dd.port_number, the_disthost_name citext, the_jail citext, the_place citext) RETURNS text
+CREATE OR REPLACE FUNCTION add_cert(the_name citext, the_subject_type dd.subject_type, the_cert_type dd.cert_type, the_encryption_algo dd.cert_encryption_algo, must_staple BOOLEAN, the_altname citext, the_tlsa_name citext, the_tlsa_port dd.port_number, the_disthost_name citext, the_jail citext, the_place citext) RETURNS text
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -388,7 +391,7 @@ CREATE FUNCTION add_cert(the_name citext, the_subject_type dd.subject_type, the_
 $$;
 
 
-CREATE FUNCTION remove_cert(the_cert_name citext) RETURNS void
+CREATE OR REPLACE FUNCTION remove_cert(the_cert_name citext) RETURNS void
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -412,7 +415,7 @@ CREATE FUNCTION remove_cert(the_cert_name citext) RETURNS void
 $$;
 
 
-CREATE FUNCTION add_altname(the_cert_name citext, the_altname citext) RETURNS void
+CREATE OR REPLACE FUNCTION add_altname(the_cert_name citext, the_altname citext) RETURNS void
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -444,7 +447,7 @@ CREATE FUNCTION add_altname(the_cert_name citext, the_altname citext) RETURNS vo
 $$;
 
 
-CREATE FUNCTION remove_altname(the_altname citext) RETURNS void
+CREATE OR REPLACE FUNCTION remove_altname(the_altname citext) RETURNS void
     LANGUAGE plpgsql
     AS $$
     BEGIN
@@ -454,7 +457,7 @@ CREATE FUNCTION remove_altname(the_altname citext) RETURNS void
 $$;
 
 
-CREATE FUNCTION add_service(the_cert_name citext, the_service_name citext, the_port dd.port_number) RETURNS void
+CREATE OR REPLACE FUNCTION add_service(the_cert_name citext, the_service_name citext, the_port dd.port_number) RETURNS void
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -485,7 +488,7 @@ CREATE FUNCTION add_service(the_cert_name citext, the_service_name citext, the_p
 $$;
 
 
-CREATE FUNCTION remove_service(the_cert_name citext, the_service_name citext, the_port dd.port_number) RETURNS void
+CREATE OR REPLACE FUNCTION remove_service(the_cert_name citext, the_service_name citext, the_port dd.port_number) RETURNS void
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -516,7 +519,7 @@ CREATE FUNCTION remove_service(the_cert_name citext, the_service_name citext, th
 $$;
 
 
-CREATE FUNCTION add_target(the_name citext, the_disthost_name citext, the_jail citext, the_place citext) RETURNS text
+CREATE OR REPLACE FUNCTION add_target(the_name citext, the_disthost_name citext, the_jail citext, the_place citext) RETURNS text
     LANGUAGE plpgsql
     AS $$
     DECLARE
@@ -577,7 +580,7 @@ CREATE FUNCTION add_target(the_name citext, the_disthost_name citext, the_jail c
 $$;
 
 
-CREATE FUNCTION remove_target(the_cert_name citext, the_disthost_name citext, the_jail citext, the_place citext) RETURNS void
+CREATE OR REPLACE FUNCTION remove_target(the_cert_name citext, the_disthost_name citext, the_jail citext, the_place citext) RETURNS void
     LANGUAGE plpgsql
     AS $$
     DECLARE
