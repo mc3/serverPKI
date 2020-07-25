@@ -694,7 +694,7 @@ def check_actions() -> None:
         if 'remove_tlsas' in s:
             sle('--remove-TLSAs may not be combined with other actions.')
             sys.exit(1)
-        if 'distribute' in s and 'create' in s:
+        if 'distribute' in s and ('create' in s or 'renew-local-certs' in s):
             return
         elif 'sync_disk' in s and 'sync_tlsas' in s:
             return
