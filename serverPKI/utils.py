@@ -467,7 +467,6 @@ def parse_config(test_config=None):
     Parse config file. Exits on error.
     :return:
     """
-    global Pathes, X509atts, DBAccounts, Misc
 
     def dict_to_class(the_class: str, section: str, list: Tuple):
         """

@@ -36,7 +36,7 @@ from serverPKI.issue_local import issue_local_cert
 
 from serverPKI.utils import parse_options, parse_config, get_config
 
-from serverPKI.utils import get_name_string, get_version_string, options_set, check_actions
+from serverPKI.utils import get_version_string, options_set, check_actions
 from serverPKI.utils import names_of_local_certs_to_be_renewed, print_certs
 from serverPKI.utils import options_set, check_actions, updateSOAofUpdatedZones
 from serverPKI.utils import sld, sli, sln, sle
@@ -46,13 +46,9 @@ from automatoes.register import register
 
 
 def execute_from_command_line():
-
-    global options
-
     """
-    if hostname('hermes'):
-        import pydevd_pycharm
-        pydevd_pycharm.settrace('axels-imac.in.chaos1.de', port=4711, stdoutToServer=True, stderrToServer=True)
+    Called from comand line
+    :return: sys.exit(0) on success, False or sys.exit(1) otherwise
     """
 
     all_cert_names: List[str, ...] = []
@@ -61,7 +57,7 @@ def execute_from_command_line():
 
     ##util.log_to_file('sftp.log')
 
-    options = opts = parse_options()        # globals not re-initialized
+    opts = parse_options()        # globals not re-initialized
     parse_config()                          # globals not re-initialized
     (DBAccount, Misc, Pathes, X509atts) = get_config()
     db_name = DBAccount.dbDatabase
@@ -73,14 +69,14 @@ def execute_from_command_line():
     pe = dbc('serverpki')
     db: db_conn = pe.open()
 
-    read_db_encryption_key(db)
-
-    # in case of restarting serverPKI
+    # in case of restarting serverPKI wo fresh imports (e.g. by pytest)
     init_module_cert()
 
     LocalCaCertCache.cert = None
     LocalCaCertCache.key = None
     LocalCaCertCache.ci = None
+
+    read_db_encryption_key(db)
 
     all_cert_names = Certificate.names(db)
     all_disthost_names = Certificate.disthost_names(db)
