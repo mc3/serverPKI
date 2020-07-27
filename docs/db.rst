@@ -68,7 +68,7 @@ Tables
 
 .. index:: Certificates.type, Certificates.disabled,
 .. index:: Certificates.authorized_until, Certificates.encryption_algo,
--- index:: Certificates.ocsp_must_staple, Certificates
+.. index:: Certificates.ocsp_must_staple, Certificates
 .. _Certificates:
 .. _Certificates.type:
 .. _Certificates.disabled:
