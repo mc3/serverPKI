@@ -67,7 +67,8 @@ Tables
   * *certificate* - reference to Certificates
 
 .. index:: Certificates.cert_type, Certificates.disabled, 
-.. index:: Certificates.authorized_until, Certificates
+.. index:: Certificates.authorized_until, Certificates.encryption_algo,
+-- index:: Certificates.ocsp_must_staple, Certificates
 .. _Certificates:
 .. _Certificates.type:
 .. _Certificates.disabled:
@@ -94,23 +95,20 @@ Tables
 
     * rsa
     * ec
-    * rsa_plus_ec
+    * rsa plus ec
 
   * ocsp_must_staple - if true then the OCSP staple protocoll will be required by the cert
     (and server must be configured to support this)
 
-.. index:: Certinstances.state, Certinstances.cert, Certinstances.key
-.. index:: Certinstances.hash, Certinstances.not_before, Certinstances.not_after
-.. index:: Certinstances
+.. index:: Certinstances.state, Certinstances.not_before, Certinstances.not_after
+.. index:: Certinstances.
 .. _Certinstances:
 .. _Certinstances.state:
-.. _Certinstances.cert:
-.. _Certinstances.key:
-.. _Certinstances.hash:
 .. _Certinstances.not_before:
 .. _Certinstances.not_after:
 .. _Certinstances.certificate:
 .. _Certinstances.cacert:
+.. _Certinstances.ocsp_must_staple:
 
 * **Certinstances** - issued certificate instances. 
 
@@ -130,6 +128,7 @@ Tables
   * *certificate* - reference to cert in Certificates
   * *cacert* - reference to cacert instance in Certinstances, describing
     CA which issued this cert
+  * ocsp_must_staple - True, if this instance requires OCSP must staple
 
 There may be more than one tuple per cert type, if cacerts are renewed.
 
