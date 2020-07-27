@@ -101,7 +101,7 @@ Tables
     (and server must be configured to support this)
 
 .. index:: Certinstances.state, Certinstances.not_before, Certinstances.not_after
-.. index:: Certinstances.
+.. index:: Certinstances
 .. _Certinstances:
 .. _Certinstances.state:
 .. _Certinstances.not_before:
