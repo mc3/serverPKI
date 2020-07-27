@@ -66,7 +66,7 @@ Tables
   * isAltName - true if subject is an alternate name
   * *certificate* - reference to Certificates
 
-.. index:: Certificates.cert_type, Certificates.disabled, 
+.. index:: Certificates.type, Certificates.disabled,
 .. index:: Certificates.authorized_until, Certificates.encryption_algo,
 -- index:: Certificates.ocsp_must_staple, Certificates
 .. _Certificates:
@@ -137,14 +137,15 @@ Here is the state transition diagram:
 .. image:: States.png
 
 
-.. index:: Services.name, Services.port, Services.TLSAprefix, services
+.. index:: CertKeyData, CertKeyData.encryption_algo, CertKeyData.cert, CertKeyData.key,
+.. index:: CertKeyData.hash
 .. _CertKeyData:
 .. _CertKeyData.encryption_algo:
 .. _CertKeyData.cert:
 .. _CertKeyData.key:
 .. _CertKeyData.hash:
 
-* **c certKeyData** - the cert/key material (one tuple per algorithm).
+* **CertKeyData** - the cert/key material (one tuple per algorithm).
 
 
   * encryption_algo - encryption algorithm, used with this cert
@@ -281,7 +282,7 @@ Some views simplify common queries. For each view the result columns are listed.
   * Subject - :ref:`Subject type <Subjects.type>`
   * Cert Name - :ref:`Subject name <Subjects.name>`
   * Type - :ref:`Type of certificate <Certificates.type>`
-  * algo - :ref:`Cert encryption algorithm <Certificates.encryption_algo>s`
+  * algo - :ref:`Cert encryption algorithm <Certificates.encryption_algo>`
   * ocsp_ms - :ref:`Cert ocsp_must_staple attribute  <Certificates.ocsp_must_staple>`
   * authorized - :ref:`authorized until <Certificates.authorized_until>`
   * Alt Name - :ref:`Alternative cert name <Subjects.name>`
@@ -300,7 +301,7 @@ Some views simplify common queries. For each view the result columns are listed.
   * Subject Type - :ref:`Subject type <Subjects.type>`
   * Cert Name - :ref:`Subject name <Subjects.name>`
   * Type - :ref:`Cert type <Certificates.type>`
-  * algo - :ref:`Cert encryption algorithm <Certificates.encryption_algo>s`
+  * algo - :ref:`Cert encryption algorithm <Certificates.encryption_algo>`
   * ocsp_ms - :ref:`Cert ocsp_must_staple attribute  <Certificates.ocsp_must_staple>`
   * authorized - :ref:`authorized until <Certificates.authorized_until>`
   * s2_id - subject id of Alternative cert name subject
@@ -330,8 +331,8 @@ Some views simplify common queries. For each view the result columns are listed.
   * ocsp_must_staple - if true then the OCSP staple protocoll will be required by the cert
   * not_before - :ref:`Start date for cert usage <Certinstances.not_before>`
   * not_after - :ref:`End date for cert usage <Certinstances.not_after>`
-  * algo - :ref:`Cert encryption algorithm <Certificates.encryption_algo> of related CertKeyData row`
-  * hash - :ref:`Hash of cert instance <Certinstances.hash>` of related CertKeyData row
+  * algo - :ref:`Cert encryption algorithm <CertKeyData.encryption_algo>`
+  * hash - :ref:`Hash of cert <CertKeyData.hash>`
 
 
 .. index:: Functions
