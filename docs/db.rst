@@ -424,28 +424,3 @@ Functions may be called with select in psql::
   * the_place - optional :ref:`Place name <Places.name>` to identify the :ref:`target <Targets>`
 
 
-
-.. index:: Manually inserting and deleting meta data
-
-.. _manually_inserting_and_deleting_meta_data:
-
-Manually inserting and deleting meta data
------------------------------------------
-
-Example: Inserting a disthost, querying it and deleting it::
-
-    pki_op=# insert into disthosts (fqdn,jailroot) values('demo-disthost.ma.do.main', '/usr/jails');
-    INSERT 0 1
-    Time: 4,901 ms
-    pki_op=# select * from disthosts where fqdn='demo-disthost.ma.do.main';
-     id |           fqdn           |  jailroot  |          updated           |          created           | remarks
-    ----+--------------------------+------------+----------------------------+----------------------------+---------
-     24 | demo-disthost.ma.do.main | /usr/jails | 2016-07-30 13:48:57.442189 | 2016-07-30 13:48:57.431786 |
-    (1 row)
-
-    Time: 1,242 ms
-    pki_op=# delete from disthosts where id=24;
-    DELETE 1
-    Time: 2,556 ms
-    pki_op=#
-

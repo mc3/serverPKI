@@ -26,7 +26,7 @@ Create meta data in the DB::
 
     # su -l pki_op -c "psql -h db1 -p 2222 -U pki_op serverpki"
     serverpki=> set search_path to pki,dd;
-    serverpki=> select * from add_cert('test.com', 'server', 'local', 'www.test.com', NULL, NULL, NULL, NULL, NULL);
+    serverpki=> select * from add_cert('test.com', 'server', 'local', 'ec', false, 'www.test.com', NULL, NULL, NULL, NULL, NULL);
                       add_cert                  
     --------------------------------------------
      (server,test.com,local,,www.test.com,,,,,)
@@ -36,7 +36,7 @@ Create meta data in the DB::
 
 Now issue one cert::
 
-   # su -l pki_op  -c "/usr/local/py_venv/test/bin/python3 /usr/local/py_venv/test/bin/operate_serverPKI -C -d -a"
+   # su -l pki_op  -c "/usr/local/py_venv/test/bin/python3 /usr/local/py_venv/test/bin/operate_serverPKI -C -d -o test.com"
    [operateCA started with options all debug verbose create ]
    [1 certificates in configuration]
    [----------- 1   test.com        local   False   None    server]
@@ -52,9 +52,9 @@ Now issue one cert::
    passphrase: 
    [CA cert serial 1 with 4096 bit key, valid until 2027-06-05T17:07:22.818955 created.]
    [Hash is: 20639CDB63F6A470141F4697919D71EAC85619B09C4056638A92BF43A4BD489F]
-   [Serial of new certificate is 2]
+   [Serial of new certificate is 7523957]
    [Creating key (2048 bits) and cert for server test.com]
-   [Certificate for server test.com, serial 2, valid until 2018-05-18T17:07:23.498130 created.]
+   [Certificate for server test.com, serial 2740072, valid until 2018-05-18T17:07:23.498130 created.]
 
     # psql -h db1 -p 2222 -U dba postgres
     serverpki=> set search_path to pki,dd;

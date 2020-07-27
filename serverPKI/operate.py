@@ -51,6 +51,12 @@ def execute_from_command_line():
     :return: sys.exit(0) on success, False or sys.exit(1) otherwise
     """
 
+    try:                # try to contact IDE (PyCharm)
+        from serverPKI.settrace import connect_to_ide
+        connect_to_ide()
+    except Exception:   # no IDE configured
+        pass
+
     all_cert_names: List[str, ...] = []
     our_cert_names: List[str, ...] = []
     our_certs: Dict[str, Certificate] = {}
@@ -242,15 +248,4 @@ def issue(db: db_conn, cert_meta: Certificate) -> bool:
     if result:
         return True
     return False
-
-def hostname(name:str) -> bool:
-    """
-    Check for hostname of development server
-    No PyCharm debugger if running test suite on localhost
-    :param name: hostname of remote development server
-    :return: True if hostname match name
-    """
-    p = process=Popen('hostname', stdout=PIPE, text=True)
-    stdout, stderr = p.communicate()
-    return stdout.strip() == name
 
