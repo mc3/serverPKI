@@ -43,15 +43,15 @@ This is the entity relation diagram:
 Tables
 ------
 
-.. index:: Subjects, Subjects.type, Subjects.isAltName, Subjects.certificate
+.. index:: Subjects, Subjects.name, Subjects.type, Subjects.isAltName, Subjects.certificate
 .. index::
   see: Subject.certificate; Certificates
 
-.. _subjects:
+.. _Subjects:
 .. _Subjects.name:
-.. _subjects.type:
-.. _subjects.isAltName:
-.. _subjects.certificate:
+.. _Subjects.type:
+.. _Subjects.isAltName:
+.. _Subjects.certificate:
 
 * **Subjects** - holds all the subject names
 
@@ -138,11 +138,11 @@ Here is the state transition diagram:
 
 
 .. index:: Services.name, Services.port, Services.TLSAprefix, services
-.. _certKeyData:
-.. _certKeyData.encryption_algo:
-.. _certKeyData.cert:
-.. _certKeyData.key:
-.. _certKeyData.hash:
+.. _CertKeyData:
+.. _CertKeyData.encryption_algo:
+.. _CertKeyData.cert:
+.. _CertKeyData.key:
+.. _CertKeyData.hash:
 
 * **c certKeyData** - the cert/key material (one tuple per algorithm).
 
@@ -278,11 +278,11 @@ Some views simplify common queries. For each view the result columns are listed.
 
 * **certs** - display meta information about a certificate
 
-  * Subject - :ref:`Subject type <subjects.type>`
-  * Cert Name - :ref:`Subject name <subjects.name>`
-  * Type - :ref:`Cert type <certificates.type>`
-  * algo - :ref:`Cert encryption algorithm <certificates.encryption_algo>s`
-  * ocsp_ms - :ref:`Cert ocsp_must_staple attribute  <certificates.ocsp_must_staple>`
+  * Subject - :ref:`Subject type <Subjects.type>`
+  * Cert Name - :ref:`Subject name <Subjects.name>`
+  * Type - :ref:`Type of certificate <Certificates.type>`
+  * algo - :ref:`Cert encryption algorithm <Certificates.encryption_algo>s`
+  * ocsp_ms - :ref:`Cert ocsp_must_staple attribute  <Certificates.ocsp_must_staple>`
   * authorized - :ref:`authorized until <Certificates.authorized_until>`
   * Alt Name - :ref:`Alternative cert name <Subjects.name>`
   * TLSA - :ref:`Service name <Services.name>`
@@ -297,11 +297,11 @@ Some views simplify common queries. For each view the result columns are listed.
 
   * c_id - cert id
   * s1_id - subject id of none-altname subject
-  * Subject Type - :ref:`Subject type <subjects.type>`
-  * Cert Name - :ref:`Subject name <subjects.name>`
-  * Type - :ref:`Cert type <certificates.type>`
-  * algo - :ref:`Cert encryption algorithm <certificates.encryption_algo>s`
-  * ocsp_ms - :ref:`Cert ocsp_must_staple attribute  <certificates.ocsp_must_staple>`
+  * Subject Type - :ref:`Subject type <Subjects.type>`
+  * Cert Name - :ref:`Subject name <Subjects.name>`
+  * Type - :ref:`Cert type <Certificates.type>`
+  * algo - :ref:`Cert encryption algorithm <Certificates.encryption_algo>s`
+  * ocsp_ms - :ref:`Cert ocsp_must_staple attribute  <Certificates.ocsp_must_staple>`
   * authorized - :ref:`authorized until <Certificates.authorized_until>`
   * s2_id - subject id of Alternative cert name subject
   * Alt Name - :ref:`Alternative cert name <Subjects.name>`
@@ -323,14 +323,14 @@ Some views simplify common queries. For each view the result columns are listed.
 
   * id - serial of cert instance
   * name - :ref:`Subject name <subjects.name>`
-  * type - :ref:`Cert type <certificates.type>`
+  * type - :ref:`Cert type <Certificates.type>`
   * state - :ref:`State of instance <Certinstances.state>`
   * cacert - reference to cacert instance in Certinstances, describing
     CA which issued this cert
   * ocsp_must_staple - if true then the OCSP staple protocoll will be required by the cert
   * not_before - :ref:`Start date for cert usage <Certinstances.not_before>`
   * not_after - :ref:`End date for cert usage <Certinstances.not_after>`
-  * algo - :ref:`Cert encryption algorithm <certificates.encryption_algo> of related CertKeyData row`
+  * algo - :ref:`Cert encryption algorithm <Certificates.encryption_algo> of related CertKeyData row`
   * hash - :ref:`Hash of cert instance <Certinstances.hash>` of related CertKeyData row
 
 
@@ -357,10 +357,10 @@ Functions may be called with select in psql::
 
 * **add_cert** - add a new cert to the database
 
-  * the_name - :ref:`Subject name <subjects.name>`
-  * the_subject_type - :ref:`Subject type <subjects.type>`
-  * the_cert_type - :ref:`Cert type <certificates.type>`
-  * the_encryption_algo - :ref:`Cert encryption algorithm <certificates.encryption_algo> of related CertKeyData row`
+  * the_name - :ref:`Subject name <Subjects.name>`
+  * the_subject_type - :ref:`Subject type <Subjects.type>`
+  * the_cert_type - :ref:`Cert type <Certificates.type>`
+  * the_encryption_algo - :ref:`Cert encryption algorithm <Certificates.encryption_algo> of related CertKeyData row`
   * must_staple - if true then the OCSP staple protocoll will be required by the cert
   * the_altname - optional :ref:`Alternative cert name <Subjects.name>`
   * the_tlsa_name - optional :ref:`Service name <Services.name>`
@@ -373,13 +373,13 @@ Functions may be called with select in psql::
 
 * **remove_cert** - delete a cert **and all issued cert instances with there CertKeyData from the database**
 
-  * the_cert_name - :ref:`Subject name <subjects.name>`
+  * the_cert_name - :ref:`Subject name <Subjects.name>`
 
 .. index:: add_altname
 
 * **add_altname** - add an alternative name to an existing cert in the database
 
-  * the_cert_name - :ref:`Subject name <subjects.name>` to identify the cert, to which the altname should be added
+  * the_cert_name - :ref:`Subject name <Subjects.name>` to identify the cert, to which the altname should be added
   * the_altname - :ref:`Alternative cert name <Subjects.name>` to add
 
 .. index:: remove_altname
@@ -392,7 +392,7 @@ Functions may be called with select in psql::
 
 * **add_service** - add an :ref:`existing service <Services>` to a certificate
 
-  * the_cert_name - :ref:`Subject name <subjects.name>` to identify the cert, to which the service should be added
+  * the_cert_name - :ref:`Subject name <Subjects.name>` to identify the cert, to which the service should be added
   * the_service_name -  :ref:`Service name <Services.name>`
   * the_port -  :ref:`Service port number <Services.port>`
 
@@ -400,7 +400,7 @@ Functions may be called with select in psql::
 
 * **remove_service** - remove a :ref:`service <Services>` from a certificate
 
-  * the_cert_name - :ref:`Subject name <subjects.name>` to identify the cert, from which the service should be removed
+  * the_cert_name - :ref:`Subject name <Subjects.name>` to identify the cert, from which the service should be removed
   * the_service_name -  :ref:`Service name <Services.name>`
   * the_port -  :ref:`Service port number <Services.port>`
 
@@ -408,7 +408,7 @@ Functions may be called with select in psql::
 
 * **add_target** - add a :ref:`target <Targets>` to a certificate
 
-  * the_name - :ref:`Subject name <subjects.name>` to identify the cert, to which the target should be added
+  * the_name - :ref:`Subject name <Subjects.name>` to identify the cert, to which the target should be added
   * the_disthost_name - :ref:`Disthost name <Disthosts.FQDN>` to identify the :ref:`target <Targets>`
   * the_jail - optional :ref:`Jail name <Jails.name>` to identify the :ref:`target <Targets>`
   * the_place - optional :ref:`Place name <Places.name>` to identify the :ref:`target <Targets>`
