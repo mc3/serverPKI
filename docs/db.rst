@@ -361,7 +361,7 @@ Functions may be called with select in psql::
   * the_name - :ref:`Subject name <Subjects.name>`
   * the_subject_type - :ref:`Subject type <Subjects.type>`
   * the_cert_type - :ref:`Cert type <Certificates.type>`
-  * the_encryption_algo - :ref:`Cert encryption algorithm <Certificates.encryption_algo> of related CertKeyData row`
+  * the_encryption_algo - :ref:`Cert encryption algorithm <Certificates.encryption_algo>`
   * must_staple - if true then the OCSP staple protocoll will be required by the cert
   * the_altname - optional :ref:`Alternative cert name <Subjects.name>`
   * the_tlsa_name - optional :ref:`Service name <Services.name>`
