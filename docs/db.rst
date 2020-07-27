@@ -281,9 +281,9 @@ Some views simplify common queries. For each view the result columns are listed.
 
   * Subject - :ref:`Subject type <subjects.type>`
   * Cert Name - :ref:`Subject name <subjects.name>`
-  * Type - :ref:`Cert type <certificates.cert_type>`
-  * algo - :ref:`Cert encryption algorithm <certificates.algo>s`
-  * ocsp_ms - :ref:`Cert ocsp_must_staple attribute  <certificates.ocsp_ms>`
+  * Type - :ref:`Cert type <certificates.type>`
+  * algo - :ref:`Cert encryption algorithm <certificates.encryption_algo>s`
+  * ocsp_ms - :ref:`Cert ocsp_must_staple attribute  <certificates.ocsp_must_staple>`
   * authorized - :ref:`authorized until <Certificates.authorized_until>`
   * Alt Name - :ref:`Alternative cert name <Subjects.name>`
   * TLSA - :ref:`Service name <Services.name>`
@@ -300,9 +300,9 @@ Some views simplify common queries. For each view the result columns are listed.
   * s1_id - subject id of none-altname subject
   * Subject Type - :ref:`Subject type <subjects.type>`
   * Cert Name - :ref:`Subject name <subjects.name>`
-  * Type - :ref:`Cert type <certificates.cert_type>`
-  * algo - :ref:`Cert encryption algorithm <certificates.algo>s`
-  * ocsp_ms - :ref:`Cert ocsp_must_staple attribute  <certificates.ocsp_ms>`
+  * Type - :ref:`Cert type <certificates.type>`
+  * algo - :ref:`Cert encryption algorithm <certificates.encryption_algo>s`
+  * ocsp_ms - :ref:`Cert ocsp_must_staple attribute  <certificates.ocsp_must_staple>`
   * authorized - :ref:`authorized until <Certificates.authorized_until>`
   * s2_id - subject id of Alternative cert name subject
   * Alt Name - :ref:`Alternative cert name <Subjects.name>`
@@ -324,14 +324,14 @@ Some views simplify common queries. For each view the result columns are listed.
 
   * id - serial of cert instance
   * name - :ref:`Subject name <subjects.name>`
-  * type - :ref:`Cert type <certificates.cert_type>`
+  * type - :ref:`Cert type <certificates.type>`
   * state - :ref:`State of instance <Certinstances.state>`
   * cacert - reference to cacert instance in Certinstances, describing
     CA which issued this cert
   * ocsp_must_staple - if true then the OCSP staple protocoll will be required by the cert
   * not_before - :ref:`Start date for cert usage <Certinstances.not_before>`
   * not_after - :ref:`End date for cert usage <Certinstances.not_after>`
-  * algo - :ref:`Cert encryption algorithm <certificates.algo> of related CertKeyData row`
+  * algo - :ref:`Cert encryption algorithm <certificates.encryption_algo> of related CertKeyData row`
   * hash - :ref:`Hash of cert instance <Certinstances.hash>` of related CertKeyData row
 
 
@@ -360,8 +360,8 @@ Functions may be called with select in psql::
 
   * the_name - :ref:`Subject name <subjects.name>`
   * the_subject_type - :ref:`Subject type <subjects.type>`
-  * the_cert_type - :ref:`Cert type <certificates.cert_type>`
-  * the_encryption_algo - :ref:`Cert encryption algorithm <certificates.algo> of related CertKeyData row`
+  * the_cert_type - :ref:`Cert type <certificates.type>`
+  * the_encryption_algo - :ref:`Cert encryption algorithm <certificates.encryption_algo> of related CertKeyData row`
   * must_staple - if true then the OCSP staple protocoll will be required by the cert
   * the_altname - optional :ref:`Alternative cert name <Subjects.name>`
   * the_tlsa_name - optional :ref:`Service name <Services.name>`
