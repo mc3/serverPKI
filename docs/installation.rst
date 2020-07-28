@@ -24,6 +24,8 @@ Installation
 
 
     host db1, port 2222, user dba and user pki_op are examples. dba must be pgsql superuser.
+    In scripts create_schema_pki.sql and create_triggers_pki.sql are GRANT statements which allow
+    usage of objects by user serverPKI. To change this, you must edit those scripts.
     Create ~/.pgpass or client cert in ~/.postgresql::
 
      psql -h db1 -p 2222 -U dba postgres
@@ -34,7 +36,7 @@ Installation
      psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/create_extension_citext.sql
      psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/create_schema_pki.sql
 
-     # optional (for demo only):
+     # optional (usefull examples for demo):
      psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/load_testdata.sql
 
      psql -h db1 -p 2222 -U pki_op -d pki_op -f install/fresh_install/create_triggers_pki.sql
@@ -46,30 +48,30 @@ Installation
                         List of relations
       Schema |         Name          |   Type   |   Owner
      --------+-----------------------+----------+-----------
-      pki    | certificates          | table    | serverPKI
-      pki    | certificates_id_seq   | sequence | serverPKI
-      pki    | certificates_services | table    | serverPKI
-      pki    | certinstances         | table    | serverPKI
-      pki    | certinstances_id_seq  | sequence | serverPKI
-      pki    | certkeydata           | table    | serverPKI
-      pki    | certkeydata_id_seq    | sequence | serverPKI
-      pki    | certs                 | view     | serverPKI
-      pki    | certs_ids             | view     | serverPKI
-      pki    | disthosts             | table    | serverPKI
-      pki    | disthosts_id_seq      | sequence | serverPKI
-      pki    | inst                  | view     | serverPKI
-      pki    | jails                 | table    | serverPKI
-      pki    | jails_id_seq          | sequence | serverPKI
-      pki    | places                | table    | serverPKI
-      pki    | places_id_seq         | sequence | serverPKI
-      pki    | revision              | table    | serverPKI
-      pki    | revision_id_seq       | sequence | serverPKI
-      pki    | services              | table    | serverPKI
-      pki    | services_id_seq       | sequence | serverPKI
-      pki    | subjects              | table    | serverPKI
-      pki    | subjects_id_seq       | sequence | serverPKI
-      pki    | targets               | table    | serverPKI
-      pki    | targets_id_seq        | sequence | serverPKI
+      pki    | certificates          | table    | pki_op
+      pki    | certificates_id_seq   | sequence | pki_op
+      pki    | certificates_services | table    | pki_op
+      pki    | certinstances         | table    | pki_op
+      pki    | certinstances_id_seq  | sequence | pki_op
+      pki    | certkeydata           | table    | pki_op
+      pki    | certkeydata_id_seq    | sequence | pki_op
+      pki    | certs                 | view     | pki_op
+      pki    | certs_ids             | view     | pki_op
+      pki    | disthosts             | table    | pki_op
+      pki    | disthosts_id_seq      | sequence | pki_op
+      pki    | inst                  | view     | pki_op
+      pki    | jails                 | table    | pki_op
+      pki    | jails_id_seq          | sequence | pki_op
+      pki    | places                | table    | pki_op
+      pki    | places_id_seq         | sequence | pki_op
+      pki    | revision              | table    | pki_op
+      pki    | revision_id_seq       | sequence | pki_op
+      pki    | services              | table    | pki_op
+      pki    | services_id_seq       | sequence | pki_op
+      pki    | subjects              | table    | pki_op
+      pki    | subjects_id_seq       | sequence | pki_op
+      pki    | targets               | table    | pki_op
+      pki    | targets_id_seq        | sequence | pki_op
      (24 rows)
      
      serverpki=> \q

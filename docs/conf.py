@@ -52,7 +52,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'serverPKI'
-copyright = '2016-2019, Axel Rau'
+copyright = '2016-2020, Axel Rau'
 author = 'Axel Rau'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -90,7 +90,6 @@ todo_include_todos = False
 #
 html_theme = "sphinx_rtd_theme"
 html_theme_options = {
-    'font_size': '12px'
 }
 
 html_sidebars = {

@@ -6,6 +6,7 @@ Tutorial
 
 In the following examples, client certs are used as PostgreSQL authentication method.
 su is used to run the commands as user pki_op, who has the client cert installed.
+It is assumed that :ref: Configuration of serverOKI has been completed.
 
         
 Setting up encrypted key storage
@@ -71,29 +72,36 @@ Creating our first Let's Encrypt certificate
 --------------------------------------------
 
 
-.. _manuale:
-.. index:: manuale, manuale register
+.. index:: operate_serverPKI --register
 
 
 Create Letsencrypt account::
 
 
-    # cd /var/pki_op/test_CA/db
-    # manuale register -s https://acme-staging.api.letsencrypt.org some_user@some_domain
-    You're about to register a new account with the e-mail some_user@some_domain. Continue? [Y/n] Y
+    su -l pki_op -c '/usr/local/py_venv/pki_op_p38/bin/operate_serverPKI -v --register'
+    [Using config file /usr/local/py_venv/pki_op_p38/etc/serverpki.conf]
+    [operateCA [pki_op-0.9.10] started with options register verbose ]
+    [43 certificates and CAs ['Local CA'] in DB]
+    [Registering a new Let's Encrypt Account.
+     With URI:https://acme-staging-v02.api.letsencrypt.org
+     and e-mail admin@example.org]
+    Candango Automatoes 0.9.4. Manuale replacement.
+
+
+    You're about to register a new account with e-mail admin@example.org as contact. Continue? [Y/n] Y
     Generating a new account key. This might take a second.
-    Key generated.
+      Key generated.
     Registering...
-    ...CryptographyDeprecationWarning: signer and verifier have been deprecated. Please use sign and verify instead.
-    This server requires you to agree to these terms:
-    https://letsencrypt.org/documents/LE-SA-v1.2-November-15-2017.pdf
+      Retrieving terms of agreement ...
+      This server requires you to agree to these terms:
+        https://letsencrypt.org/documents/LE-SA-v1.2-November-15-2017.pdf
     Agreed? [Y/n] Y
-    Updated account with agreement.
     Account https://acme-staging.api.letsencrypt.org/acme/reg/12345678 created.
     Wrote account to account.json.
 
     What next? Verify your domains with 'authorize' and use 'issue' to get new certificates.
 
+Last message can be ignored (its meaningless with serverOKI).
 
 Create meta data in the DB::
 

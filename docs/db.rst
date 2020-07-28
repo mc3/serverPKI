@@ -19,7 +19,7 @@ Model
 
 .. index:: entity relation diagram, ERD, id, created, updated, remarks
 
-* The entity relation diagram shows 7 entities, related to certificates and
+* The entity relation diagram shows 10 entities, related to certificates and
   their deployment. The normalized schema has rules and triggers to ensure
   integrity.
 * Common columns - All relations have the following columns:
@@ -156,6 +156,7 @@ Here is the state transition diagram:
   * cert - the certificate in binary PEM format
   * key - the key in binary PEM format (encrypted, if DB encryption in use)
   * hash - the binascii presentation of the SHA256 hash of the certificate
+  * *certinstance* - reference to cert in Certinstances
 
 
 .. index:: Services.name, Services.port, Services.TLSAprefix, services
@@ -328,10 +329,10 @@ Some views simplify common queries. For each view the result columns are listed.
   * state - :ref:`State of instance <Certinstances.state>`
   * cacert - reference to cacert instance in Certinstances, describing
     CA which issued this cert
-  * ocsp_must_staple - if true then the OCSP staple protocoll will be required by the cert
+  * ocsp_must_staple - if true then the OCSP staple protocol will be required by the cert
   * not_before - :ref:`Start date for cert usage <Certinstances.not_before>`
   * not_after - :ref:`End date for cert usage <Certinstances.not_after>`
-  * algo - :ref:`Cert encryption algorithm <CertKeyData.encryption_algo>`
+  * encryption_algo - :ref:`Cert encryption algorithm <CertKeyData.encryption_algo>`
   * hash - :ref:`Hash of cert <CertKeyData.hash>`
 
 
@@ -347,7 +348,7 @@ All arguments are text (mostly case insensitive [=citext]), exceptions are menti
 to omit an argument, use *null*.
 Functions may be called with select in psql::
 
-    serverpki=> select * from add_cert('test.com', 'server', 'local', 'www.test.com', NULL, NULL, NULL, NULL, NULL);
+    serverpki=> select * from add_cert('test.com', 'server', 'local', 'ec', false, 'www.test.com', NULL, NULL, NULL, NULL, NULL);
                       add_cert                  
     --------------------------------------------
      (server,test.com,local,,www.test.com,,,,,)
