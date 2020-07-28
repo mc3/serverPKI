@@ -24,7 +24,6 @@ along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 
 # --------------- imported modules --------------
 import datetime
-from secrets import randbits
 from typing import Optional
 
 from cryptography.hazmat.backends import default_backend
@@ -65,7 +64,7 @@ def issue_local_cert(cert_meta: Certificate) -> Optional[CertInstance]:
         cert_meta.name,
         cacert_ci.row_id)
     )
-    serial = int(randbits(16))
+    serial = x509.random_serial_number()
     # Generate our key
     key = rsa.generate_private_key(
         public_exponent=65537,

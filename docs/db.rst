@@ -112,7 +112,6 @@ Tables
 
 * **Certinstances** - issued certificate instances. 
 
-  * id - the primary key. In case of local cert, id is the x509 serial.
   * state - state of instance (see :ref:`State Table <States>`), one of
   
     * reserved - being issued
@@ -148,15 +147,15 @@ Here is the state transition diagram:
 * **CertKeyData** - the cert/key material (one tuple per algorithm).
 
 
-  * encryption_algo - encryption algorithm, used with this cert
+  * **encryption_algo** - encryption algorithm, used with this cert (unique together with certinstance)
 
     * rsa
     * ec
 
   * cert - the certificate in binary PEM format
   * key - the key in binary PEM format (encrypted, if DB encryption in use)
-  * hash - the binascii presentation of the SHA256 hash of the certificate
-  * *certinstance* - reference to cert in Certinstances
+  * **hash** - the binascii presentation of the SHA256 hash of the certificate
+  * **certinstance** - reference to cert in Certinstances (unique together with encryption_algo)
 
 
 .. index:: Services.name, Services.port, Services.TLSAprefix, services

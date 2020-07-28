@@ -70,7 +70,10 @@ CREATE TABLE CertKeyData (      -- Holds cert-key-pairs for one algorithm with m
   cert              BYTEA           NOT NULL,       -- 'PEM encoded certificate'
   key               BYTEA           NOT NULL,       -- 'PEM encoded key'
   hash              TEXT            NOT NULL UNIQUE,-- 'hex ascii encoded TLSA hash'
-  created           dd.created                      -- 'time of record creation'
+  created           dd.created,                     -- 'time of record creation'
+
+    UNIQUE (certinstance, encryption_algo)          -- 'only cert per algo and instance allowed
+
 )
 
 

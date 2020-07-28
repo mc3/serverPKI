@@ -50,7 +50,7 @@ def test_encrypt_keys_encryption_key_missing(script_runner, setup_directories):
     ret = script_runner.run('operate_serverPKI', ' --encrypt-keys', '-v', '-f', config_path_for_pytest)
     print(ret.stdout)
     print(ret.stderr)
-    assert ret==1
+    assert ret != ret.success
 
 
 
@@ -67,7 +67,7 @@ def test_encrypt_keys_encryption_key_available(script_runner, setup_directories)
     ret = script_runner.run('operate_serverPKI', ' --encrypt-keys', '-v', '-f', config_path_for_pytest)
     print(ret.stdout)
     print(ret.stderr)
-    assert ret==0
+    assert ret.success
 
 
     # now distribute local cert

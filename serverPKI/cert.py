@@ -999,6 +999,19 @@ class CertKeyStore(object):
             cert.fingerprint(SHA256())).decode('ascii').upper()
 
     @staticmethod
+    def serial_from_cert(cert: Union[x509.Certificate, bytes]) -> int:
+        """
+        return serial number from cryptography.x509.Certificate instance
+        :cert:  certificate to obtain serial from
+        :return: the serial as int
+        """
+        if isinstance(cert, bytes):
+            cert = x509.load_pem_x509_certificate(cert, default_backend())
+        elif not isinstance(cert, x509.Certificate):
+            raise AssertionError('CertKeyStore.serial_from_cert called with unexpected cert object type')
+        return cert.serial_number
+
+    @staticmethod
     def certinstance_from_cert(cert: x509.Certificate) -> Optional[CertInstance]:
         """
         return the CertInstance from a (loaded) cert
