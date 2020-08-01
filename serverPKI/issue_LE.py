@@ -45,6 +45,7 @@ from postgresql import driver as db_conn
 from . import get_version
 import automatoes.acme as am
 from automatoes.errors import AcmeError
+
 # set our identity and version
 
 am.__dict__['DEFAULT_HEADERS'] = {
@@ -62,7 +63,7 @@ from automatoes import errors as manuale_errors
 # --------------- local imports --------------
 from serverPKI.cacert import create_CAcert_meta
 from serverPKI.cert import Certificate, CertInstance, CertKeyStore, EncAlgo, EncAlgoCKS, CertState
-from serverPKI.utils import sld, sli, sln, sle,  Pathes, X509atts, Misc
+from serverPKI.utils import sld, sli, sln, sle, Pathes, X509atts, Misc
 from serverPKI.utils import updateSOAofUpdatedZones, get_options
 from serverPKI.utils import updateZoneCache, print_order, ddns_update
 
@@ -211,11 +212,15 @@ def _issue_cert_for_one_algo(encryption_algo: EncAlgoCKS, cert_meta: Certificate
                 return None
 
         if order.certificate_uri is None:
-            if options.verbose:
-                sld("{}/{}:  Checking order status.".format(cert_meta.name, encryption_algo))
-            fulfillment = acme.await_for_order_fulfillment(order)
-            if fulfillment['status'] == "valid":
-                order.contents = fulfillment
+            for i in range(5):
+                if options.verbose:
+                    sld("{}/{}:  Checking order status.".format(cert_meta.name, encryption_algo))
+                fulfillment = acme.await_for_order_fulfillment(order, timeout=15, iterations=2)
+                if fulfillment['status'] == "valid":
+                    order.contents = fulfillment
+                if order.certificate_uri:
+                    break
+                time.sleep(60)
             else:
                 sle("{}/{}:  Order not valid after fulfillment. Giving up"
                     .format(cert_meta.name, encryption_algo))
@@ -263,9 +268,9 @@ def _get_intermediate_instance(db: db_conn, int_cert: x509.Certificate) -> CertI
     # obtain our cert meta - check, if it exists
 
     if Misc.SUBJECT_LE_CA in Certificate.names(db):
-        cm = Certificate.create_or_load_cert_meta(db, Misc.SUBJECT_LE_CA)                 # yes: we have meta but no instance
+        cm = Certificate.create_or_load_cert_meta(db, Misc.SUBJECT_LE_CA)  # yes: we have meta but no instance
         sln('Cert meta for intermediate cert exists, but no instance.')
-    else:                                               # no: this ist 1st cert with this CA
+    else:  # no: this ist 1st cert with this CA
         sln('Cert meta for intermediate does not exist, creating {}.'.format(Misc.SUBJECT_LE_CA))
         cm = create_CAcert_meta(db=db, name=Misc.SUBJECT_LE_CA, cert_type=CertType('LE'))
     ci = cm.create_instance(state=CertState('issued'),
@@ -281,7 +286,7 @@ def _get_intermediate_instance(db: db_conn, int_cert: x509.Certificate) -> CertI
 def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
     """
     Try to prove the control about a DNS object.
-    
+
     @param cert_meta:   Cert meta instance to issue an certificate for
     @type cert_meta:    Cert meta instance
     @param account:     Our letsencrypt account
@@ -304,9 +309,19 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
         print(e)
         return None
     returned_order = acme.query_order(order)
-    order.contents = returned_order.contents
     sld('new_order for {} returned\n{}'.
         format(cert_meta.name, print_order(returned_order)))
+    if acme.clean_authorizations(returned_order):
+        try:
+            order: Order = acme.new_order(domains, 'dns')
+        except AcmeError as e:
+            print(e)
+            return None
+        returned_order = acme.query_order(order)
+        sld('new_order after calling clean_authorizations for {} returned\n{}'.
+            format(cert_meta.name, print_order(returned_order)))
+
+    order.contents = returned_order.contents
     if order.expired or order.invalid:
         sle("{}: Order is {} {}. Giving up.".
             format(cert_meta.name, 'invalid' if order.invalid else '',
@@ -391,12 +406,12 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
 def create_challenge_responses_in_dns(zones, fqdn_challenges):
     """
     Create the expected challenge response in dns
-    
+
     @param zones:           dict of zones, where each zone has a list of fqdns
                             as values
     @type zones:            dict()
     @param fqdn_challenges: dict of zones, containing challenge response
-                            (key) of zone 
+                            (key) of zone
     @type fqdn_challenges:  dict()
     @rtype:                 None
     @exceptions             Can''t parse ddns key or
@@ -448,7 +463,7 @@ def delete_challenge_responses_in_dns(zones):
     """
     Delete the challenge response in dns, created by
                             create_challenge_responses_in_dns()
-    
+
     @param zones:           dict of zones, where each zone has a list of fqdns
                             as values
     @type zones:            dict()
