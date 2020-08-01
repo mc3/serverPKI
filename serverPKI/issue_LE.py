@@ -219,8 +219,11 @@ def _issue_cert_for_one_algo(encryption_algo: EncAlgoCKS, cert_meta: Certificate
                 if fulfillment['status'] == "valid":
                     order.contents = fulfillment
                 if order.certificate_uri:
-                    break
-                time.sleep(60)
+                     break
+                else:
+                    sln('Missing certificate_uri of {} while waiting for fulfillment {}'.
+                        format(cert_meta.name, print_order(fulfillment)))
+                    time.sleep(60)
             else:
                 sle("{}/{}:  Order not valid after fulfillment. Giving up"
                     .format(cert_meta.name, encryption_algo))
