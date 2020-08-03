@@ -203,34 +203,25 @@ def _issue_cert_for_one_algo(encryption_algo: EncAlgoCKS, cert_meta: Certificate
             final_order = acme.finalize_order(order, csr)
             order.contents = final_order
 
-            if final_order['status'] in ["processing", "valid"]:
+            if final_order['status'] ==  "valid":
                 sld('{}/{}:  Order finalized. Certificate is being issued.'
                     .format(cert_meta.name, encryption_algo))
             else:
-                sle("{}:  Order not ready or invalid after finalize. Status = {}. Giving up. \n Response = {}"
+                sld("{}/{}:  Checking order status.".format(cert_meta.name, encryption_algo))
+                fulfillment = acme.await_for_order_fulfillment(order)
+                if fulfillment['status'] == "valid":
+                    order.contents = fulfillment
+                else:
+                    sle("{}:  Order not ready or invalid after finalize. Status = {}. Giving up. \n Response = {}"
                     .format(cert_meta.name, final_order['status'], final_order))
                 return None
 
-        if order.certificate_uri is None:
-            for i in range(5):
-                if options.verbose:
-                    sld("{}/{}:  Checking order status.".format(cert_meta.name, encryption_algo))
-                fulfillment = acme.await_for_order_fulfillment(order, timeout=15, iterations=2)
-                if fulfillment['status'] == "valid":
-                    order.contents = fulfillment
-                if order.certificate_uri:
-                     break
-                else:
-                    sln('Missing certificate_uri of {} while waiting for fulfillment {}'.
-                        format(cert_meta.name, print_order(fulfillment)))
-                    time.sleep(60)
-            else:
-                sle("{}/{}:  Order not valid after fulfillment. Giving up"
-                    .format(cert_meta.name, encryption_algo))
-                return None
+        if not order.certificate_uri:
+            sle("{}/{}:  Order not valid after fulfillment: Missing certificate URI"
+                .format(cert_meta.name, encryption_algo))
+            return None
         else:
-            sli("We already know the certificate uri for order {}/{}. "
-                "Downloading certificate.".format(cert_meta.name, encryption_algo))
+            sli("Downloading certificate for {}/{}.".format(cert_meta.name, encryption_algo))
 
         result = acme.download_order_certificate(order)
 
@@ -314,17 +305,6 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
     returned_order = acme.query_order(order)
     sld('new_order for {} returned\n{}'.
         format(cert_meta.name, print_order(returned_order)))
-    if acme.clean_authorizations(returned_order):
-        try:
-            order: Order = acme.new_order(domains, 'dns')
-        except AcmeError as e:
-            print(e)
-            return None
-        returned_order = acme.query_order(order)
-        sld('new_order after calling clean_authorizations for {} returned\n{}'.
-            format(cert_meta.name, print_order(returned_order)))
-
-    order.contents = returned_order.contents
     if order.expired or order.invalid:
         sle("{}: Order is {} {}. Giving up.".
             format(cert_meta.name, 'invalid' if order.invalid else '',
