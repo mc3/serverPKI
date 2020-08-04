@@ -199,22 +199,23 @@ def _issue_cert_for_one_algo(encryption_algo: EncAlgoCKS, cert_meta: Certificate
     try:
         sli('Requesting certificate issuance from LE...')
 
-        if order.contents['status'] == 'ready':
-            final_order = acme.finalize_order(order, csr)
-            order.contents = final_order
+        if not order.contents['status'] == 'valid':
+            if order.contents['status'] == 'ready':
+                final_order = acme.finalize_order(order, csr)
+                order.contents = final_order
 
-            if final_order['status'] ==  "valid":
-                sld('{}/{}:  Order finalized. Certificate is being issued.'
-                    .format(cert_meta.name, encryption_algo))
-            else:
-                sld("{}/{}:  Checking order status.".format(cert_meta.name, encryption_algo))
-                fulfillment = acme.await_for_order_fulfillment(order)
-                if fulfillment['status'] == "valid":
-                    order.contents = fulfillment
+                if order.contents['status'] ==  "valid":
+                    sld('{}/{}:  Order finalized. Certificate is being issued.'
+                        .format(cert_meta.name, encryption_algo))
                 else:
-                    sle("{}:  Order not ready or invalid after finalize. Status = {}. Giving up. \n Response = {}"
-                    .format(cert_meta.name, final_order['status'], final_order))
-                return None
+                    sld("{}/{}:  Checking order status.".format(cert_meta.name, encryption_algo))
+                    fulfillment = acme.await_for_order_fulfillment(order)
+                    if fulfillment['status'] == "valid":
+                        order.contents = fulfillment
+                    else:
+                        sle("{}:  Order not ready or invalid after finalize. Status = {}. Giving up. \n Response = {}"
+                        .format(cert_meta.name, final_order['status'], final_order))
+                    return None
 
         if not order.certificate_uri:
             sle("{}/{}:  Order not valid after fulfillment: Missing certificate URI"
@@ -323,6 +324,11 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
     fqdn_challenges = {}  # key = domain, value = chllenge
     pending_challenges = acme.get_order_challenges(order)
     for challenge in pending_challenges:
+        if challenge.status == 'valid':
+            sli("    {} is already authorized until {}.".format(
+                challenge.domain, challenge.expires))
+            continue
+
         fqdn_challenges[challenge.domain] = challenge
 
         # find zones by fqdn
@@ -335,6 +341,13 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
                 else:
                     zones[zone] = [fqdn]
         sld('zones: {}'.format(zones))
+
+    if not fqdn_challenges:
+        server_order = acme.query_order(order)
+        order.contents = server_order.contents
+        sli("All Altnames of {} are already authorized.Order status = {}".
+            format(cert_meta.name, order.contents['status']))
+        return order
 
     create_challenge_responses_in_dns(zones, fqdn_challenges)
 
@@ -373,6 +386,11 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
             # we need either all challenges or none: repeat with next cron cacle
             return None
 
+    server_order = acme.query_order(order)
+    order.contents = server_order.contents
+    sld("All Altnames of {} authorized.Order status = {}".
+        format(cert_meta.name, order.contents['status']))
+
     # remember new expiration date in DB
     if authorized_until:
         updates = cert_meta.update_authorized_until(
@@ -381,6 +399,7 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
             sln('Failed to update DB with new authorized_until timestamp')
 
     delete_challenge_responses_in_dns(zones)
+
 
     sli("FQDNs authorized. Let's Encrypt!")
     return order

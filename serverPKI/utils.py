@@ -876,8 +876,12 @@ def print_certs(db: db_conn, names) -> None:
 
 
 def print_order(order):
-    return ('\turi: {}\n\ttype: {}\n\tcertificate_uri: {}\n\tcontents: {}'.
+    try:
+        return ('\turi: {}\n\ttype: {}\n\tcertificate_uri: {}\n\tcontents: {}'.
             format(order.uri, order.type, order.certificate_uri, order.contents))
+    except AttributeError:
+        return str(order)
+
 
 
 # ----------- dynamic DNS update setup ---------------
