@@ -235,7 +235,7 @@ def parse_options():
     group.add_option('--create-certs', '-C', dest='create', action='store_true',
                      default=False,
                      help='Scan configuration and create all certs, which are not'
-                          ' disbled or excluded.'
+                          ' disabled or excluded.'
                           ' State will be "issued" of created certs.'
                           ' Action modifiers may be used to select a subset of certs to act on.')
 
@@ -274,7 +274,7 @@ def parse_options():
                      default=False,
                      help='Consolidate targets to be in sync with DB.'
                           ' This affects certs in state "deployed" '
-                          ' and effectivly re-distributes certs.')
+                          ' and effectively re-distributes certs.')
 
     group.add_option('--consolidate-TLSAs', '-T', dest='sync_tlsas', action='store_true',
                      default=False,
@@ -294,8 +294,7 @@ def parse_options():
 
     parser.add_option_group(group)
 
-    group = optparse.OptionGroup(parser, 'Action modifiers, to select subset of certificates'
-                                         ' whose meta data is stored in the DB or to set verbosity of messages.')
+    group = optparse.OptionGroup(parser, 'Action modifiers, to select certificates or disthosts to act on.')
 
     group.add_option('--all', '-a', action='store_true',
                      help='All certs in configuration should be included in operation, even if disabled.')
