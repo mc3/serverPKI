@@ -7,7 +7,7 @@ database.
 
 serverPKI includes support for
 - local CA
-- LetsEncrypt CA (ACMEv2 only)
+- LetsEncrypt CA (ACMEv2 only), using dns_01 challenge
 - FreeBSD jails
 - publishing of DANE RR in DNS, using TLSA key rollover
 - unattended operation via cronjob
