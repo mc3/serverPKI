@@ -30,7 +30,7 @@ serverPKI includes support for
 
 - local CA
 - LetsEncrypt CA (supports only acme v2 api, see https://letsencrypt.org/docs)
-- FreeBSD jails
+- FreeBSD service jails via ssh access to host
 - publishing of DANE RR in DNS, using BIND 9 and TLSA key rollover (see RFC 6698)
 - controlling DNS zone info for LetsEncrypt challenges und TLSA RR via dynamic
   DNS updates (recommended) or via zone files.

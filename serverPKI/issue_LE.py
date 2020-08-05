@@ -355,8 +355,8 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
         format(datetime.datetime.utcnow().isoformat()))
     # Validate challenges
     authorized_until = None
-    sli('Waiting 60 seconds for dns propagation')
-    time.sleep(60)
+    sli('Waiting 15 seconds for dns propagation')
+    time.sleep(15)
     for challenge in pending_challenges:
 
         # wait maximum 2 minutes
