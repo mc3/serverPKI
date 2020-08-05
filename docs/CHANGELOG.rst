@@ -86,4 +86,4 @@ Changelog
 - Support for OCSP_must_staple attribute
 - New config file format
 - BUGFIXES mainly in ACMEv2 handshaking code
-- Run install/upgrade_to_{3456}.sql in psql, connected to pki DB.
+- For upgrade run install/upgrade_to_{3456}.sql in psql, connected to pki DB.
