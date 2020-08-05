@@ -180,7 +180,7 @@ DBAccount
 
 .. _Configuration_DBAccount:
 
-        Dection with account data and credentials for the PostgreSQL DB.
+        Configuration of account data and credentials for the PostgreSQL DB.
         Passwords may be stored in pki_op's HOME in  HOME/.pgpass or
         client certs in HOME/.postgresql.crt and HOME/.postgresql.key
 
@@ -198,10 +198,10 @@ dbDbaUser
         who runs program is DBA
 
 dbSslRequired
-        If "yes" then connectin will be made with TLS
+        If "yes" then connecting will be made with TLS
 
 dbDatabase
-        name of databse, used for serverPKI (contains schemas dd and pki)
+        name of database, used for serverPKI (contains schemas dd and pki)
 
 dbSearchPath
         search_path set at login

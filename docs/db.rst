@@ -366,7 +366,7 @@ Functions may be called with select in psql::
   * the_altname - optional :ref:`Alternative cert name <Subjects.name>`
   * the_tlsa_name - optional :ref:`Service name <Services.name>`
   * the_tlsa_port - optional :ref:`Service port number <Services.port>`
-  * the_disthost_name - optional :ref: `Name of disthost <Disthosts.name>`
+  * the_disthost_name - optional :ref: `Name of disthost <Disthosts.FQDN>`
   * the_jail - optional :ref:`Jail name <Jails.name>`
   * the_place - optional :ref:`Place name <Places.name>`
 

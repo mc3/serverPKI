@@ -6,7 +6,7 @@ Tutorial
 
 In the following examples, client certs are used as PostgreSQL authentication method.
 su is used to run the commands as user pki_op, who has the client cert installed.
-It is assumed that :ref: Configuration of serverOKI has been completed.
+It is assumed that :ref: Configuration of serverPKI has been completed.
 
         
 Setting up encrypted key storage
@@ -101,7 +101,7 @@ Create Letsencrypt account::
 
     What next? Verify your domains with 'authorize' and use 'issue' to get new certificates.
 
-Last message can be ignored (its meaningless with serverOKI).
+Last message can be ignored (its meaningless with serverPKI).
 
 Create meta data in the DB::
 

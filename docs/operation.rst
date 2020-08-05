@@ -11,7 +11,7 @@ Operation
 Operation of the PKI is divided into
 
 * Management of cert configuration, which is done via psql (PostgreSQL command line
-  utility) because configuration is stored in a database. Configuration are 
+  utility) because configuration is stored in a database. This meta data describes
   things like subject-, alt- name(s), subject- and cert- type, deployment target
   (host, jail and path), server reload command and DNS TLSA info (service and port). 
 
@@ -98,7 +98,7 @@ These are the command line options. Arguments are in capital letters::
 
       Actions to issue and replace certificates.:
         -C, --create-certs  Scan configuration and create all certs, which are not
-                            disbled or excluded. State will be "issued" of created
+                            disabled or excluded. State will be "issued" of created
                             certs. Action modifiers may be used to select a subset
                             of certs to act on.
         -r REMAINING_DAYS, --renew-local-certs=REMAINING_DAYS
