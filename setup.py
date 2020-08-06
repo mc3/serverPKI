@@ -67,7 +67,6 @@ setup(
                                         'install/fresh_install/create_extension_citext.sql',
                                         'install/fresh_install/create_schema_pki.sql',
                                         'install/fresh_install/create_triggers_pki.sql',
-                                        'install/fresh_install/example_config.py',
                                         'install/fresh_install/load_services.sql',
                                         'install/fresh_install/load_testdata.sql',
                                         'install/upgrade/upgrade_to_2.sql',
