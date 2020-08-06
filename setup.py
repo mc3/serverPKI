@@ -6,10 +6,13 @@ is done via ssh/sftp. Configuration and cert/key data is stored in a relational
 database.
 
 serverPKI includes support for
+
 - local CA
-- LetsEncrypt CA (ACMEv2 only), using dns_01 challenge
-- FreeBSD jails
-- publishing of DANE RR in DNS, using TLSA key rollover
+- LetsEncrypt CA (supports only acme v2 api, see https://letsencrypt.org/docs)
+- FreeBSD service jails via ssh access to host
+- publishing of DANE RR in DNS, using BIND 9 and TLSA key rollover (see RFC 6698)
+- controlling DNS zone info for LetsEncrypt challenges und TLSA RR via dynamic
+  DNS updates (recommended) or via zone files.
 - unattended operation via cronjob
 - extensive logging
 - alerting via mail
@@ -21,7 +24,7 @@ Required Python3 packages:
 
     configobj>=5.0.6,
     cryptography>=2.9.2,
-    automatoes>=0.9.3,
+    git+https://github.com/candango/automatoes@9da80a3bd2bad355ac65c139f66105ed5032f770,
     dnspython>=1.16.0,
     py-postgresql>=1.2.1,
     paramiko>=2.4.2,
@@ -86,7 +89,7 @@ setup(
     install_requires=[
         'configobj>=5.0.6',
         'cryptography>=2.9.2',
-        'automatoes>=0.9.3',
+        'git+https://github.com/candango/automatoes@9da80a3bd2bad355ac65c139f66105ed5032f770',
         'dnspython>=1.16.0',
         'py-postgresql>=1.2.1',
         'paramiko>=2.4.2',
