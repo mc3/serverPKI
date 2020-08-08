@@ -24,7 +24,7 @@ Required Python3 packages:
 
     configobj>=5.0.6,
     cryptography>=2.9.2,
-    git+https://github.com/candango/automatoes@9da80a3bd2bad355ac65c139f66105ed5032f770,
+    automatoes>=0.9.5,
     dnspython>=1.16.0,
     py-postgresql>=1.2.1,
     paramiko>=2.4.2,
@@ -97,7 +97,7 @@ setup(
         'Natural Language :: English',
     ],
     install_requires=[
-        'automatoes-9da80a3',
+        'automatoes>=0.9.5',
         'configobj>=5.0.6',
         'cryptography>=2.9.2',
         'dnspython>=1.16.0',
