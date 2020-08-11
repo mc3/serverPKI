@@ -238,7 +238,7 @@ Here is the state transition diagram:
   * chownboth - set owner of cert file to that of key file
   * pglink - link cert / key file to postgresql.crt / postgresql.key
   * reload_command - command to reload service after distribution of cert/key.
-    In case of jail, '{}' is the placeholdfer for the jail name.
+    In case of jail, '{}' is the placeholder for the jail name.
 
 .. index:: Targets, Targets.distHost, Targets.jail, Targets.place, Targets.certificate 
 .. _Targets:

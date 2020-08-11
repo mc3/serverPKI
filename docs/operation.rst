@@ -89,18 +89,18 @@ Management of cert instances
 
 These are the command line options. Arguments are in capital letters::
 
-    Usage: operate_serverPKI [options]
+     Usage: operate_serverPKI [options]
 
-    Server PKI 0.9.9
+    Server PKI 0.9.10
 
     Options:
       -h, --help            show this help message and exit
 
       Actions to issue and replace certificates.:
         -C, --create-certs  Scan configuration and create all certs, which are not
-                            disabled or excluded. State will be "issued" of created
-                            certs. Action modifiers may be used to select a subset
-                            of certs to act on.
+                            disabled or excluded. State will be "issued" of
+                            created certs. Action modifiers may be used to select
+                            a subset of certs to act on.
         -r REMAINING_DAYS, --renew-local-certs=REMAINING_DAYS
                             Scan configuration for local certs in state deployed
                             which will expire within REMAINING_DAYS days. Include
@@ -125,7 +125,7 @@ These are the command line options. Arguments are in capital letters::
                             installed, if not suppressed with --no-TLSA-records-
         -K, --consolidate-certs
                             Consolidate targets to be in sync with DB. This
-                            affects certs in state "deployed"  and effectivly re-
+                            affects certs in state "deployed"  and effectively re-
                             distributes certs.
         -T, --consolidate-TLSAs
                             Consolidate TLSA-RR to be in sync with DB. This
@@ -137,7 +137,7 @@ These are the command line options. Arguments are in capital letters::
                             "id" with command operate_serverPKI -n -v) This action
                             may not be combined with other actions.
 
-      Action modifiers, to select subset of certificates whose meta data is stored in the DB or to set verbosity of messages.:
+      Action modifiers, to select certificates or disthosts to act on.:
         -a, --all           All certs in configuration should be included in
                             operation, even if disabled.
         -i CERT_TO_BE_INCLUDED, --include=CERT_TO_BE_INCLUDED
@@ -164,16 +164,16 @@ These are the command line options. Arguments are in capital letters::
                             Do not distribute/change TLSA resource records.
 
       Maintenance and administrative actions.:
-        --encrypt-keys      Encrypt all keys in DB.Configuration parameter
+        -X, --encrypt-keys  Encrypt all keys in DB.Configuration parameter
                             db_encryption_key must point at a file, containing a
                             usable passphrase.
-        --decrypt-keys      Replace all keys in the DB by their clear text
+        -Y, --decrypt-keys  Replace all keys in the DB by their clear text
                             version.Configuration parameter db_encryption_key must
                             point at a file, containing a usable passphrase.
         -I, --issue-local-CAcert
                             Issue a new local CA cert, used for issuing future
                             local server/client certs.
-        --register          Register a new account at LetsEncrypt, This action may
+        -Z, --register      Register a new account at LetsEncrypt, This action may
                             not be combined with other actions.
         -n, --check-only    Do syntax check of configuration data. Produce a
                             listing of cert meta and related cert instances if
