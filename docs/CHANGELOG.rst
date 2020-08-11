@@ -87,3 +87,9 @@ Changelog
 - New config file format
 - BUGFIXES mainly in ACMEv2 handshaking code
 - For upgrade run install/upgrade_to_{3456}.sql in psql, connected to pki DB.
+
+
+0.9.11 (2020-08-11)
+-------------------
+
+- Using automatoes 0.9.5. Got hotfix from automatoes maintainer
