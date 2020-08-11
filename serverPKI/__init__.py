@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License
 along with serverPKI.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = (0, 9, 10)
+__version__ = (0, 9, 11)
 __schema_version__ =6
 __author__ = "Axel Rau <Axel.Rau@Chaos1.DE>"
 __licence__ = "Apache License V2.0"

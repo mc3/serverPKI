@@ -91,7 +91,7 @@ These are the command line options. Arguments are in capital letters::
 
      Usage: operate_serverPKI [options]
 
-    Server PKI 0.9.10
+    Server PKI 0.9.11
 
     Options:
       -h, --help            show this help message and exit
