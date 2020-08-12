@@ -32,7 +32,7 @@ Changelog
     New configuration parameter: db_encryption_key
 
 - Upgrading:
-    Create new table Revision in DB - see install/create_schema_pki.sql::
+    Create new table Revision in DB - see install/fresh_install/create_schema_pki.sql::
     
      pki_op=# CREATE TABLE Revision (
      id                SERIAL          PRIMARY KEY,            -- 'PK of Revision'
@@ -75,7 +75,7 @@ Changelog
 
 - Supporting and (requiring) V2 of ACME protocoll.
 - New fields in DB for upcoming support of certs with elliptic algorithm.
-  (in addition to rsa). Run install/upgrade_to_2.sql in psql, connected to pki DB.
+  (in addition to rsa). Run install/upgrade/upgrade_to_2.sql in psql, connected to pki DB.
 
 0.9.10 (2020-08-06)
 -------------------
@@ -86,7 +86,7 @@ Changelog
 - Support for OCSP_must_staple attribute
 - New config file format
 - BUGFIXES mainly in ACMEv2 handshaking code
-- For upgrade run install/upgrade_to_{3456}.sql in psql, connected to pki DB.
+- For upgrade run install/upgrade/upgrade_to_{3456}.sql in psql, connected to pki DB.
 
 
 0.9.11 (2020-08-11)
