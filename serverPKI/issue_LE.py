@@ -289,6 +289,19 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
     @rtype:             True if all fqdns could be authorized, False otherwise
     @exceptions:        manuale_errors.AutomatoesError on Network or other fatal error
     """
+
+    def log_authz(returned_order):
+        c = returned_order.contents
+        for a_uri in c['authorizations']:
+            response = acme.post_as_get(a_uri, kid=acme.account.uri)
+            if response.status_code == 200:
+                ac = response.json()
+                sld('Authz: {}'.format(ac))
+            else:
+                sld('Failed to get authz, status = {}'.format(response.status_code))
+
+    options = get_options()
+
     acme = AcmeV2(Misc.LE_SERVER, account)
 
     FQDNS = dict()
@@ -297,15 +310,18 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
         if name not in FQDNS:
             FQDNS[name] = 0
     domains = list(FQDNS.keys())
-
     try:
         order: Order = acme.new_order(domains, 'dns')
     except AcmeError as e:
         print(e)
         return None
     returned_order = acme.query_order(order)
+    order.contents = returned_order.contents
     sld('new_order for {} returned\n{}'.
-        format(cert_meta.name, print_order(returned_order)))
+        format(cert_meta.name, print_order(order)))
+    if options.debug:
+        log_authz(order)
+
     if order.expired or order.invalid:
         sle("{}: Order is {} {}. Giving up.".
             format(cert_meta.name, 'invalid' if order.invalid else '',
