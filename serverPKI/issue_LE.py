@@ -335,11 +335,13 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
         return None
 
     if order.contents['status'] != 'pending':
-        return order  # all done, if now challenge pending
+        return order  # all done, if no challenge pending
 
     fqdn_challenges = {}  # key = domain, value = chllenge
     pending_challenges = acme.get_order_challenges(order)
     for challenge in pending_challenges:
+        sld('challenge fqdn={}, status={}, token={}'.format(
+            challenge.domain, challenge.status, challenge.key))
         if challenge.status == 'valid':
             sli("    {} is already authorized until {}.".format(
                 challenge.domain, challenge.expires))
