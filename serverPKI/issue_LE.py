@@ -377,7 +377,7 @@ def _authorize(cert_meta: Certificate, account: Account) -> Optional[Order]:
     time.sleep(15)
     for challenge in pending_challenges:
 
-        # wait maximum 2 minutes
+        # wait maximum 30 seconds
         sld('{} starting verification of {}'.
             format(datetime.datetime.utcnow().isoformat(), challenge.domain))
         response = acme.verify_order_challenge(challenge,

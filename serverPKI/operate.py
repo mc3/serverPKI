@@ -182,18 +182,26 @@ def execute_from_command_line():
         scheduleCerts(db, our_certs)
     else:
         if opts.create:
+            # continue with issuence and distribution if something goes wrong
             sli('Creating certificates.')
             for c in our_certs.values():
                 if c.cert_type == CertType('LE'):
-                    if issue_LE_cert(c):
+                    if not issue_LE_cert(c):
+                        if opts.distribute:
+                            sle('Distribution of {} skipped due to creation error'.
+                                format(c.name))
                         continue
                 elif  c.cert_type == CertType('local'):
-                    if issue_local_cert(c):
+                    if not issue_local_cert(c):
+                        if opts.distribute:
+                            sle('Distribution of {} skipped due to creation error'.
+                                format(c.name))
                         continue
                 else:
                     raise AssertionError('Invalid CertType in {}'.format(c.name))
-                sle('Stopped due to error')
-                sys.exit(1)
+                if opts.distribute:
+                    deployCerts([c,])
+            sys.exit(0)                 # all done
 
         if opts.distribute:
             sli('Distributing certificates.')
