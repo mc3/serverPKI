@@ -200,7 +200,7 @@ def execute_from_command_line():
                 else:
                     raise AssertionError('Invalid CertType in {}'.format(c.name))
                 if opts.distribute:
-                    deployCerts([c,])
+                    deployCerts({c.name: c})
             sys.exit(0)                 # all done
 
         if opts.distribute:
